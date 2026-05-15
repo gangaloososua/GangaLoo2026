@@ -1,3 +1,4 @@
+import { Suspense } from 'react'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { Sidebar } from '@/components/sidebar'
@@ -19,7 +20,9 @@ export default async function DashboardLayout({
 
   return (
     <div className="flex h-screen overflow-hidden">
-      <Sidebar />
+      <Suspense fallback={<aside className="w-60 border-r bg-background" />}>
+        <Sidebar />
+      </Suspense>
       <main className="flex-1 overflow-y-auto">
         <div className="border-b bg-background">
           <div className="flex h-16 items-center justify-end px-6">

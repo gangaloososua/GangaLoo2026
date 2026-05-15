@@ -8,7 +8,7 @@ import {
   Warehouse,
   Users,
   Truck,
-  UserCog,
+  UsersRound,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -26,7 +26,7 @@ export const navItems: NavItem[] = [
   { label: 'Inventory', href: '/inventory', icon: Boxes },
   { label: 'Categories', href: '/categories', icon: Tags },
   { label: 'Warehouses', href: '/warehouses', icon: Warehouse },
-  { label: 'Customers', href: '/customers', icon: Users },
-  { label: 'Distributors', href: '/distributors', icon: Truck },
-  { label: 'Users', href: '/users', icon: UserCog },
+  { label: 'People', href: '/people', icon: UsersRound },
+  { label: 'Customers', href: '/people?role=customer', icon: Users },
+  { label: 'Distributors', href: '/people?distributor=1', icon: Truck },
 ]
