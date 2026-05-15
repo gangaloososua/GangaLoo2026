@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { Sidebar } from '@/components/sidebar'
+import { Toaster } from '@/components/ui/sonner'
 
 export default async function DashboardLayout({
   children,
@@ -27,6 +28,7 @@ export default async function DashboardLayout({
         </div>
         <div className="p-6">{children}</div>
       </main>
+      <Toaster />
     </div>
   )
 }
