@@ -128,3 +128,6 @@
     @apply font-sans;
   }
 }
+[role="tabpanel"][data-state="inactive"] {
+  display: none !important;
+}
