@@ -1,8 +1,9 @@
 ﻿'use client'
 
 import { useState } from 'react'
-import { ChevronDown, ChevronRight } from 'lucide-react'
+import { ChevronDown, ChevronRight, Plus, Banknote, CreditCard, ArrowRightLeft, Wallet } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   Table,
@@ -286,114 +287,279 @@ function ItemRow({ item }: { item: SaleDetailItem }) {
 // (richer panels arrive in 9.3)
 // ---------------------------------------------------------------------------
 
-function SummaryCards({ sale }: { sale: SaleDetailType }) {
-  return (
-    <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Totals</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <dl className="space-y-1 text-sm">
-            <Row label="Subtotal" value={formatDOP(sale.subtotal_cents)} />
-            {sale.discount_cents > 0 && (
-              <Row
-                label="Discount"
-                value={`−${formatDOP(sale.discount_cents)}`}
-                tone="negative"
-              />
-            )}
-            {sale.tax_cents > 0 && (
-              <Row label="Tax" value={formatDOP(sale.tax_cents)} />
-            )}
-            {sale.shipping_cents > 0 && (
-              <Row label="Shipping" value={formatDOP(sale.shipping_cents)} />
-            )}
-            <Row label="Total" value={formatDOP(sale.total_cents)} bold />
-            <Row label="Paid" value={formatDOP(sale.paid_cents)} />
-            {sale.cogs_cents != null && (
-              <Row
-                label="COGS"
-                value={formatDOP(sale.cogs_cents)}
-                tone="muted"
-              />
-            )}
-            {sale.gross_profit_cents != null && (
-              <Row
-                label="Gross profit"
-                value={formatDOP(sale.gross_profit_cents)}
-                tone="muted"
-              />
-            )}
-          </dl>
-        </CardContent>
-      </Card>
+// ---------------------------------------------------------------------------
+// TotalsCard — totals breakdown + outstanding balance
+// ---------------------------------------------------------------------------
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">
-            Payments
-            <span className="ml-2 text-sm font-normal text-muted-foreground">
-              ({sale.payments.length})
-            </span>
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {sale.payments.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No payments recorded.</p>
-          ) : (
-            <ul className="space-y-2 text-sm">
-              {sale.payments.map((p) => (
-                <li key={p.id} className="flex justify-between gap-2">
-                  <div>
-                    <div className="font-medium capitalize">
-                      {p.method.replace('_', ' ')}
+function TotalsCard({ sale }: { sale: SaleDetailType }) {
+  const outstanding = sale.total_cents - sale.paid_cents
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">Totals</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <dl className="space-y-1 text-sm">
+          <Row label="Subtotal" value={formatDOP(sale.subtotal_cents)} />
+          {sale.discount_cents > 0 && (
+            <Row
+              label="Discount"
+              value={`-${formatDOP(sale.discount_cents)}`}
+              tone="negative"
+            />
+          )}
+          {sale.tax_cents > 0 && (
+            <Row label="Tax" value={formatDOP(sale.tax_cents)} />
+          )}
+          {sale.shipping_cents > 0 && (
+            <Row label="Shipping" value={formatDOP(sale.shipping_cents)} />
+          )}
+          <Row label="Total" value={formatDOP(sale.total_cents)} bold />
+          <Row label="Paid" value={formatDOP(sale.paid_cents)} />
+          {outstanding > 0 && (
+            <Row
+              label="Outstanding"
+              value={formatDOP(outstanding)}
+              tone="negative"
+              bold
+            />
+          )}
+          {sale.cogs_cents != null && (
+            <Row
+              label="COGS"
+              value={formatDOP(sale.cogs_cents)}
+              tone="muted"
+            />
+          )}
+          {sale.gross_profit_cents != null && (
+            <Row
+              label="Gross profit"
+              value={formatDOP(sale.gross_profit_cents)}
+              tone="muted"
+            />
+          )}
+        </dl>
+      </CardContent>
+    </Card>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// PaymentsPanel — payments list + outstanding line + "Add payment" placeholder
+// (real action wires up in 9.5)
+// ---------------------------------------------------------------------------
+
+const METHOD_ICON: Record<string, typeof Banknote> = {
+  cash: Banknote,
+  card: CreditCard,
+  transfer: ArrowRightLeft,
+  paypal: Wallet,
+  stripe: CreditCard,
+  credit: Wallet,
+  mixed: Wallet,
+}
+
+const METHOD_LABEL: Record<string, string> = {
+  cash: 'Cash',
+  card: 'Card',
+  transfer: 'Transfer',
+  paypal: 'PayPal',
+  stripe: 'Stripe',
+  credit: 'Credit',
+  mixed: 'Mixed',
+}
+
+function PaymentsPanel({ sale }: { sale: SaleDetailType }) {
+  const outstanding = sale.total_cents - sale.paid_cents
+  const isFullyPaid = outstanding <= 0
+  const isCancelled = sale.status === 'cancelled' || sale.status === 'refunded'
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+        <CardTitle className="text-base">
+          Payments
+          <span className="ml-2 text-sm font-normal text-muted-foreground">
+            ({sale.payments.length})
+          </span>
+        </CardTitle>
+        {!isFullyPaid && !isCancelled && (
+          <Button size="sm" variant="outline" disabled title="Coming in 9.5">
+            <Plus className="mr-1 h-3.5 w-3.5" />
+            Add payment
+          </Button>
+        )}
+      </CardHeader>
+      <CardContent>
+        {sale.payments.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No payments recorded.</p>
+        ) : (
+          <ul className="divide-y">
+            {sale.payments.map((p) => {
+              const Icon = METHOD_ICON[p.method] ?? Wallet
+              return (
+                <li key={p.id} className="flex items-center justify-between gap-3 py-2">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-md bg-muted">
+                      <Icon className="h-4 w-4 text-muted-foreground" />
                     </div>
-                    <div className="text-xs text-muted-foreground">
-                      {p.money_account_name} · {formatDateTime(p.paid_at)}
+                    <div>
+                      <div className="text-sm font-medium">
+                        {METHOD_LABEL[p.method] ?? p.method}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {p.money_account_name} . {formatDateTime(p.paid_at)}
+                        {p.reference && <> . {p.reference}</>}
+                      </div>
                     </div>
                   </div>
-                  <div className="text-right tabular-nums font-medium">
+                  <div className="text-right tabular-nums text-sm font-medium">
                     {formatDOP(p.amount_cents)}
                   </div>
                 </li>
-              ))}
-            </ul>
-          )}
-        </CardContent>
-      </Card>
+              )
+            })}
+          </ul>
+        )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">
-            Commissions
-            <span className="ml-2 text-sm font-normal text-muted-foreground">
-              ({sale.commissions.length})
-            </span>
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {sale.commissions.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No commissions recorded.</p>
-          ) : (
-            <ul className="space-y-2 text-sm">
-              {sale.commissions.map((c) => (
-                <li key={c.id} className="flex justify-between gap-2">
-                  <div>
-                    <div className="font-medium">{c.earner_name}</div>
-                    <div className="text-xs text-muted-foreground capitalize">
-                      {c.earner_role} · {c.percent}% · {c.status}
+        {sale.payments.length > 0 && (
+          <div className="mt-3 border-t pt-3 text-sm">
+            <div className="flex justify-between">
+              <dt className="text-muted-foreground">Paid</dt>
+              <dd className="tabular-nums">{formatDOP(sale.paid_cents)}</dd>
+            </div>
+            {outstanding > 0 && (
+              <div className="flex justify-between font-medium text-rose-700">
+                <dt>Outstanding</dt>
+                <dd className="tabular-nums">{formatDOP(outstanding)}</dd>
+              </div>
+            )}
+            {outstanding < 0 && (
+              <div className="flex justify-between font-medium text-amber-700">
+                <dt>Overpaid</dt>
+                <dd className="tabular-nums">{formatDOP(-outstanding)}</dd>
+              </div>
+            )}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// CommissionsPanel — grouped by earner, status breakdown per earner
+// ---------------------------------------------------------------------------
+
+type CommissionsByEarner = {
+  earner_id: string
+  earner_name: string
+  roles: Set<'seller' | 'distributor'>
+  total_cents: number
+  paid_cents: number
+  pending_cents: number
+  void_cents: number
+  rows: number
+}
+
+function CommissionsPanel({ sale }: { sale: SaleDetailType }) {
+  const grouped = new Map<string, CommissionsByEarner>()
+  for (const c of sale.commissions) {
+    let g = grouped.get(c.earner_id)
+    if (!g) {
+      g = {
+        earner_id: c.earner_id,
+        earner_name: c.earner_name,
+        roles: new Set(),
+        total_cents: 0,
+        paid_cents: 0,
+        pending_cents: 0,
+        void_cents: 0,
+        rows: 0,
+      }
+      grouped.set(c.earner_id, g)
+    }
+    g.roles.add(c.earner_role)
+    g.total_cents += c.amount_cents
+    g.rows += 1
+    if (c.status === 'paid') g.paid_cents += c.amount_cents
+    else if (c.status === 'pending') g.pending_cents += c.amount_cents
+    else if (c.status === 'void') g.void_cents += c.amount_cents
+  }
+
+  const earners = Array.from(grouped.values()).sort((a, b) =>
+    a.earner_name.localeCompare(b.earner_name),
+  )
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">
+          Commissions
+          <span className="ml-2 text-sm font-normal text-muted-foreground">
+            ({sale.commissions.length} {sale.commissions.length === 1 ? 'row' : 'rows'})
+          </span>
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        {earners.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No commissions recorded.</p>
+        ) : (
+          <ul className="divide-y">
+            {earners.map((g) => {
+              const rolesLabel = Array.from(g.roles).join(' + ')
+              return (
+                <li key={g.earner_id} className="py-2">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="text-sm font-medium">{g.earner_name}</div>
+                      <div className="text-xs capitalize text-muted-foreground">
+                        {rolesLabel} . {g.rows} {g.rows === 1 ? 'line' : 'lines'}
+                      </div>
+                    </div>
+                    <div className="text-right tabular-nums text-sm font-medium">
+                      {formatDOP(g.total_cents)}
                     </div>
                   </div>
-                  <div className="text-right tabular-nums font-medium">
-                    {formatDOP(c.amount_cents)}
-                  </div>
+                  {(g.paid_cents > 0 || g.pending_cents > 0 || g.void_cents > 0) && (
+                    <div className="mt-1 flex gap-3 text-xs">
+                      {g.paid_cents > 0 && (
+                        <span className="text-emerald-700">
+                          Paid {formatDOP(g.paid_cents)}
+                        </span>
+                      )}
+                      {g.pending_cents > 0 && (
+                        <span className="text-amber-700">
+                          Pending {formatDOP(g.pending_cents)}
+                        </span>
+                      )}
+                      {g.void_cents > 0 && (
+                        <span className="text-muted-foreground">
+                          Void {formatDOP(g.void_cents)}
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </li>
-              ))}
-            </ul>
-          )}
-        </CardContent>
-      </Card>
+              )
+            })}
+          </ul>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// SummaryCards — three-column row, kept as wrapper for layout
+// ---------------------------------------------------------------------------
+
+function SummaryCards({ sale }: { sale: SaleDetailType }) {
+  return (
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+      <TotalsCard sale={sale} />
+      <PaymentsPanel sale={sale} />
+      <CommissionsPanel sale={sale} />
     </div>
   )
 }
