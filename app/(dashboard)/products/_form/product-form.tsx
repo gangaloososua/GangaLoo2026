@@ -21,8 +21,14 @@ import { BasicsTab } from './basics-tab'
 import { PricingTab } from './pricing-tab'
 import { CategoriesTab } from './categories-tab'
 import { ImagesTab } from './images-tab'
+import { WarehousesTab } from './warehouses-tab'
 import { DeleteDialog } from './delete-dialog'
-import type { ProductCategory, ProductImage } from '@/lib/products'
+import type {
+  ProductCategory,
+  ProductImage,
+  Warehouse,
+  ProductWarehouseSetting,
+} from '@/lib/products'
 
 type Mode = 'create' | 'edit'
 
@@ -48,6 +54,9 @@ type Props = {
   productCategories?: ProductCategory[]
   allCategories?: FlatCategory[]
   productImages?: ProductImage[]
+  allWarehouses?: Warehouse[]
+  productWarehouseSettings?: ProductWarehouseSetting[]
+  stockByWarehouse?: Record<string, number>
   justCreated?: boolean
 }
 
@@ -60,6 +69,9 @@ export function ProductForm({
   productCategories = [],
   allCategories = [],
   productImages = [],
+  allWarehouses = [],
+  productWarehouseSettings = [],
+  stockByWarehouse = {},
   justCreated,
 }: Props) {
   const router = useRouter()
@@ -68,7 +80,6 @@ export function ProductForm({
   const [state, formAction, pending] = useActionState(action, INITIAL)
   const createdToastShown = useRef(false)
 
-  // One-time toast after redirect from create
   useEffect(() => {
     if (justCreated && !createdToastShown.current) {
       createdToastShown.current = true
@@ -78,7 +89,6 @@ export function ProductForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [justCreated])
 
-  // Edit-mode save feedback
   useEffect(() => {
     if (state.error) toast.error(state.error)
     else if (state.ok && mode === 'edit') {
@@ -135,7 +145,7 @@ export function ProductForm({
           <TabsTrigger value="images" disabled={mode === 'create'}>
             Images
           </TabsTrigger>
-          <TabsTrigger value="warehouses" disabled>
+          <TabsTrigger value="warehouses" disabled={mode === 'create'}>
             Warehouses
           </TabsTrigger>
           <TabsTrigger value="calculator" disabled>
@@ -176,6 +186,17 @@ export function ProductForm({
         {mode === 'edit' && productId && (
           <TabsContent value="images" forceMount className="pt-6">
             <ImagesTab productId={productId} initialRows={productImages} />
+          </TabsContent>
+        )}
+
+        {mode === 'edit' && productId && (
+          <TabsContent value="warehouses" forceMount className="pt-6">
+            <WarehousesTab
+              productId={productId}
+              warehouses={allWarehouses}
+              initialSettings={productWarehouseSettings}
+              stockByWarehouse={stockByWarehouse}
+            />
           </TabsContent>
         )}
       </Tabs>

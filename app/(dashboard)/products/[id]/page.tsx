@@ -5,6 +5,9 @@ import {
   fetchProductCategories,
   fetchAllCategoriesFlat,
   fetchProductImages,
+  fetchAllWarehouses,
+  fetchProductWarehouseSettings,
+  fetchProductStockByWarehouse,
 } from '@/lib/products'
 
 export default async function EditProductPage({
@@ -26,10 +29,20 @@ export default async function EditProductPage({
     .maybeSingle()
   if (error || !product) notFound()
 
-  const [productCategories, allCategories, productImages] = await Promise.all([
+  const [
+    productCategories,
+    allCategories,
+    productImages,
+    allWarehouses,
+    productWarehouseSettings,
+    stockByWarehouse,
+  ] = await Promise.all([
     fetchProductCategories(product.id),
     fetchAllCategoriesFlat(),
     fetchProductImages(product.id),
+    fetchAllWarehouses(),
+    fetchProductWarehouseSettings(product.id),
+    fetchProductStockByWarehouse(product.id),
   ])
 
   return (
@@ -54,6 +67,9 @@ export default async function EditProductPage({
       productCategories={productCategories}
       allCategories={allCategories}
       productImages={productImages}
+      allWarehouses={allWarehouses}
+      productWarehouseSettings={productWarehouseSettings}
+      stockByWarehouse={stockByWarehouse}
       justCreated={sp.created === '1'}
     />
   )

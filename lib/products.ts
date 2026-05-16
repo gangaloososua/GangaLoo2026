@@ -222,3 +222,58 @@ export async function fetchProductImages(
   if (error) throw error
   return data ?? []
 }
+
+export type Warehouse = {
+  id: string
+  name: string
+  kind: string
+  is_active: boolean
+  display_order: number
+}
+
+export type ProductWarehouseSetting = {
+  warehouse_id: string
+  is_visible: boolean
+  price_override_cents: number | null
+  display_order: number
+}
+
+export async function fetchAllWarehouses(): Promise<Warehouse[]> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('warehouses')
+    .select('id, name, kind, is_active, display_order')
+    .eq('is_active', true)
+    .order('display_order', { ascending: true })
+    .order('name', { ascending: true })
+  if (error) throw error
+  return data ?? []
+}
+
+export async function fetchProductWarehouseSettings(
+  productId: string
+): Promise<ProductWarehouseSetting[]> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('product_warehouse_settings')
+    .select('warehouse_id, is_visible, price_override_cents, display_order')
+    .eq('product_id', productId)
+  if (error) throw error
+  return data ?? []
+}
+
+export async function fetchProductStockByWarehouse(
+  productId: string
+): Promise<Record<string, number>> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('v_inventory_current')
+    .select('warehouse_id, qty_on_hand')
+    .eq('product_id', productId)
+  if (error) throw error
+  const out: Record<string, number> = {}
+  for (const r of data ?? []) {
+    out[r.warehouse_id] = Number(r.qty_on_hand) || 0
+  }
+  return out
+}

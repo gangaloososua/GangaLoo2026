@@ -454,3 +454,51 @@ export async function deleteProductImage(
   revalidatePath('/products')
   return { ok: true }
 }
+
+export async function saveProductWarehouseSettings(
+  productId: string,
+  rows: Array<{
+    warehouse_id: string
+    is_visible: boolean
+    price_override_cents: number | null
+    display_order: number
+  }>
+): Promise<{ ok: boolean; error?: string }> {
+  const supabase = await createClient()
+
+  // Validate price overrides are non-negative when set
+  for (const r of rows) {
+    if (r.price_override_cents !== null && r.price_override_cents < 0) {
+      return { ok: false, error: 'Price override cannot be negative.' }
+    }
+  }
+
+  const { error: delError } = await supabase
+    .from('product_warehouse_settings')
+    .delete()
+    .eq('product_id', productId)
+  if (delError) return { ok: false, error: delError.message }
+
+  if (rows.length === 0) {
+    revalidatePath(`/products/${productId}`)
+    revalidatePath('/products')
+    return { ok: true }
+  }
+
+  const payload = rows.map((r) => ({
+    product_id: productId,
+    warehouse_id: r.warehouse_id,
+    is_visible: r.is_visible,
+    price_override_cents: r.price_override_cents,
+    display_order: r.display_order,
+  }))
+
+  const { error: insError } = await supabase
+    .from('product_warehouse_settings')
+    .insert(payload)
+  if (insError) return { ok: false, error: insError.message }
+
+  revalidatePath(`/products/${productId}`)
+  revalidatePath('/products')
+  return { ok: true }
+}
