@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useState, useEffect, useTransition } from 'react'
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
@@ -28,6 +28,7 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover'
 import type { ProductListItem } from '@/lib/products'
+import { formatDOP } from '@/lib/format'
 
 type Props = {
   initialRows: ProductListItem[]
@@ -43,11 +44,6 @@ type Props = {
   }
 }
 
-const fmtDOP = new Intl.NumberFormat('es-DO', {
-  style: 'currency',
-  currency: 'DOP',
-  minimumFractionDigits: 0,
-})
 
 export function ProductsClient({
   initialRows,
@@ -212,10 +208,10 @@ export function ProductsClient({
                     </Link>
                   </TableCell>
                   <TableCell className="text-muted-foreground">
-                    {p.primary_category?.name ?? '—'}
+                    {p.primary_category?.name ?? 'â€”'}
                   </TableCell>
                   <TableCell className="text-right">
-                    {fmtDOP.format(p.price_cents / 100)}
+                    {formatDOP(p.price_cents, { decimals: 0 })}
                   </TableCell>
                   <TableCell className="text-right">
                     {p.commission_percent.toFixed(1)}%
@@ -269,7 +265,7 @@ export function ProductsClient({
       {totalPages > 1 && (
         <div className="flex items-center justify-between">
           <p className="text-sm text-muted-foreground">
-            Page {page} of {totalPages} · {total} products
+            Page {page} of {totalPages} Â· {total} products
           </p>
           <div className="flex gap-2">
             <Button

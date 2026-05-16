@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react'
 import { toast } from 'sonner'
 import { Check, X } from 'lucide-react'
+import { formatDateTime } from '@/lib/format'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -28,14 +29,6 @@ function toEditableString(value: string | number | boolean): string {
   return String(value)
 }
 
-function formatTimestamp(iso: string): string {
-  try {
-    const d = new Date(iso)
-    return d.toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' })
-  } catch {
-    return iso
-  }
-}
 
 function ConfigRow({ row }: { row: StoreConfigRow }) {
   const original = toEditableString(row.value)
@@ -122,7 +115,7 @@ function ConfigRow({ row }: { row: StoreConfigRow }) {
             </>
           ) : (
             <span className="text-xs text-muted-foreground">
-              {formatTimestamp(row.updated_at)}
+              {formatDateTime(row.updated_at)}
             </span>
           )}
         </div>
