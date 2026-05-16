@@ -1,10 +1,39 @@
 ﻿'use client'
 
-import { useState } from 'react'
-import { ChevronDown, ChevronRight, Plus, Banknote, CreditCard, ArrowRightLeft, Wallet } from 'lucide-react'
+import { useState, useTransition } from 'react'
+import { useRouter } from 'next/navigation'
+import { toast } from 'sonner'
+import { ChevronDown, ChevronRight, MoreVertical, XCircle, RotateCcw, Plus, Banknote, CreditCard, ArrowRightLeft, Wallet } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Textarea } from '@/components/ui/textarea'
+import { Label } from '@/components/ui/label'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { cancelSale, refundSale } from '../actions'
 import {
   Table,
   TableBody,
@@ -59,79 +88,257 @@ export function SaleDetail({ sale }: { sale: SaleDetailType }) {
 // ---------------------------------------------------------------------------
 
 function HeaderCard({ sale }: { sale: SaleDetailType }) {
+  const router = useRouter()
+  const [pending, startTransition] = useTransition()
+
+  const [cancelOpen, setCancelOpen] = useState(false)
+  const [cancelReason, setCancelReason] = useState('')
+
+  const [refundOpen, setRefundOpen] = useState(false)
+  const [refundReason, setRefundReason] = useState('')
+  const [refundRestock, setRefundRestock] = useState(true)
+
+  const canCancel =
+    sale.status === 'draft' ||
+    sale.status === 'confirmed' ||
+    sale.status === 'partially_paid'
+  const canRefund =
+    sale.status === 'confirmed' ||
+    sale.status === 'paid' ||
+    sale.status === 'partially_paid'
+  const hasAnyAction = canCancel || canRefund
+
+  function doCancel() {
+    startTransition(async () => {
+      const res = await cancelSale(sale.id, cancelReason)
+      if (res.ok) {
+        toast.success('Sale cancelled.')
+        setCancelOpen(false)
+        setCancelReason('')
+        router.refresh()
+      } else {
+        toast.error(res.error)
+      }
+    })
+  }
+
+  function doRefund() {
+    if (!refundReason.trim()) {
+      toast.error('Refund reason is required.')
+      return
+    }
+    startTransition(async () => {
+      const res = await refundSale(sale.id, refundReason, refundRestock)
+      if (res.ok) {
+        toast.success(
+          refundRestock ? 'Sale refunded and stock returned to lots.' : 'Sale refunded.',
+        )
+        setRefundOpen(false)
+        setRefundReason('')
+        setRefundRestock(true)
+        router.refresh()
+      } else {
+        toast.error(res.error)
+      }
+    })
+  }
+
   return (
-    <Card>
-      <CardHeader className="pb-3">
-        <div className="flex items-baseline justify-between gap-4">
-          <div className="space-y-1">
-            <div className="flex items-center gap-3">
-              <CardTitle className="font-mono text-xl">
-                {sale.invoice_number ?? '— (draft)'}
-              </CardTitle>
-              <Badge variant="secondary" className={STATUS_VARIANT[sale.status]}>
-                {STATUS_LABEL[sale.status]}
-              </Badge>
-            </div>
-            <p className="text-sm text-muted-foreground">
-              Sold {formatDateTime(sale.sold_at)}
-              {sale.confirmed_at && (
-                <> · confirmed {formatDateTime(sale.confirmed_at)}</>
-              )}
-              {sale.paid_at && <> · paid {formatDateTime(sale.paid_at)}</>}
-            </p>
-          </div>
-          <div className="text-right">
-            <div className="text-xs uppercase tracking-wide text-muted-foreground">
-              Total
-            </div>
-            <div className="text-2xl font-semibold tabular-nums">
-              {formatDOP(sale.total_cents)}
-            </div>
-            {sale.paid_cents !== sale.total_cents && (
-              <div className="text-xs text-muted-foreground tabular-nums">
-                {formatDOP(sale.paid_cents)} paid
+    <>
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-baseline justify-between gap-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-3">
+                <CardTitle className="font-mono text-xl">
+                  {sale.invoice_number ?? '— (draft)'}
+                </CardTitle>
+                <Badge variant="secondary" className={STATUS_VARIANT[sale.status]}>
+                  {STATUS_LABEL[sale.status]}
+                </Badge>
+                {hasAnyAction && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
+                        <MoreVertical className="h-4 w-4" />
+                        <span className="sr-only">Actions</span>
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start">
+                      {canCancel && (
+                        <DropdownMenuItem onClick={() => setCancelOpen(true)}>
+                          <XCircle className="mr-2 h-4 w-4" />
+                          Cancel sale
+                        </DropdownMenuItem>
+                      )}
+                      {canRefund && (
+                        <DropdownMenuItem
+                          onClick={() => setRefundOpen(true)}
+                          className="text-rose-700 focus:text-rose-700"
+                        >
+                          <RotateCcw className="mr-2 h-4 w-4" />
+                          Refund sale
+                        </DropdownMenuItem>
+                      )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
               </div>
-            )}
+              <p className="text-sm text-muted-foreground">
+                Sold {formatDateTime(sale.sold_at)}
+                {sale.confirmed_at && (
+                  <> · confirmed {formatDateTime(sale.confirmed_at)}</>
+                )}
+                {sale.paid_at && <> · paid {formatDateTime(sale.paid_at)}</>}
+              </p>
+            </div>
+            <div className="text-right">
+              <div className="text-xs uppercase tracking-wide text-muted-foreground">
+                Total
+              </div>
+              <div className="text-2xl font-semibold tabular-nums">
+                {formatDOP(sale.total_cents)}
+              </div>
+              {sale.paid_cents !== sale.total_cents && (
+                <div className="text-xs text-muted-foreground tabular-nums">
+                  {formatDOP(sale.paid_cents)} paid
+                </div>
+              )}
+            </div>
           </div>
-        </div>
-      </CardHeader>
-      <CardContent className="pt-0">
-        <dl className="grid grid-cols-1 gap-x-6 gap-y-2 text-sm sm:grid-cols-2 lg:grid-cols-3">
-          <Field label="Customer" value={sale.customer_name ?? 'Walk-in'} />
-          <Field label="Seller" value={sale.seller_name ?? '—'} />
-          <Field
-            label="Fulfillment"
-            value={`${sale.fulfillment_warehouse_name} · ${
-              FULFILLMENT_LABEL[sale.fulfillment_method] ?? sale.fulfillment_method
-            }`}
-          />
-          {sale.source_warehouse_name &&
-            sale.source_warehouse_id !== sale.fulfillment_warehouse_id && (
-              <Field
-                label="Source warehouse"
-                value={sale.source_warehouse_name}
-              />
-            )}
-          {sale.tracking_number && (
-            <Field label="Tracking" value={sale.tracking_number} />
-          )}
-          {sale.delivery_notes && (
-            <Field label="Delivery notes" value={sale.delivery_notes} />
-          )}
-          {sale.refunded_at && (
+        </CardHeader>
+        <CardContent className="pt-0">
+          <dl className="grid grid-cols-1 gap-x-6 gap-y-2 text-sm sm:grid-cols-2 lg:grid-cols-3">
+            <Field label="Customer" value={sale.customer_name ?? 'Walk-in'} />
+            <Field label="Seller" value={sale.seller_name ?? '—'} />
             <Field
-              label="Refunded"
-              value={`${formatDateTime(sale.refunded_at)} — ${
-                sale.refund_reason ?? 'no reason given'
+              label="Fulfillment"
+              value={`${sale.fulfillment_warehouse_name} · ${
+                FULFILLMENT_LABEL[sale.fulfillment_method] ?? sale.fulfillment_method
               }`}
             />
-          )}
-        </dl>
-      </CardContent>
-    </Card>
+            {sale.source_warehouse_name &&
+              sale.source_warehouse_id !== sale.fulfillment_warehouse_id && (
+                <Field
+                  label="Source warehouse"
+                  value={sale.source_warehouse_name}
+                />
+              )}
+            {sale.tracking_number && (
+              <Field label="Tracking" value={sale.tracking_number} />
+            )}
+            {sale.delivery_notes && (
+              <Field label="Delivery notes" value={sale.delivery_notes} />
+            )}
+            {sale.refunded_at && (
+              <Field
+                label="Refunded"
+                value={`${formatDateTime(sale.refunded_at)} — ${
+                  sale.refund_reason ?? 'no reason given'
+                }`}
+              />
+            )}
+          </dl>
+        </CardContent>
+      </Card>
+
+      {/* Cancel dialog */}
+      <AlertDialog open={cancelOpen} onOpenChange={setCancelOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancel this sale?</AlertDialogTitle>
+            <AlertDialogDescription>
+              The sale will move to <strong>cancelled</strong>. Stock movements are not
+              reversed. If this sale already had stock pulled, refund it instead.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="cancel-reason" className="text-sm">
+              Reason (optional)
+            </Label>
+            <Textarea
+              id="cancel-reason"
+              placeholder="Operator error, duplicate entry, …"
+              value={cancelReason}
+              onChange={(e) => setCancelReason(e.target.value)}
+              rows={3}
+              disabled={pending}
+            />
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={pending}>Keep sale</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={doCancel}
+              disabled={pending}
+              className="bg-rose-600 hover:bg-rose-700"
+            >
+              {pending ? 'Cancelling…' : 'Cancel sale'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Refund dialog */}
+      <Dialog open={refundOpen} onOpenChange={setRefundOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Refund this sale?</DialogTitle>
+            <DialogDescription>
+              Status moves to <strong>refunded</strong>. Audit-trail stock movements
+              are written for every consumed lot. All commissions on this sale are
+              voided (including ones already paid out, which creates a clawback debt).
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="refund-reason" className="text-sm">
+                Refund reason <span className="text-rose-600">*</span>
+              </Label>
+              <Textarea
+                id="refund-reason"
+                placeholder="Customer returned product, wrong item, …"
+                value={refundReason}
+                onChange={(e) => setRefundReason(e.target.value)}
+                rows={3}
+                disabled={pending}
+                required
+              />
+            </div>
+            <label className="flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={refundRestock}
+                onChange={(e) => setRefundRestock(e.target.checked)}
+                disabled={pending}
+                className="mt-0.5"
+              />
+              <span>
+                <strong>Add stock back to lots.</strong> Uncheck only if the items
+                were damaged or destroyed and won't return to inventory.
+              </span>
+            </label>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setRefundOpen(false)}
+              disabled={pending}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={doRefund}
+              disabled={pending || !refundReason.trim()}
+              className="bg-rose-600 hover:bg-rose-700 text-white"
+            >
+              {pending ? 'Refunding…' : 'Refund sale'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   )
 }
-
 function Field({ label, value }: { label: string; value: string }) {
   return (
     <div>
