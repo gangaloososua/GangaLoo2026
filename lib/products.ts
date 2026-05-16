@@ -201,3 +201,24 @@ export async function fetchProductCategories(
     display_order: r.display_order,
   }))
 }
+
+export type ProductImage = {
+  id: string
+  url: string
+  alt_text: string | null
+  display_order: number
+  is_primary: boolean
+}
+
+export async function fetchProductImages(
+  productId: string
+): Promise<ProductImage[]> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('product_images')
+    .select('id, url, alt_text, display_order, is_primary')
+    .eq('product_id', productId)
+    .order('display_order', { ascending: true })
+  if (error) throw error
+  return data ?? []
+}

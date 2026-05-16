@@ -254,3 +254,203 @@ export async function saveProductCategories(
   revalidatePath('/products')
   return { ok: true }
 }
+
+const BUCKET = 'product-images'
+
+function extOf(filename: string): string {
+  const dot = filename.lastIndexOf('.')
+  return dot === -1 ? '' : filename.slice(dot).toLowerCase()
+}
+
+export async function uploadProductImage(
+  formData: FormData
+): Promise<{ ok: boolean; error?: string; image?: { id: string; url: string } }> {
+  const supabase = await createClient()
+  const productId = String(formData.get('product_id') ?? '')
+  const file = formData.get('file') as File | null
+  if (!productId || !file) return { ok: false, error: 'Missing product or file.' }
+
+  const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
+  if (!allowed.includes(file.type)) {
+    return { ok: false, error: `Unsupported file type: ${file.type}` }
+  }
+  if (file.size > 5 * 1024 * 1024) {
+    return { ok: false, error: 'File exceeds 5 MB limit.' }
+  }
+
+  const ext = extOf(file.name) || '.jpg'
+  const path = `products/${productId}/${crypto.randomUUID()}${ext}`
+
+  const { error: upErr } = await supabase.storage
+    .from(BUCKET)
+    .upload(path, file, { contentType: file.type, upsert: false })
+  if (upErr) return { ok: false, error: upErr.message }
+
+  const { data: pub } = supabase.storage.from(BUCKET).getPublicUrl(path)
+  const publicUrl = pub.publicUrl
+
+  // Determine display_order = max + 1, is_primary = true if first image
+  const { data: existing, error: countErr } = await supabase
+    .from('product_images')
+    .select('id, display_order')
+    .eq('product_id', productId)
+    .order('display_order', { ascending: false })
+    .limit(1)
+  if (countErr) return { ok: false, error: countErr.message }
+  const nextOrder = existing && existing.length > 0 ? existing[0].display_order + 1 : 0
+  const isPrimary = !existing || existing.length === 0
+
+  const { data: inserted, error: insErr } = await supabase
+    .from('product_images')
+    .insert({
+      product_id: productId,
+      url: publicUrl,
+      alt_text: null,
+      display_order: nextOrder,
+      is_primary: isPrimary,
+    })
+    .select('id, url')
+    .single()
+  if (insErr) {
+    // Best-effort cleanup of the just-uploaded file
+    await supabase.storage.from(BUCKET).remove([path])
+    return { ok: false, error: insErr.message }
+  }
+
+  if (isPrimary) {
+    await supabase.from('products').update({ primary_image_url: publicUrl }).eq('id', productId)
+  }
+
+  revalidatePath(`/products/${productId}`)
+  revalidatePath('/products')
+  return { ok: true, image: inserted }
+}
+
+export async function saveProductImagesMetadata(
+  productId: string,
+  rows: Array<{
+    id: string
+    alt_text: string | null
+    is_primary: boolean
+    display_order: number
+  }>
+): Promise<{ ok: boolean; error?: string }> {
+  const supabase = await createClient()
+
+  if (rows.length > 0) {
+    const primaryCount = rows.filter((r) => r.is_primary).length
+    if (primaryCount !== 1) {
+      return { ok: false, error: 'Exactly one image must be marked as primary.' }
+    }
+  }
+
+  // Update each row. Small N, sequential is fine and avoids transaction complexity.
+  for (const r of rows) {
+    const { error } = await supabase
+      .from('product_images')
+      .update({
+        alt_text: r.alt_text,
+        is_primary: r.is_primary,
+        display_order: r.display_order,
+      })
+      .eq('id', r.id)
+      .eq('product_id', productId)
+    if (error) return { ok: false, error: error.message }
+  }
+
+  // Sync products.primary_image_url with the new primary
+  const primary = rows.find((r) => r.is_primary)
+  if (primary) {
+    const { data: primaryRow, error: fetchErr } = await supabase
+      .from('product_images')
+      .select('url')
+      .eq('id', primary.id)
+      .maybeSingle()
+    if (fetchErr) return { ok: false, error: fetchErr.message }
+    if (primaryRow) {
+      const { error: updErr } = await supabase
+        .from('products')
+        .update({ primary_image_url: primaryRow.url })
+        .eq('id', productId)
+      if (updErr) return { ok: false, error: updErr.message }
+    }
+  } else if (rows.length === 0) {
+    // No images at all — clear the primary URL
+    await supabase.from('products').update({ primary_image_url: null }).eq('id', productId)
+  }
+
+  revalidatePath(`/products/${productId}`)
+  revalidatePath('/products')
+  return { ok: true }
+}
+
+function storagePathFromPublicUrl(url: string): string | null {
+  // Public URL shape: .../storage/v1/object/public/product-images/<path>
+  const marker = `/${BUCKET}/`
+  const idx = url.indexOf(marker)
+  if (idx === -1) return null
+  return url.slice(idx + marker.length)
+}
+
+export async function deleteProductImage(
+  productId: string,
+  imageId: string
+): Promise<{ ok: boolean; error?: string }> {
+  const supabase = await createClient()
+
+  // Fetch the row first so we know the URL (for Storage delete) and primary status
+  const { data: img, error: fetchErr } = await supabase
+    .from('product_images')
+    .select('id, url, is_primary')
+    .eq('id', imageId)
+    .eq('product_id', productId)
+    .maybeSingle()
+  if (fetchErr) return { ok: false, error: fetchErr.message }
+  if (!img) return { ok: false, error: 'Image not found.' }
+
+  // Delete the DB row first — if Storage delete fails afterward we have an orphan
+  // file but no broken UI reference. The other way around leaves a row pointing
+  // to a missing file, which is worse.
+  const { error: delErr } = await supabase
+    .from('product_images')
+    .delete()
+    .eq('id', imageId)
+    .eq('product_id', productId)
+  if (delErr) return { ok: false, error: delErr.message }
+
+  // Best-effort Storage cleanup
+  const path = storagePathFromPublicUrl(img.url)
+  if (path) {
+    await supabase.storage.from(BUCKET).remove([path])
+  }
+
+  // If we just removed the primary, promote the next image (lowest display_order)
+  if (img.is_primary) {
+    const { data: next, error: nextErr } = await supabase
+      .from('product_images')
+      .select('id, url')
+      .eq('product_id', productId)
+      .order('display_order', { ascending: true })
+      .limit(1)
+    if (nextErr) return { ok: false, error: nextErr.message }
+    if (next && next.length > 0) {
+      await supabase
+        .from('product_images')
+        .update({ is_primary: true })
+        .eq('id', next[0].id)
+      await supabase
+        .from('products')
+        .update({ primary_image_url: next[0].url })
+        .eq('id', productId)
+    } else {
+      await supabase
+        .from('products')
+        .update({ primary_image_url: null })
+        .eq('id', productId)
+    }
+  }
+
+  revalidatePath(`/products/${productId}`)
+  revalidatePath('/products')
+  return { ok: true }
+}

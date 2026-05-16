@@ -4,6 +4,7 @@ import { ProductForm } from '../_form/product-form'
 import {
   fetchProductCategories,
   fetchAllCategoriesFlat,
+  fetchProductImages,
 } from '@/lib/products'
 
 export default async function EditProductPage({
@@ -25,9 +26,10 @@ export default async function EditProductPage({
     .maybeSingle()
   if (error || !product) notFound()
 
-  const [productCategories, allCategories] = await Promise.all([
+  const [productCategories, allCategories, productImages] = await Promise.all([
     fetchProductCategories(product.id),
     fetchAllCategoriesFlat(),
+    fetchProductImages(product.id),
   ])
 
   return (
@@ -51,6 +53,7 @@ export default async function EditProductPage({
       }}
       productCategories={productCategories}
       allCategories={allCategories}
+      productImages={productImages}
       justCreated={sp.created === '1'}
     />
   )

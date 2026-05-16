@@ -20,8 +20,9 @@ import {
 import { BasicsTab } from './basics-tab'
 import { PricingTab } from './pricing-tab'
 import { CategoriesTab } from './categories-tab'
+import { ImagesTab } from './images-tab'
 import { DeleteDialog } from './delete-dialog'
-import type { ProductCategory } from '@/lib/products'
+import type { ProductCategory, ProductImage } from '@/lib/products'
 
 type Mode = 'create' | 'edit'
 
@@ -46,6 +47,7 @@ type Props = {
   initial?: InitialValues
   productCategories?: ProductCategory[]
   allCategories?: FlatCategory[]
+  productImages?: ProductImage[]
   justCreated?: boolean
 }
 
@@ -57,6 +59,7 @@ export function ProductForm({
   initial = {},
   productCategories = [],
   allCategories = [],
+  productImages = [],
   justCreated,
 }: Props) {
   const router = useRouter()
@@ -129,7 +132,7 @@ export function ProductForm({
           <TabsTrigger value="categories" disabled={mode === 'create'}>
             Categories
           </TabsTrigger>
-          <TabsTrigger value="images" disabled>
+          <TabsTrigger value="images" disabled={mode === 'create'}>
             Images
           </TabsTrigger>
           <TabsTrigger value="warehouses" disabled>
@@ -167,6 +170,12 @@ export function ProductForm({
               initialRows={productCategories}
               allCategories={allCategories}
             />
+          </TabsContent>
+        )}
+
+        {mode === 'edit' && productId && (
+          <TabsContent value="images" forceMount className="pt-6">
+            <ImagesTab productId={productId} initialRows={productImages} />
           </TabsContent>
         )}
       </Tabs>
