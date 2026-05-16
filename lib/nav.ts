@@ -1,4 +1,4 @@
-import {
+﻿import {
   LayoutDashboard,
   ShoppingCart,
   Globe,
@@ -9,6 +9,7 @@ import {
   Users,
   Truck,
   UsersRound,
+  Settings,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -29,4 +30,5 @@ export const navItems: NavItem[] = [
   { label: 'People', href: '/people', icon: UsersRound },
   { label: 'Customers', href: '/people?role=customer', icon: Users },
   { label: 'Distributors', href: '/people?distributor=1', icon: Truck },
+  { label: 'Settings', href: '/settings', icon: Settings },
 ]
