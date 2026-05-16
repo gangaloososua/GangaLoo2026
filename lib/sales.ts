@@ -386,3 +386,56 @@ export async function listMoneyAccounts(): Promise<MoneyAccount[]> {
   if (error) throw new Error(`listMoneyAccounts: ${error.message}`)
   return (data ?? []) as MoneyAccount[]
 }
+
+// ---------------------------------------------------------------------------
+// Customer + seller pickers for /sales/new
+// ---------------------------------------------------------------------------
+
+export type CustomerPickerItem = {
+  id: string
+  full_name: string
+  email: string | null
+  club_tier: string | null
+}
+
+export async function listCustomersForPicker(): Promise<CustomerPickerItem[]> {
+  const supabase = await createClient()
+  // Anyone with a customer-ish role. Cheaper to fetch by role than by
+  // who has been on a sale; we want to allow new customers too.
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id, full_name, email, club_tier')
+    .in('role', ['customer'])
+    .order('full_name')
+    .limit(2000)
+  if (error) throw new Error(`listCustomersForPicker: ${error.message}`)
+  return (data ?? []) as CustomerPickerItem[]
+}
+
+export type SellerOption = { id: string; full_name: string; role: string }
+
+export async function listSellers(): Promise<SellerOption[]> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id, full_name, role')
+    .in('role', ['owner', 'admin', 'seller', 'distributor'])
+    .order('full_name')
+  if (error) throw new Error(`listSellers: ${error.message}`)
+  return (data ?? []) as SellerOption[]
+}
+
+export async function getCurrentSeller(): Promise<SellerOption | null> {
+  const supabase = await createClient()
+  const { data: auth } = await supabase.auth.getUser()
+  if (!auth.user) return null
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id, full_name, role')
+    .eq('id', auth.user.id)
+    .maybeSingle()
+  if (error || !data) return null
+  // Only return them as a seller default if their role qualifies.
+  if (!['owner', 'admin', 'seller', 'distributor'].includes(data.role)) return null
+  return data as SellerOption
+}
