@@ -2,6 +2,10 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
+import {
+  searchProductsForSale,
+  type ProductSearchResult,
+} from '@/lib/sales'
 
 export type ActionResult = { ok: true } | { ok: false; error: string }
 
@@ -341,4 +345,34 @@ export async function recordPayment(input: RecordPaymentInput): Promise<ActionRe
   revalidatePath(`/sales/${input.saleId}`)
   revalidatePath('/sales')
   return { ok: true }
+}
+
+// ============================================================
+// 9.7 — product search wrapper (client-callable)
+// ============================================================
+
+export type SearchProductsResult =
+  | { ok: true; results: ProductSearchResult[] }
+  | { ok: false; error: string }
+
+export async function searchProductsForSaleAction(input: {
+  query: string
+  warehouseId: string
+}): Promise<SearchProductsResult> {
+  // Caller is responsible for ensuring auth — every page in (dashboard)
+  // is already gated. We still don't take a sale-write action here, so
+  // even an unauthenticated call would only leak read-side info.
+  try {
+    if (!input.warehouseId) {
+      return { ok: false, error: 'Source warehouse is required.' }
+    }
+    const results = await searchProductsForSale({
+      query: input.query,
+      warehouseId: input.warehouseId,
+    })
+    return { ok: true, results }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Search failed.'
+    return { ok: false, error: msg }
+  }
 }

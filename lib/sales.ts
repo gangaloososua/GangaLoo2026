@@ -439,3 +439,103 @@ export async function getCurrentSeller(): Promise<SellerOption | null> {
   if (!['owner', 'admin', 'seller', 'distributor'].includes(data.role)) return null
   return data as SellerOption
 }
+
+// ============================================================
+// 9.7 — product search for the POS create flow
+// ============================================================
+
+export type ProductSearchResult = {
+  id: string
+  sku: string
+  name: string
+  primary_image_url: string | null
+  base_price_cents: number
+  club_price_cents: number | null
+  warehouse_price_override_cents: number | null
+  commission_percent: number
+  qty_on_hand: number
+}
+
+/**
+ * Search active products for the POS cart, scoped to a source warehouse
+ * so we can attach the warehouse-specific override price and the
+ * warehouse-specific stock (already lot-rolled-up via v_inventory_current).
+ *
+ * Does NOT resolve the default unit price — that depends on the customer's
+ * club tier, which the cart owns. Returns all three price candidates and
+ * lets the cart pick at add-time.
+ */
+export async function searchProductsForSale(opts: {
+  query: string
+  warehouseId: string
+  limit?: number
+}): Promise<ProductSearchResult[]> {
+  const { query, warehouseId } = opts
+  const limit = opts.limit ?? 20
+
+  // Sanitize for PostgREST .or() — strip chars that would break the
+  // filter expression, then collapse whitespace.
+  const q = query
+    .replace(/[,'"()*%]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+  if (!q) return []
+
+  const supabase = await createClient()
+
+  // 1) Matching active products.
+  const { data: products, error: pErr } = await supabase
+    .from('products')
+    .select(
+      'id, sku, name, primary_image_url, price_cents, club_price_cents, commission_percent'
+    )
+    .eq('is_active', true)
+    .or(`sku.ilike.%${q}%,name.ilike.%${q}%`)
+    .order('name', { ascending: true })
+    .limit(limit)
+  if (pErr) throw pErr
+
+  const rows = products ?? []
+  if (rows.length === 0) return []
+  const productIds = rows.map((r) => r.id as string)
+
+  // 2 + 3) Warehouse override prices and warehouse stock, in parallel.
+  const [settingsRes, stockRes] = await Promise.all([
+    supabase
+      .from('product_warehouse_settings')
+      .select('product_id, price_override_cents')
+      .eq('warehouse_id', warehouseId)
+      .in('product_id', productIds),
+    supabase
+      .from('v_inventory_current')
+      .select('product_id, qty_on_hand')
+      .eq('warehouse_id', warehouseId)
+      .in('product_id', productIds),
+  ])
+  if (settingsRes.error) throw settingsRes.error
+  if (stockRes.error) throw stockRes.error
+
+  const overrideMap: Record<string, number | null> = {}
+  for (const s of settingsRes.data ?? []) {
+    overrideMap[s.product_id as string] =
+      s.price_override_cents == null ? null : Number(s.price_override_cents)
+  }
+
+  const stockMap: Record<string, number> = {}
+  for (const s of stockRes.data ?? []) {
+    stockMap[s.product_id as string] = Number(s.qty_on_hand) || 0
+  }
+
+  return rows.map((r) => ({
+    id: r.id as string,
+    sku: r.sku as string,
+    name: r.name as string,
+    primary_image_url: (r.primary_image_url as string | null) ?? null,
+    base_price_cents: Number(r.price_cents) || 0,
+    club_price_cents:
+      r.club_price_cents == null ? null : Number(r.club_price_cents),
+    warehouse_price_override_cents: overrideMap[r.id as string] ?? null,
+    commission_percent: Number(r.commission_percent) || 0,
+    qty_on_hand: stockMap[r.id as string] ?? 0,
+  }))
+}
