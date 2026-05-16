@@ -1,7 +1,7 @@
 'use client'
 
-import { useActionState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useActionState, useEffect, useRef } from 'react'
+import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
 import { toast } from 'sonner'
 import { ArrowLeft } from 'lucide-react'
@@ -12,9 +12,14 @@ import {
   TabsList,
   TabsTrigger,
 } from '@/components/ui/tabs'
-import { createProduct, type ProductFormState } from '../actions'
+import {
+  createProduct,
+  updateProduct,
+  type ProductFormState,
+} from '../actions'
 import { BasicsTab } from './basics-tab'
 import { PricingTab } from './pricing-tab'
+import { DeleteDialog } from './delete-dialog'
 
 type Mode = 'create' | 'edit'
 
@@ -35,20 +40,47 @@ type Props = {
   mode: Mode
   productId?: string
   initial?: InitialValues
+  justCreated?: boolean
 }
 
 const INITIAL: ProductFormState = { ok: false }
 
-export function ProductForm({ mode, initial = {} }: Props) {
+export function ProductForm({
+  mode,
+  productId,
+  initial = {},
+  justCreated,
+}: Props) {
   const router = useRouter()
-  const [state, formAction, pending] = useActionState(createProduct, INITIAL)
+  const pathname = usePathname()
+  const action = mode === 'create' ? createProduct : updateProduct
+  const [state, formAction, pending] = useActionState(action, INITIAL)
+  const createdToastShown = useRef(false)
 
+  // One-time toast after redirect from create
+  useEffect(() => {
+    if (justCreated && !createdToastShown.current) {
+      createdToastShown.current = true
+      toast.success('Product created')
+      router.replace(pathname)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [justCreated])
+
+  // Edit-mode save feedback
   useEffect(() => {
     if (state.error) toast.error(state.error)
-  }, [state])
+    else if (state.ok && mode === 'edit') {
+      toast.success('Saved')
+      router.refresh()
+    }
+  }, [state, mode, router])
 
   return (
     <form action={formAction} className="space-y-6">
+      {mode === 'edit' && productId && (
+        <input type="hidden" name="product_id" value={productId} />
+      )}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Button asChild variant="ghost" size="sm">
@@ -58,10 +90,16 @@ export function ProductForm({ mode, initial = {} }: Props) {
             </Link>
           </Button>
           <h1 className="text-2xl font-bold">
-            {mode === 'create' ? 'New product' : 'Edit product'}
+            {mode === 'create' ? 'New product' : initial.name || 'Edit product'}
           </h1>
         </div>
         <div className="flex gap-2">
+          {mode === 'edit' && productId && (
+            <DeleteDialog
+              productId={productId}
+              productName={initial.name ?? 'this product'}
+            />
+          )}
           <Button
             type="button"
             variant="outline"
