@@ -8,6 +8,7 @@ import {
   fetchAllWarehouses,
   fetchProductWarehouseSettings,
   fetchProductStockByWarehouse,
+  fetchCurrentExchangeRate,
 } from '@/lib/products'
 
 export default async function EditProductPage({
@@ -23,7 +24,7 @@ export default async function EditProductPage({
   const { data: product, error } = await supabase
     .from('products')
     .select(
-      'id, sku, name, slug, description, is_active, visible_in_store, price_cents, club_price_cents, commission_percent, target_payback_percent',
+      'id, sku, name, slug, description, is_active, visible_in_store, price_cents, club_price_cents, commission_percent, target_payback_percent, cost_calc',
     )
     .eq('id', id)
     .maybeSingle()
@@ -36,6 +37,7 @@ export default async function EditProductPage({
     allWarehouses,
     productWarehouseSettings,
     stockByWarehouse,
+    currentRate,
   ] = await Promise.all([
     fetchProductCategories(product.id),
     fetchAllCategoriesFlat(),
@@ -43,6 +45,7 @@ export default async function EditProductPage({
     fetchAllWarehouses(),
     fetchProductWarehouseSettings(product.id),
     fetchProductStockByWarehouse(product.id),
+    fetchCurrentExchangeRate(),
   ])
 
   return (
@@ -70,6 +73,8 @@ export default async function EditProductPage({
       allWarehouses={allWarehouses}
       productWarehouseSettings={productWarehouseSettings}
       stockByWarehouse={stockByWarehouse}
+      costCalc={product.cost_calc ?? null}
+      currentRate={currentRate}
       justCreated={sp.created === '1'}
     />
   )

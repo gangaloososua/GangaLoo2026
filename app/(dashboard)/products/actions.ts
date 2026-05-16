@@ -502,3 +502,35 @@ export async function saveProductWarehouseSettings(
   revalidatePath('/products')
   return { ok: true }
 }
+
+export async function saveProductCostCalc(
+  productId: string,
+  state: Record<string, number | null>
+): Promise<{ ok: boolean; error?: string }> {
+  const supabase = await createClient()
+  const { error } = await supabase
+    .from('products')
+    .update({ cost_calc: state })
+    .eq('id', productId)
+  if (error) return { ok: false, error: error.message }
+  revalidatePath(`/products/${productId}`)
+  return { ok: true }
+}
+
+export async function applyCalculatorPrice(
+  productId: string,
+  priceCents: number
+): Promise<{ ok: boolean; error?: string }> {
+  if (!Number.isFinite(priceCents) || priceCents < 0) {
+    return { ok: false, error: 'Invalid price.' }
+  }
+  const supabase = await createClient()
+  const { error } = await supabase
+    .from('products')
+    .update({ price_cents: Math.round(priceCents) })
+    .eq('id', productId)
+  if (error) return { ok: false, error: error.message }
+  revalidatePath(`/products/${productId}`)
+  revalidatePath('/products')
+  return { ok: true }
+}

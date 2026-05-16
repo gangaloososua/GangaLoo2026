@@ -277,3 +277,38 @@ export async function fetchProductStockByWarehouse(
   }
   return out
 }
+
+export type ExchangeRateRow = {
+  year: number
+  month: number
+  rate: number
+  source: string | null
+}
+
+export async function fetchCurrentExchangeRate(): Promise<ExchangeRateRow | null> {
+  const supabase = await createClient()
+  // Try current year/month first, fall back to most recent if no row for this month
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = now.getMonth() + 1
+  const { data: exact, error: exactErr } = await supabase
+    .from('monthly_exchange_rates')
+    .select('year, month, rate, source')
+    .eq('year', year)
+    .eq('month', month)
+    .maybeSingle()
+  if (exactErr) throw exactErr
+  if (exact) {
+    return { ...exact, rate: Number(exact.rate) }
+  }
+  const { data: latest, error: latestErr } = await supabase
+    .from('monthly_exchange_rates')
+    .select('year, month, rate, source')
+    .order('year', { ascending: false })
+    .order('month', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  if (latestErr) throw latestErr
+  if (!latest) return null
+  return { ...latest, rate: Number(latest.rate) }
+}

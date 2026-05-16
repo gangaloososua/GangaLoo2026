@@ -22,12 +22,14 @@ import { PricingTab } from './pricing-tab'
 import { CategoriesTab } from './categories-tab'
 import { ImagesTab } from './images-tab'
 import { WarehousesTab } from './warehouses-tab'
+import { CalculatorTab, type CostCalcState } from './calculator-tab'
 import { DeleteDialog } from './delete-dialog'
 import type {
   ProductCategory,
   ProductImage,
   Warehouse,
   ProductWarehouseSetting,
+  ExchangeRateRow,
 } from '@/lib/products'
 
 type Mode = 'create' | 'edit'
@@ -57,6 +59,8 @@ type Props = {
   allWarehouses?: Warehouse[]
   productWarehouseSettings?: ProductWarehouseSetting[]
   stockByWarehouse?: Record<string, number>
+  costCalc?: CostCalcState | null
+  currentRate?: ExchangeRateRow | null
   justCreated?: boolean
 }
 
@@ -72,6 +76,8 @@ export function ProductForm({
   allWarehouses = [],
   productWarehouseSettings = [],
   stockByWarehouse = {},
+  costCalc = null,
+  currentRate = null,
   justCreated,
 }: Props) {
   const router = useRouter()
@@ -148,7 +154,7 @@ export function ProductForm({
           <TabsTrigger value="warehouses" disabled={mode === 'create'}>
             Warehouses
           </TabsTrigger>
-          <TabsTrigger value="calculator" disabled>
+          <TabsTrigger value="calculator" disabled={mode === 'create'}>
             Calculator
           </TabsTrigger>
         </TabsList>
@@ -196,6 +202,18 @@ export function ProductForm({
               warehouses={allWarehouses}
               initialSettings={productWarehouseSettings}
               stockByWarehouse={stockByWarehouse}
+            />
+          </TabsContent>
+        )}
+
+        {mode === 'edit' && productId && (
+          <TabsContent value="calculator" forceMount className="pt-6">
+            <CalculatorTab
+              productId={productId}
+              initialState={costCalc}
+              productCommissionPercent={initial.commission_percent ?? 0}
+              productTargetPaybackPercent={initial.target_payback_percent ?? null}
+              currentRate={currentRate}
             />
           </TabsContent>
         )}
