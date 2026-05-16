@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useActionState, useEffect, useRef } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
@@ -19,7 +19,9 @@ import {
 } from '../actions'
 import { BasicsTab } from './basics-tab'
 import { PricingTab } from './pricing-tab'
+import { CategoriesTab } from './categories-tab'
 import { DeleteDialog } from './delete-dialog'
+import type { ProductCategory } from '@/lib/products'
 
 type Mode = 'create' | 'edit'
 
@@ -36,10 +38,14 @@ type InitialValues = {
   target_payback_percent?: number | null
 }
 
+type FlatCategory = { id: string; name: string; parent_id: string | null }
+
 type Props = {
   mode: Mode
   productId?: string
   initial?: InitialValues
+  productCategories?: ProductCategory[]
+  allCategories?: FlatCategory[]
   justCreated?: boolean
 }
 
@@ -49,6 +55,8 @@ export function ProductForm({
   mode,
   productId,
   initial = {},
+  productCategories = [],
+  allCategories = [],
   justCreated,
 }: Props) {
   const router = useRouter()
@@ -118,7 +126,7 @@ export function ProductForm({
         <TabsList>
           <TabsTrigger value="basics">Basics</TabsTrigger>
           <TabsTrigger value="pricing">Pricing</TabsTrigger>
-          <TabsTrigger value="categories" disabled>
+          <TabsTrigger value="categories" disabled={mode === 'create'}>
             Categories
           </TabsTrigger>
           <TabsTrigger value="images" disabled>
@@ -151,6 +159,16 @@ export function ProductForm({
             initialTargetPaybackPercent={initial.target_payback_percent}
           />
         </TabsContent>
+
+        {mode === 'edit' && productId && (
+          <TabsContent value="categories" forceMount className="pt-6">
+            <CategoriesTab
+              productId={productId}
+              initialRows={productCategories}
+              allCategories={allCategories}
+            />
+          </TabsContent>
+        )}
       </Tabs>
     </form>
   )

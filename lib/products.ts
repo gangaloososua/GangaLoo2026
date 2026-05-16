@@ -174,3 +174,30 @@ export async function fetchAllCategoriesFlat() {
   if (error) throw error
   return data ?? []
 }
+
+export type ProductCategory = {
+  category_id: string
+  category_name: string
+  is_visible: boolean
+  is_primary: boolean
+  display_order: number
+}
+
+export async function fetchProductCategories(
+  productId: string
+): Promise<ProductCategory[]> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('product_categories')
+    .select('category_id, is_visible, is_primary, display_order, categories(name)')
+    .eq('product_id', productId)
+    .order('display_order', { ascending: true })
+  if (error) throw error
+  return (data ?? []).map((r: any) => ({
+    category_id: r.category_id,
+    category_name: r.categories?.name ?? '?',
+    is_visible: r.is_visible,
+    is_primary: r.is_primary,
+    display_order: r.display_order,
+  }))
+}

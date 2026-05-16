@@ -1,6 +1,10 @@
-import { notFound } from 'next/navigation'
+﻿import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { ProductForm } from '../_form/product-form'
+import {
+  fetchProductCategories,
+  fetchAllCategoriesFlat,
+} from '@/lib/products'
 
 export default async function EditProductPage({
   params,
@@ -12,7 +16,6 @@ export default async function EditProductPage({
   const { id } = await params
   const sp = await searchParams
   const supabase = await createClient()
-
   const { data: product, error } = await supabase
     .from('products')
     .select(
@@ -20,8 +23,12 @@ export default async function EditProductPage({
     )
     .eq('id', id)
     .maybeSingle()
-
   if (error || !product) notFound()
+
+  const [productCategories, allCategories] = await Promise.all([
+    fetchProductCategories(product.id),
+    fetchAllCategoriesFlat(),
+  ])
 
   return (
     <ProductForm
@@ -42,6 +49,8 @@ export default async function EditProductPage({
             ? Number(product.target_payback_percent)
             : null,
       }}
+      productCategories={productCategories}
+      allCategories={allCategories}
       justCreated={sp.created === '1'}
     />
   )

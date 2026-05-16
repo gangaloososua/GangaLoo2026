@@ -207,3 +207,50 @@ export async function deleteProduct(
   revalidatePath('/products')
   return { ok: true }
 }
+
+export async function saveProductCategories(
+  productId: string,
+  rows: Array<{
+    category_id: string
+    is_visible: boolean
+    is_primary: boolean
+    display_order: number
+  }>
+): Promise<{ ok: boolean; error?: string }> {
+  const supabase = await createClient()
+
+  // Validate: at most one primary, and if any rows exist, exactly one must be primary
+  const primaryCount = rows.filter((r) => r.is_primary).length
+  if (rows.length > 0 && primaryCount !== 1) {
+    return { ok: false, error: 'Exactly one category must be marked as primary.' }
+  }
+
+  // Replace strategy: delete all existing rows for this product, then insert the new set.
+  // Simple and safe given the small row count per product.
+  const { error: delError } = await supabase
+    .from('product_categories')
+    .delete()
+    .eq('product_id', productId)
+  if (delError) return { ok: false, error: delError.message }
+
+  if (rows.length === 0) {
+    revalidatePath(`/products/${productId}`)
+    revalidatePath('/products')
+    return { ok: true }
+  }
+
+  const payload = rows.map((r) => ({
+    product_id: productId,
+    category_id: r.category_id,
+    is_visible: r.is_visible,
+    is_primary: r.is_primary,
+    display_order: r.display_order,
+  }))
+
+  const { error: insError } = await supabase.from('product_categories').insert(payload)
+  if (insError) return { ok: false, error: insError.message }
+
+  revalidatePath(`/products/${productId}`)
+  revalidatePath('/products')
+  return { ok: true }
+}
