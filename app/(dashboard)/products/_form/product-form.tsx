@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/tabs'
 import { createProduct, type ProductFormState } from '../actions'
 import { BasicsTab } from './basics-tab'
+import { PricingTab } from './pricing-tab'
 
 type Mode = 'create' | 'edit'
 
@@ -24,6 +25,10 @@ type InitialValues = {
   description?: string
   is_active?: boolean
   visible_in_store?: boolean
+  price_cents?: number
+  club_price_cents?: number | null
+  commission_percent?: number
+  target_payback_percent?: number | null
 }
 
 type Props = {
@@ -74,9 +79,7 @@ export function ProductForm({ mode, initial = {} }: Props) {
       <Tabs defaultValue="basics">
         <TabsList>
           <TabsTrigger value="basics">Basics</TabsTrigger>
-          <TabsTrigger value="pricing" disabled>
-            Pricing
-          </TabsTrigger>
+          <TabsTrigger value="pricing">Pricing</TabsTrigger>
           <TabsTrigger value="categories" disabled>
             Categories
           </TabsTrigger>
@@ -99,6 +102,15 @@ export function ProductForm({ mode, initial = {} }: Props) {
             initialDescription={initial.description}
             initialIsActive={initial.is_active ?? true}
             initialVisibleInStore={initial.visible_in_store ?? true}
+          />
+        </TabsContent>
+
+        <TabsContent value="pricing" forceMount className="pt-6">
+          <PricingTab
+            initialPriceCents={initial.price_cents}
+            initialClubPriceCents={initial.club_price_cents}
+            initialCommissionPercent={initial.commission_percent}
+            initialTargetPaybackPercent={initial.target_payback_percent}
           />
         </TabsContent>
       </Tabs>

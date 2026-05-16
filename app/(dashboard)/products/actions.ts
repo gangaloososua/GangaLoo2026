@@ -33,8 +33,29 @@ export async function createProduct(
   const isActive = formData.get('is_active') === 'on'
   const visibleInStore = formData.get('visible_in_store') === 'on'
 
+  const priceDop =
+    parseFloat(String(formData.get('price_dop') ?? '0')) || 0
+  const clubPriceDopRaw = String(
+    formData.get('club_price_dop') ?? '',
+  ).trim()
+  const clubPriceDop = clubPriceDopRaw ? parseFloat(clubPriceDopRaw) : null
+  const commissionPercent =
+    parseFloat(String(formData.get('commission_percent') ?? '0')) || 0
+  const paybackRaw = String(
+    formData.get('target_payback_percent') ?? '',
+  ).trim()
+  const targetPaybackPercent = paybackRaw ? parseFloat(paybackRaw) : null
+
   if (!sku) return { ok: false, error: 'SKU is required.' }
   if (!name) return { ok: false, error: 'Name is required.' }
+  if (priceDop < 0)
+    return { ok: false, error: 'Price cannot be negative.' }
+
+  const priceCents = Math.round(priceDop * 100)
+  const clubPriceCents =
+    clubPriceDop != null && !Number.isNaN(clubPriceDop)
+      ? Math.round(clubPriceDop * 100)
+      : null
 
   if (!slug) slug = slugify(name)
   if (!slug) slug = slugify(sku) || `product-${Date.now()}`
@@ -61,8 +82,10 @@ export async function createProduct(
       description: description || null,
       is_active: isActive,
       visible_in_store: visibleInStore,
-      price_cents: 0,
-      commission_percent: 0,
+      price_cents: priceCents,
+      club_price_cents: clubPriceCents,
+      commission_percent: commissionPercent,
+      target_payback_percent: targetPaybackPercent,
     })
     .select('id')
     .single()
