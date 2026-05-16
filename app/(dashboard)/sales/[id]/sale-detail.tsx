@@ -33,7 +33,17 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { cancelSale, refundSale } from '../actions'
+import { cancelSale, refundSale, recordPayment } from '../actions'
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { Input } from '@/components/ui/input'
 import {
   Table,
   TableBody,
@@ -47,6 +57,7 @@ import type {
   SaleDetail as SaleDetailType,
   SaleStatus,
   SaleDetailItem,
+  MoneyAccount,
 } from '@/lib/sales'
 
 const STATUS_VARIANT: Record<SaleStatus, string> = {
@@ -73,12 +84,18 @@ const FULFILLMENT_LABEL: Record<string, string> = {
   delivery: 'Delivery',
 }
 
-export function SaleDetail({ sale }: { sale: SaleDetailType }) {
+export function SaleDetail({
+  sale,
+  moneyAccounts,
+}: {
+  sale: SaleDetailType
+  moneyAccounts: MoneyAccount[]
+}) {
   return (
     <div className="space-y-4">
       <HeaderCard sale={sale} />
       <ItemsCard items={sale.items} />
-      <SummaryCards sale={sale} />
+      <SummaryCards sale={sale} moneyAccounts={moneyAccounts} />
     </div>
   )
 }
@@ -576,10 +593,25 @@ const METHOD_LABEL: Record<string, string> = {
   mixed: 'Mixed',
 }
 
-function PaymentsPanel({ sale }: { sale: SaleDetailType }) {
+function PaymentsPanel({
+  sale,
+  moneyAccounts,
+}: {
+  sale: SaleDetailType
+  moneyAccounts: MoneyAccount[]
+}) {
   const outstanding = sale.total_cents - sale.paid_cents
-  const isFullyPaid = outstanding <= 0
   const isCancelled = sale.status === 'cancelled' || sale.status === 'refunded'
+  const canAddPayment =
+    !isCancelled &&
+    (sale.status === 'confirmed' ||
+      sale.status === 'paid' ||
+      sale.status === 'partially_paid')
+
+  const [addOpen, setAddOpen] = useState(false)
+
+  // Suggest outstanding (or total if no payments yet) as the default amount.
+  const suggestedAmountCents = outstanding > 0 ? outstanding : sale.total_cents
 
   return (
     <Card>
@@ -590,8 +622,8 @@ function PaymentsPanel({ sale }: { sale: SaleDetailType }) {
             ({sale.payments.length})
           </span>
         </CardTitle>
-        {!isFullyPaid && !isCancelled && (
-          <Button size="sm" variant="outline" disabled title="Coming in 9.5">
+        {canAddPayment && (
+          <Button size="sm" variant="outline" onClick={() => setAddOpen(true)}>
             <Plus className="mr-1 h-3.5 w-3.5" />
             Add payment
           </Button>
@@ -650,6 +682,13 @@ function PaymentsPanel({ sale }: { sale: SaleDetailType }) {
           </div>
         )}
       </CardContent>
+      <AddPaymentDialog
+        open={addOpen}
+        onOpenChange={setAddOpen}
+        saleId={sale.id}
+        suggestedAmountCents={suggestedAmountCents}
+        moneyAccounts={moneyAccounts}
+      />
     </Card>
   )
 }
@@ -761,11 +800,17 @@ function CommissionsPanel({ sale }: { sale: SaleDetailType }) {
 // SummaryCards — three-column row, kept as wrapper for layout
 // ---------------------------------------------------------------------------
 
-function SummaryCards({ sale }: { sale: SaleDetailType }) {
+function SummaryCards({
+  sale,
+  moneyAccounts,
+}: {
+  sale: SaleDetailType
+  moneyAccounts: MoneyAccount[]
+}) {
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
       <TotalsCard sale={sale} />
-      <PaymentsPanel sale={sale} />
+      <PaymentsPanel sale={sale} moneyAccounts={moneyAccounts} />
       <CommissionsPanel sale={sale} />
     </div>
   )
@@ -809,5 +854,231 @@ function Row({
         {value}
       </dd>
     </div>
+  )
+}
+// ---------------------------------------------------------------------------
+// AddPaymentDialog — records a payment against a sale
+// ---------------------------------------------------------------------------
+
+const PAYMENT_METHODS: Array<{ value: string; label: string }> = [
+  { value: 'cash', label: 'Cash' },
+  { value: 'card', label: 'Card' },
+  { value: 'transfer', label: 'Transfer' },
+  { value: 'paypal', label: 'PayPal' },
+  { value: 'stripe', label: 'Stripe' },
+  { value: 'credit', label: 'Credit' },
+  { value: 'mixed', label: 'Mixed' },
+]
+
+const ACCOUNT_KIND_LABEL: Record<MoneyAccount['kind'], string> = {
+  bank: 'Bank',
+  cash: 'Cash',
+  card: 'Card',
+  digital: 'Digital',
+  credit_line: 'Credit line',
+}
+
+function AddPaymentDialog({
+  open,
+  onOpenChange,
+  saleId,
+  suggestedAmountCents,
+  moneyAccounts,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  saleId: string
+  suggestedAmountCents: number
+  moneyAccounts: MoneyAccount[]
+}) {
+  const router = useRouter()
+  const [pending, startTransition] = useTransition()
+
+  // Initial values are computed each time the dialog mounts.
+  const today = new Date().toISOString().slice(0, 10)
+  const [method, setMethod] = useState<string>('cash')
+  const [amountStr, setAmountStr] = useState<string>(
+    (suggestedAmountCents / 100).toFixed(2),
+  )
+  const [accountId, setAccountId] = useState<string>('')
+  const [paidAt, setPaidAt] = useState<string>(today)
+  const [reference, setReference] = useState<string>('')
+
+  // Reset when the dialog reopens so it always shows fresh state.
+  function handleOpenChange(next: boolean) {
+    if (next) {
+      setMethod('cash')
+      setAmountStr((suggestedAmountCents / 100).toFixed(2))
+      setAccountId('')
+      setPaidAt(new Date().toISOString().slice(0, 10))
+      setReference('')
+    }
+    onOpenChange(next)
+  }
+
+  // Group accounts by kind for the Select.
+  const grouped = moneyAccounts.reduce<Record<string, MoneyAccount[]>>(
+    (acc, a) => {
+      const k = a.kind
+      if (!acc[k]) acc[k] = []
+      acc[k].push(a)
+      return acc
+    },
+    {},
+  )
+  const kindOrder: Array<MoneyAccount['kind']> = [
+    'bank',
+    'cash',
+    'card',
+    'digital',
+    'credit_line',
+  ]
+
+  function doSubmit() {
+    const amount = Number(amountStr)
+    if (!Number.isFinite(amount) || amount <= 0) {
+      toast.error('Amount must be greater than zero.')
+      return
+    }
+    if (!accountId) {
+      toast.error('Pick a money account.')
+      return
+    }
+    const amountCents = Math.round(amount * 100)
+
+    startTransition(async () => {
+      const res = await recordPayment({
+        saleId,
+        method: method as
+          | 'cash'
+          | 'card'
+          | 'transfer'
+          | 'paypal'
+          | 'stripe'
+          | 'credit'
+          | 'mixed',
+        amountCents,
+        moneyAccountId: accountId,
+        paidAt,
+        reference: reference.trim() || undefined,
+      })
+      if (res.ok) {
+        toast.success('Payment recorded.')
+        handleOpenChange(false)
+        router.refresh()
+      } else {
+        toast.error(res.error)
+      }
+    })
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Add payment</DialogTitle>
+          <DialogDescription>
+            Records a payment against this sale and updates the paid total.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label htmlFor="pay-method" className="text-xs">
+                Method
+              </Label>
+              <Select value={method} onValueChange={setMethod}>
+                <SelectTrigger id="pay-method">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {PAYMENT_METHODS.map((m) => (
+                    <SelectItem key={m.value} value={m.value}>
+                      {m.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="pay-amount" className="text-xs">
+                Amount (DOP) <span className="text-rose-600">*</span>
+              </Label>
+              <Input
+                id="pay-amount"
+                type="number"
+                step="0.01"
+                min="0"
+                value={amountStr}
+                onChange={(e) => setAmountStr(e.target.value)}
+                disabled={pending}
+              />
+            </div>
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="pay-account" className="text-xs">
+              Account <span className="text-rose-600">*</span>
+            </Label>
+            <Select value={accountId} onValueChange={setAccountId}>
+              <SelectTrigger id="pay-account">
+                <SelectValue placeholder="Pick an account…" />
+              </SelectTrigger>
+              <SelectContent>
+                {kindOrder
+                  .filter((k) => grouped[k]?.length)
+                  .map((k) => (
+                    <SelectGroup key={k}>
+                      <SelectLabel>{ACCOUNT_KIND_LABEL[k]}</SelectLabel>
+                      {grouped[k].map((a) => (
+                        <SelectItem key={a.id} value={a.id}>
+                          {a.name}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label htmlFor="pay-date" className="text-xs">
+                Date
+              </Label>
+              <Input
+                id="pay-date"
+                type="date"
+                value={paidAt}
+                onChange={(e) => setPaidAt(e.target.value)}
+                disabled={pending}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="pay-ref" className="text-xs">
+                Reference
+              </Label>
+              <Input
+                id="pay-ref"
+                placeholder="Transfer #, auth code…"
+                value={reference}
+                onChange={(e) => setReference(e.target.value)}
+                disabled={pending}
+              />
+            </div>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button
+            variant="outline"
+            onClick={() => handleOpenChange(false)}
+            disabled={pending}
+          >
+            Cancel
+          </Button>
+          <Button onClick={doSubmit} disabled={pending}>
+            {pending ? 'Recording…' : 'Record payment'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }

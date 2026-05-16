@@ -1,7 +1,7 @@
 ﻿import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 import { ChevronLeft } from 'lucide-react'
-import { getSale } from '@/lib/sales'
+import { getSale, listMoneyAccounts } from '@/lib/sales'
 import { SaleDetail } from './sale-detail'
 
 export const dynamic = 'force-dynamic'
@@ -12,7 +12,10 @@ export default async function SaleDetailPage({
   params: Promise<{ id: string }>
 }) {
   const { id } = await params
-  const sale = await getSale(id)
+  const [sale, moneyAccounts] = await Promise.all([
+    getSale(id),
+    listMoneyAccounts(),
+  ])
 
   if (!sale) notFound()
 
@@ -34,7 +37,7 @@ export default async function SaleDetailPage({
         </Link>
       </div>
 
-      <SaleDetail sale={sale} />
+      <SaleDetail sale={sale} moneyAccounts={moneyAccounts} />
     </div>
   )
 }

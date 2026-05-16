@@ -227,3 +227,118 @@ export async function refundSale(
   revalidatePath('/sales')
   return { ok: true }
 }
+
+// ---------------------------------------------------------------------------
+// Record a payment against a sale
+// ---------------------------------------------------------------------------
+// Inserts a sale_payments row, then recomputes sales.paid_cents and
+// derives the new status from the sum of all payments vs total_cents.
+//
+// Allowed from: confirmed, paid, partially_paid.
+// Rejected from: draft (need to confirm first), cancelled, refunded.
+//
+// Overpayment is allowed — status stays 'paid' and the PaymentsPanel
+// surfaces an "Overpaid" line. This matches real-world POS where a
+// customer hands over 2500 to pay 2475 and the extra 25 is just there
+// in the till.
+// ---------------------------------------------------------------------------
+
+export type RecordPaymentInput = {
+  saleId: string
+  method: 'cash' | 'card' | 'transfer' | 'paypal' | 'stripe' | 'credit' | 'mixed'
+  amountCents: number
+  moneyAccountId: string
+  paidAt: string // ISO datetime or YYYY-MM-DD (Postgres coerces)
+  reference?: string
+}
+
+export async function recordPayment(input: RecordPaymentInput): Promise<ActionResult> {
+  const supabase = await createClient()
+
+  // Basic validation
+  if (!input.saleId) return { ok: false, error: 'Sale id is required.' }
+  if (!input.moneyAccountId) return { ok: false, error: 'Pick a money account.' }
+  if (!Number.isFinite(input.amountCents) || input.amountCents <= 0) {
+    return { ok: false, error: 'Amount must be greater than zero.' }
+  }
+  if (!input.paidAt) return { ok: false, error: 'Payment date is required.' }
+
+  // Check the sale's current status.
+  const { data: sale, error: fetchErr } = await supabase
+    .from('sales')
+    .select('id, status, total_cents, paid_cents, paid_at')
+    .eq('id', input.saleId)
+    .maybeSingle()
+  if (fetchErr) return { ok: false, error: fetchErr.message }
+  if (!sale) return { ok: false, error: 'Sale not found.' }
+
+  const allowed = ['confirmed', 'paid', 'partially_paid']
+  if (!allowed.includes(sale.status)) {
+    return {
+      ok: false,
+      error: `Can't add a payment to a sale in status '${sale.status}'.`,
+    }
+  }
+
+  // Insert the payment row.
+  const reference = input.reference?.trim() || null
+  const { error: insErr } = await supabase.from('sale_payments').insert({
+    sale_id: input.saleId,
+    method: input.method,
+    amount_cents: input.amountCents,
+    money_account_id: input.moneyAccountId,
+    paid_at: input.paidAt,
+    reference,
+  })
+  if (insErr) return { ok: false, error: `Payment insert failed: ${insErr.message}` }
+
+  // Recompute paid_cents from sum of all payments now in the table.
+  const { data: paymentRows, error: sumErr } = await supabase
+    .from('sale_payments')
+    .select('amount_cents')
+    .eq('sale_id', input.saleId)
+  if (sumErr) {
+    return {
+      ok: false,
+      error: `Payment recorded, but recompute failed: ${sumErr.message}. Refresh and check the totals.`,
+    }
+  }
+  const newPaidCents = (paymentRows ?? []).reduce(
+    (sum, p) => sum + (p.amount_cents ?? 0),
+    0,
+  )
+
+  // Derive status.
+  let newStatus: 'paid' | 'partially_paid' | 'confirmed'
+  let newPaidAt: string | null
+  if (newPaidCents >= sale.total_cents) {
+    newStatus = 'paid'
+    // Keep first paid_at if already set, else use this payment's date.
+    newPaidAt = sale.paid_at ?? input.paidAt
+  } else if (newPaidCents > 0) {
+    newStatus = 'partially_paid'
+    newPaidAt = null
+  } else {
+    newStatus = 'confirmed'
+    newPaidAt = null
+  }
+
+  const { error: updErr } = await supabase
+    .from('sales')
+    .update({
+      paid_cents: newPaidCents,
+      status: newStatus,
+      paid_at: newPaidAt,
+    })
+    .eq('id', input.saleId)
+  if (updErr) {
+    return {
+      ok: false,
+      error: `Payment recorded, but status update failed: ${updErr.message}. Refresh and check the totals.`,
+    }
+  }
+
+  revalidatePath(`/sales/${input.saleId}`)
+  revalidatePath('/sales')
+  return { ok: true }
+}

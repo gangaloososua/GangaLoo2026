@@ -364,3 +364,25 @@ export async function getSale(id: string): Promise<SaleDetail | null> {
     payments,
   }
 }
+
+// ---------------------------------------------------------------------------
+// Money accounts for the payment picker
+// ---------------------------------------------------------------------------
+
+export type MoneyAccount = {
+  id: string
+  name: string
+  kind: 'bank' | 'cash' | 'card' | 'digital' | 'credit_line'
+}
+
+export async function listMoneyAccounts(): Promise<MoneyAccount[]> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('money_accounts')
+    .select('id, name, kind')
+    .eq('is_active', true)
+    .order('kind')
+    .order('name')
+  if (error) throw new Error(`listMoneyAccounts: ${error.message}`)
+  return (data ?? []) as MoneyAccount[]
+}
