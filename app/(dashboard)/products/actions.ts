@@ -1,8 +1,9 @@
-'use server'
+﻿'use server'
 
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { requireOwner } from '@/lib/auth/guard'
 
 export type ProductFormState = {
   ok: boolean
@@ -24,6 +25,7 @@ export async function createProduct(
   _prev: ProductFormState,
   formData: FormData,
 ): Promise<ProductFormState> {
+  await requireOwner()
   const supabase = await createClient()
 
   const sku = String(formData.get('sku') ?? '').trim()
@@ -105,6 +107,7 @@ export async function updateProduct(
   _prev: ProductFormState,
   formData: FormData,
 ): Promise<ProductFormState> {
+  await requireOwner()
   const supabase = await createClient()
 
   const productId = String(formData.get('product_id') ?? '').trim()
@@ -188,6 +191,7 @@ export async function updateProduct(
 export async function deleteProduct(
   productId: string,
 ): Promise<{ ok: boolean; error?: string }> {
+  await requireOwner()
   if (!productId) return { ok: false, error: 'Missing product ID.' }
   const supabase = await createClient()
   const { error } = await supabase
@@ -217,6 +221,7 @@ export async function saveProductCategories(
     display_order: number
   }>
 ): Promise<{ ok: boolean; error?: string }> {
+  await requireOwner()
   const supabase = await createClient()
 
   // Validate: at most one primary, and if any rows exist, exactly one must be primary
@@ -265,6 +270,7 @@ function extOf(filename: string): string {
 export async function uploadProductImage(
   formData: FormData
 ): Promise<{ ok: boolean; error?: string; image?: { id: string; url: string } }> {
+  await requireOwner()
   const supabase = await createClient()
   const productId = String(formData.get('product_id') ?? '')
   const file = formData.get('file') as File | null
@@ -335,6 +341,7 @@ export async function saveProductImagesMetadata(
     display_order: number
   }>
 ): Promise<{ ok: boolean; error?: string }> {
+  await requireOwner()
   const supabase = await createClient()
 
   if (rows.length > 0) {
@@ -375,7 +382,7 @@ export async function saveProductImagesMetadata(
       if (updErr) return { ok: false, error: updErr.message }
     }
   } else if (rows.length === 0) {
-    // No images at all — clear the primary URL
+    // No images at all â€” clear the primary URL
     await supabase.from('products').update({ primary_image_url: null }).eq('id', productId)
   }
 
@@ -396,6 +403,7 @@ export async function deleteProductImage(
   productId: string,
   imageId: string
 ): Promise<{ ok: boolean; error?: string }> {
+  await requireOwner()
   const supabase = await createClient()
 
   // Fetch the row first so we know the URL (for Storage delete) and primary status
@@ -408,7 +416,7 @@ export async function deleteProductImage(
   if (fetchErr) return { ok: false, error: fetchErr.message }
   if (!img) return { ok: false, error: 'Image not found.' }
 
-  // Delete the DB row first — if Storage delete fails afterward we have an orphan
+  // Delete the DB row first â€” if Storage delete fails afterward we have an orphan
   // file but no broken UI reference. The other way around leaves a row pointing
   // to a missing file, which is worse.
   const { error: delErr } = await supabase
@@ -464,6 +472,7 @@ export async function saveProductWarehouseSettings(
     display_order: number
   }>
 ): Promise<{ ok: boolean; error?: string }> {
+  await requireOwner()
   const supabase = await createClient()
 
   // Validate price overrides are non-negative when set
@@ -507,6 +516,7 @@ export async function saveProductCostCalc(
   productId: string,
   state: Record<string, number | null>
 ): Promise<{ ok: boolean; error?: string }> {
+  await requireOwner()
   const supabase = await createClient()
   const { error } = await supabase
     .from('products')
@@ -521,6 +531,7 @@ export async function applyCalculatorPrice(
   productId: string,
   priceCents: number
 ): Promise<{ ok: boolean; error?: string }> {
+  await requireOwner()
   if (!Number.isFinite(priceCents) || priceCents < 0) {
     return { ok: false, error: 'Invalid price.' }
   }
