@@ -13,6 +13,7 @@ export type CallerProfile = {
   auth_user_id: string;
   role: Role;
   full_name: string | null;
+  email: string;
 };
 
 /**
@@ -43,7 +44,13 @@ export async function requireAdminCaller(): Promise<CallerProfile> {
 
   if (!isAdminRole(profile.role as Role)) redirect('/bounce');
 
-  return profile as CallerProfile;
+  return {
+    id: profile.id,
+    auth_user_id: profile.auth_user_id,
+    role: profile.role as Role,
+    full_name: profile.full_name,
+    email: user.email ?? '',
+  };
 }
 
 /**

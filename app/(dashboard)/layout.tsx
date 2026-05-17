@@ -1,22 +1,14 @@
-import { Suspense } from 'react'
-import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
+﻿import { Suspense } from 'react'
 import { Sidebar } from '@/components/sidebar'
 import { Toaster } from '@/components/ui/sonner'
+import { requireAdminCaller } from '@/lib/auth/guard'
 
 export default async function DashboardLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    redirect('/login')
-  }
+  const caller = await requireAdminCaller()
 
   return (
     <div className="flex h-screen overflow-hidden">
@@ -26,7 +18,7 @@ export default async function DashboardLayout({
       <main className="flex-1 overflow-y-auto">
         <div className="border-b bg-background">
           <div className="flex h-16 items-center justify-end px-6">
-            <span className="text-sm text-muted-foreground">{user.email}</span>
+            <span className="text-sm text-muted-foreground">{caller.email}</span>
           </div>
         </div>
         <div className="p-6">{children}</div>
