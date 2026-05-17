@@ -1,9 +1,11 @@
-import Link from 'next/link'
+﻿import Link from 'next/link'
 import { ChevronLeft } from 'lucide-react'
 import { listUnlinkedProfiles } from '../actions'
 import { NewUserForm } from '../new-user-form'
+import { requireOwner } from '@/lib/auth/guard'
 
 export default async function NewUserPage() {
+  await requireOwner()
   const unlinkedProfiles = await listUnlinkedProfiles()
 
   return (

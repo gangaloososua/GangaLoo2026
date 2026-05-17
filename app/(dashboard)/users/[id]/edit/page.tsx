@@ -1,14 +1,16 @@
-import Link from 'next/link'
+﻿import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { ChevronLeft } from 'lucide-react'
 import { getUser } from '../../actions'
 import { ManageUserForm } from '../../manage-user-form'
+import { requireOwner } from '@/lib/auth/guard'
 
 export default async function ManageUserPage({
   params,
 }: {
   params: Promise<{ id: string }>
 }) {
+  await requireOwner()
   const { id } = await params
   const user = await getUser(id)
   if (!user) notFound()

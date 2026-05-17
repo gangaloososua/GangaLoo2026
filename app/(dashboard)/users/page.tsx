@@ -1,10 +1,12 @@
-import Link from 'next/link'
+﻿import Link from 'next/link'
 import { Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { listUsers } from './actions'
 import { UsersTable } from './users-table'
+import { requireOwner } from '@/lib/auth/guard'
 
 export default async function UsersPage() {
+  await requireOwner()
   const users = await listUsers()
 
   return (
@@ -13,7 +15,7 @@ export default async function UsersPage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Users</h1>
           <p className="text-sm text-muted-foreground">
-            Staff with login access — sellers and distributors.
+            Staff with login access â€” sellers and distributors.
           </p>
         </div>
         <Button asChild>

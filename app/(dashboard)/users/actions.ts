@@ -1,12 +1,13 @@
-'use server'
+﻿'use server'
 
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { requireOwner } from '@/lib/auth/guard'
 
 // Roles this UI is allowed to create/assign.
-// owner + admin + customer are intentionally excluded — see notes in handoff.
+// owner + admin + customer are intentionally excluded â€” see notes in handoff.
 export type AssignableRole = 'seller' | 'distributor'
 export type UserRole = 'owner' | 'admin' | 'seller' | 'distributor' | 'customer'
 
@@ -36,6 +37,7 @@ export type UnlinkedProfile = {
  * (email, last_sign_in_at, banned status) from the admin API.
  */
 export async function listUsers(): Promise<UserRow[]> {
+  await requireOwner()
   const supabase = await createClient()
   const admin = createAdminClient()
 
@@ -51,7 +53,7 @@ export async function listUsers(): Promise<UserRow[]> {
     throw new Error('Failed to load users')
   }
 
-  // 2. Auth users (paginate — admin API caps at 1000 per page; we expect <50)
+  // 2. Auth users (paginate â€” admin API caps at 1000 per page; we expect <50)
   const { data: authData, error: authErr } = await admin.auth.admin.listUsers({
     page: 1,
     perPage: 1000,
@@ -99,6 +101,7 @@ export async function listUsers(): Promise<UserRow[]> {
  * Get one user (profile + auth) by profile id. Used by the edit page.
  */
 export async function getUser(profileId: string): Promise<UserRow | null> {
+  await requireOwner()
   const supabase = await createClient()
   const admin = createAdminClient()
 
@@ -143,11 +146,12 @@ export async function getUser(profileId: string): Promise<UserRow | null> {
 }
 
 /**
- * List profiles that DON'T have a login yet — used by the "Promote existing"
+ * List profiles that DON'T have a login yet â€” used by the "Promote existing"
  * mode of the new-user form. Excludes customers (they sign up themselves on
  * the future storefront).
  */
 export async function listUnlinkedProfiles(): Promise<UnlinkedProfile[]> {
+  await requireOwner()
   const supabase = await createClient()
 
   const { data, error } = await supabase
@@ -182,7 +186,7 @@ function readForm(formData: FormData) {
 
 function validateEmail(email: string): string | null {
   if (!email) return 'Email is required'
-  // Permissive check — the Supabase admin API does its own real validation.
+  // Permissive check â€” the Supabase admin API does its own real validation.
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return 'Email looks invalid'
   if (email.length > 254) return 'Email too long'
   return null
@@ -200,6 +204,7 @@ function validatePassword(pw: string): string | null {
  * Used by the "Create new" mode of /users/new.
  */
 export async function createNewUser(formData: FormData): Promise<ActionResult> {
+  await requireOwner()
   const { get } = readForm(formData)
 
   const fullName = get('full_name')
@@ -275,6 +280,7 @@ export async function createNewUser(formData: FormData): Promise<ActionResult> {
  * account and linking it. Used by the "Promote existing" mode of /users/new.
  */
 export async function promoteProfileToUser(formData: FormData): Promise<ActionResult> {
+  await requireOwner()
   const { get } = readForm(formData)
 
   const profileId = get('profile_id')
@@ -304,7 +310,7 @@ export async function promoteProfileToUser(formData: FormData): Promise<ActionRe
     return { ok: false, error: 'This person already has a login' }
   }
   if (!profile.is_active) {
-    return { ok: false, error: 'Profile is inactive — reactivate it first' }
+    return { ok: false, error: 'Profile is inactive â€” reactivate it first' }
   }
   if (profile.role !== 'seller' && profile.role !== 'distributor') {
     return {
@@ -358,6 +364,7 @@ export async function promoteProfileToUser(formData: FormData): Promise<ActionRe
  * Cannot promote to owner or admin from this UI.
  */
 export async function changeUserRole(formData: FormData): Promise<ActionResult> {
+  await requireOwner()
   const { get } = readForm(formData)
   const profileId = get('profile_id')
   const newRole = get('role') as AssignableRole
@@ -407,6 +414,7 @@ export async function changeUserRole(formData: FormData): Promise<ActionResult> 
  * to hand them a fresh temp password verbally.
  */
 export async function resetUserPassword(formData: FormData): Promise<ActionResult> {
+  await requireOwner()
   const { get } = readForm(formData)
   const authUserId = get('auth_user_id')
   const password = get('password')
@@ -427,13 +435,14 @@ export async function resetUserPassword(formData: FormData): Promise<ActionResul
 }
 
 /**
- * Ban a user — they can't log in until unbanned. Also flips profiles.is_active
+ * Ban a user â€” they can't log in until unbanned. Also flips profiles.is_active
  * to false so they disappear from active-staff lists.
  *
  * Supabase admin API: ban_duration: '876000h' = 100 years (effectively forever).
  * 'none' clears the ban.
  */
 export async function setUserBanned(formData: FormData): Promise<ActionResult> {
+  await requireOwner()
   const { get } = readForm(formData)
   const authUserId = get('auth_user_id')
   const profileId = get('profile_id')
@@ -472,13 +481,14 @@ export async function setUserBanned(formData: FormData): Promise<ActionResult> {
 }
 
 /**
- * Unlink a user — deletes the auth account, sets profiles.auth_user_id to null.
+ * Unlink a user â€” deletes the auth account, sets profiles.auth_user_id to null.
  * The profile itself stays. Use when someone leaves but you want to keep their
  * historical sales/commissions tied to their name.
  *
  * Guard: never unlink an owner.
  */
 export async function unlinkUser(formData: FormData): Promise<ActionResult> {
+  await requireOwner()
   const { get } = readForm(formData)
   const profileId = get('profile_id')
   const authUserId = get('auth_user_id')
@@ -503,7 +513,7 @@ export async function unlinkUser(formData: FormData): Promise<ActionResult> {
     return { ok: false, error: 'Cannot unlink the owner' }
   }
 
-  // 1. Unlink first — if this fails, we don't want a dangling auth account
+  // 1. Unlink first â€” if this fails, we don't want a dangling auth account
   const { error: unlinkErr } = await supabase
     .from('profiles')
     .update({ auth_user_id: null })
