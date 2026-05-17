@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import type { ConfigValueType } from '@/lib/store-config'
+import { requireOwner } from '@/lib/auth/guard'
 
 export type ConfigActionResult = { ok: boolean; error?: string }
 
@@ -11,6 +12,7 @@ export async function updateConfigValue(
   rawValue: string,
   type: ConfigValueType,
 ): Promise<ConfigActionResult> {
+  await requireOwner()
   if (!key) return { ok: false, error: 'Missing key.' }
 
   let parsed: string | number | boolean

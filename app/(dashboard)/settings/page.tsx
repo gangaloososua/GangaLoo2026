@@ -1,8 +1,10 @@
 ﻿import Link from 'next/link'
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { ArrowRight, Calendar, SlidersHorizontal } from 'lucide-react'
+import { requireOwner } from '@/lib/auth/guard'
 
-export default function SettingsHubPage() {
+export default async function SettingsHubPage() {
+  await requireOwner()
   return (
     <div className="space-y-6">
       <div>
@@ -11,7 +13,6 @@ export default function SettingsHubPage() {
           Configure store-wide values and reference data.
         </p>
       </div>
-
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <Link href="/settings/exchange-rates" className="block">
           <Card className="transition-colors hover:bg-accent/50">
@@ -27,7 +28,6 @@ export default function SettingsHubPage() {
             </CardHeader>
           </Card>
         </Link>
-
         <Link href="/settings/store-config" className="block">
           <Card className="transition-colors hover:bg-accent/50">
             <CardHeader>

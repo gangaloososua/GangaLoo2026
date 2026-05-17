@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
+import { requireOwner } from '@/lib/auth/guard'
 
 export type RateActionResult = { ok: boolean; error?: string }
 
@@ -42,6 +43,7 @@ function parseRateInput(formData: FormData): {
 }
 
 export async function createRate(formData: FormData): Promise<RateActionResult> {
+  await requireOwner()
   const parsed = parseRateInput(formData)
   if ('error' in parsed) return { ok: false, error: parsed.error }
 
@@ -63,6 +65,7 @@ export async function updateRate(
   origMonth: number,
   formData: FormData,
 ): Promise<RateActionResult> {
+  await requireOwner()
   const parsed = parseRateInput(formData)
   if ('error' in parsed) return { ok: false, error: parsed.error }
 
@@ -83,6 +86,7 @@ export async function updateRate(
 }
 
 export async function deleteRate(year: number, month: number): Promise<RateActionResult> {
+  await requireOwner()
   const supabase = await createClient()
   const { error } = await supabase
     .from('monthly_exchange_rates')

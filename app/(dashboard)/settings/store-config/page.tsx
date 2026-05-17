@@ -2,12 +2,13 @@
 import { ChevronLeft } from 'lucide-react'
 import { fetchStoreConfig } from '@/lib/store-config'
 import { ConfigTable } from './config-table'
+import { requireOwner } from '@/lib/auth/guard'
 
 export const dynamic = 'force-dynamic'
 
 export default async function StoreConfigPage() {
+  await requireOwner()
   const rows = await fetchStoreConfig()
-
   return (
     <div className="space-y-6">
       <div>
@@ -24,7 +25,6 @@ export default async function StoreConfigPage() {
           New keys are added by migrations, not from this page.
         </p>
       </div>
-
       <ConfigTable rows={rows} />
     </div>
   )

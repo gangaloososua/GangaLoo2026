@@ -2,12 +2,13 @@
 import { ChevronLeft } from 'lucide-react'
 import { fetchAllExchangeRates } from '@/lib/exchange-rates'
 import { RatesTable } from './rates-table'
+import { requireOwner } from '@/lib/auth/guard'
 
 export const dynamic = 'force-dynamic'
 
 export default async function ExchangeRatesPage() {
+  await requireOwner()
   const rows = await fetchAllExchangeRates()
-
   return (
     <div className="space-y-6">
       <div>
@@ -23,7 +24,6 @@ export default async function ExchangeRatesPage() {
           Monthly USD → DOP rates. Used by the Calculator and any reports that convert costs.
         </p>
       </div>
-
       <RatesTable rows={rows} />
     </div>
   )
