@@ -1,4 +1,7 @@
 ﻿import { Suspense } from 'react'
+import Link from 'next/link'
+import { Plus } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import {
   listSales,
   listSellersForFilter,
@@ -73,8 +76,16 @@ export default async function SalesPage({
             In-person POS sales. Online orders live in their own module.
           </p>
         </div>
-        <div className="text-sm text-muted-foreground">
-          {salesResult.total} {salesResult.total === 1 ? 'sale' : 'sales'}
+        <div className="flex items-center gap-3">
+          <div className="text-sm text-muted-foreground">
+            {salesResult.total} {salesResult.total === 1 ? 'sale' : 'sales'}
+          </div>
+          <Button asChild size="sm">
+            <Link href="/sales/new">
+              <Plus className="mr-1 size-4" />
+              New POS sale
+            </Link>
+          </Button>
         </div>
       </div>
 

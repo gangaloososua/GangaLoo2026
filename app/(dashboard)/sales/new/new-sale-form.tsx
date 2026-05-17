@@ -348,6 +348,16 @@ export function NewSaleForm({
 
   return (
     <div className="space-y-4">
+      {moneyAccounts.length === 0 && (
+        <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+          <div className="font-medium">No active money accounts</div>
+          <div className="mt-0.5">
+            Before you can confirm a sale you need at least one active money
+            account (cash drawer, bank, etc). Set one up in Settings, then
+            come back here.
+          </div>
+        </div>
+      )}
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Sale details</CardTitle>
