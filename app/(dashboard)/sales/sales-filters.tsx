@@ -19,6 +19,7 @@ type LookupItem = { id: string; name: string }
 type Props = {
   sellers: LookupItem[]
   warehouses: LookupItem[]
+  canFilterBySeller?: boolean
   currentFilters: {
     search: string
     status: string
@@ -43,7 +44,7 @@ const STATUS_OPTIONS: Array<{ value: string; label: string }> = [
   { value: 'cancelled', label: 'Cancelled' },
 ]
 
-export function SalesFilters({ sellers, warehouses, currentFilters }: Props) {
+export function SalesFilters({ sellers, warehouses, currentFilters, canFilterBySeller = true }: Props) {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
@@ -121,7 +122,8 @@ export function SalesFilters({ sellers, warehouses, currentFilters }: Props) {
           </Select>
         </div>
 
-        <div className="space-y-1">
+        {canFilterBySeller && (
+          <div className="space-y-1">
           <Label className="text-xs">Seller</Label>
           <Select
             value={currentFilters.sellerId || ALL}
@@ -140,6 +142,7 @@ export function SalesFilters({ sellers, warehouses, currentFilters }: Props) {
             </SelectContent>
           </Select>
         </div>
+        )}
 
         <div className="space-y-1">
           <Label className="text-xs">Warehouse</Label>

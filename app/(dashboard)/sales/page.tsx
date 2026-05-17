@@ -11,6 +11,8 @@ import {
 } from '@/lib/sales'
 import { SalesFilters } from './sales-filters'
 import { SalesTable } from './sales-table'
+import { requireAdminCaller } from '@/lib/auth/guard'
+import { isOwnerEquivalent } from '@/lib/auth/roles'
 
 export const dynamic = 'force-dynamic'
 
@@ -58,12 +60,21 @@ export default async function SalesPage({
 }: {
   searchParams: Promise<SearchParams>
 }) {
+  const caller = await requireAdminCaller()
+  const canSeeAllSales = isOwnerEquivalent(caller.role)
+
   const sp = await searchParams
   const filters = parseFilters(sp)
 
+  // Non-owners only ever see their own sales. Force the seller_id filter
+  // and ignore any sellerId in searchParams.
+  if (!canSeeAllSales) {
+    filters.sellerId = caller.id
+  }
+
   const [salesResult, sellers, warehouses] = await Promise.all([
     listSales(filters),
-    listSellersForFilter(),
+    canSeeAllSales ? listSellersForFilter() : Promise.resolve([]),
     listWarehousesForFilter(),
   ])
 
@@ -93,6 +104,7 @@ export default async function SalesPage({
         <SalesFilters
           sellers={sellers}
           warehouses={warehouses}
+          canFilterBySeller={canSeeAllSales}
           currentFilters={{
             search: filters.search ?? '',
             status: filters.status ?? '',
