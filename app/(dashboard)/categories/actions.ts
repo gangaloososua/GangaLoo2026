@@ -1,7 +1,8 @@
-'use server'
+﻿'use server'
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
+import { requireOwner } from '@/lib/auth/guard'
 
 export type Category = {
   id: string
@@ -58,6 +59,7 @@ export async function listCategories(): Promise<Category[]> {
 }
 
 export async function createCategory(formData: FormData) {
+  await requireOwner()
   const name = (formData.get('name') as string)?.trim()
   const parentId = (formData.get('parent_id') as string) || null
   const displayOrder = Number(formData.get('display_order') ?? 0)
@@ -81,6 +83,7 @@ export async function createCategory(formData: FormData) {
 }
 
 export async function updateCategory(id: string, formData: FormData) {
+  await requireOwner()
   const name = (formData.get('name') as string)?.trim()
   const parentId = (formData.get('parent_id') as string) || null
   const displayOrder = Number(formData.get('display_order') ?? 0)
@@ -112,6 +115,7 @@ export async function updateCategory(id: string, formData: FormData) {
 }
 
 export async function deleteCategory(id: string) {
+  await requireOwner()
   const supabase = await createClient()
 
   const { count: childCount, error: childErr } = await supabase
