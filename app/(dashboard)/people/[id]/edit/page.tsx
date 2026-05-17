@@ -1,18 +1,19 @@
-import Link from 'next/link'
+﻿import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { ChevronLeft } from 'lucide-react'
 import { getProfile } from '../../actions'
 import { PeopleForm } from '../../people-form'
+import { requireOwner } from '@/lib/auth/guard'
 
 export default async function EditPersonPage({
   params,
 }: {
   params: Promise<{ id: string }>
 }) {
+  await requireOwner()
   const { id } = await params
   const profile = await getProfile(id)
   if (!profile) notFound()
-
   return (
     <div className="space-y-4 max-w-3xl">
       <Link href="/people" className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground">

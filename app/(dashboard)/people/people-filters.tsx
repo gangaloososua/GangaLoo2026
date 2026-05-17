@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { useState, useEffect } from 'react'
@@ -11,6 +11,7 @@ type Props = {
   distributorOnly: boolean
   activeStatus: 'all' | 'active' | 'inactive'
   search: string
+  canManagePeople?: boolean
 }
 
 const ROLE_CHIPS: { value: UserRole | 'all'; label: string }[] = [
@@ -22,13 +23,12 @@ const ROLE_CHIPS: { value: UserRole | 'all'; label: string }[] = [
   { value: 'owner', label: 'Owners' },
 ]
 
-export function PeopleFilters({ role, distributorOnly, activeStatus, search }: Props) {
+export function PeopleFilters({ role, distributorOnly, activeStatus, search, canManagePeople = false }: Props) {
   const router = useRouter()
   const pathname = usePathname()
   const sp = useSearchParams()
   const [searchInput, setSearchInput] = useState(search)
 
-  // Debounced search
   useEffect(() => {
     const id = setTimeout(() => {
       if (searchInput === (sp.get('q') ?? '')) return
@@ -48,30 +48,34 @@ export function PeopleFilters({ role, distributorOnly, activeStatus, search }: P
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
-        {ROLE_CHIPS.map((chip) => {
-          const isActive = chip.value === 'all' ? !role : role === chip.value
-          return (
+        {canManagePeople && (
+          <>
+            {ROLE_CHIPS.map((chip) => {
+              const isActive = chip.value === 'all' ? !role : role === chip.value
+              return (
+                <Button
+                  key={chip.value}
+                  type="button"
+                  variant={isActive ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => updateParam('role', chip.value === 'all' ? null : chip.value)}
+                >
+                  {chip.label}
+                </Button>
+              )
+            })}
+            <div className="mx-1 h-5 w-px bg-border" />
             <Button
-              key={chip.value}
               type="button"
-              variant={isActive ? 'default' : 'outline'}
+              variant={distributorOnly ? 'default' : 'outline'}
               size="sm"
-              onClick={() => updateParam('role', chip.value === 'all' ? null : chip.value)}
+              onClick={() => updateParam('distributor', distributorOnly ? null : '1')}
             >
-              {chip.label}
+              Warehouse distributors
             </Button>
-          )
-        })}
-        <div className="mx-1 h-5 w-px bg-border" />
-        <Button
-          type="button"
-          variant={distributorOnly ? 'default' : 'outline'}
-          size="sm"
-          onClick={() => updateParam('distributor', distributorOnly ? null : '1')}
-        >
-          Warehouse distributors
-        </Button>
-        <div className="mx-1 h-5 w-px bg-border" />
+            <div className="mx-1 h-5 w-px bg-border" />
+          </>
+        )}
         {(['all', 'active', 'inactive'] as const).map((s) => (
           <Button
             key={s}
@@ -86,7 +90,7 @@ export function PeopleFilters({ role, distributorOnly, activeStatus, search }: P
       </div>
       <div className="max-w-sm">
         <Input
-          placeholder="Search by name, email, or phone…"
+          placeholder="Search by name, email, or phone..."
           value={searchInput}
           onChange={(e) => setSearchInput(e.target.value)}
         />

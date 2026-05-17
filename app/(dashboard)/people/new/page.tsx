@@ -1,8 +1,10 @@
-import Link from 'next/link'
+﻿import Link from 'next/link'
 import { ChevronLeft } from 'lucide-react'
 import { PeopleForm } from '../people-form'
+import { requireOwner } from '@/lib/auth/guard'
 
-export default function NewPersonPage() {
+export default async function NewPersonPage() {
+  await requireOwner()
   return (
     <div className="space-y-4 max-w-3xl">
       <Link href="/people" className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground">
