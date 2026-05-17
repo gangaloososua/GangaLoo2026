@@ -6,6 +6,7 @@ import {
   searchProductsForSale,
   type ProductSearchResult,
 } from '@/lib/sales'
+import { requireOwner } from '@/lib/auth/guard'
 
 export type ActionResult = { ok: true } | { ok: false; error: string }
 
@@ -26,6 +27,7 @@ export type ActionResult = { ok: true } | { ok: false; error: string }
 // ---------------------------------------------------------------------------
 
 export async function cancelSale(saleId: string, reason: string): Promise<ActionResult> {
+  await requireOwner()
   const supabase = await createClient()
 
   // Fetch current status to enforce the rule app-side.
@@ -91,6 +93,7 @@ export async function refundSale(
   reason: string,
   restockLots: boolean,
 ): Promise<ActionResult> {
+  await requireOwner()
   const supabase = await createClient()
 
   const { data: sale, error: fetchErr } = await supabase
@@ -257,6 +260,7 @@ export type RecordPaymentInput = {
 }
 
 export async function recordPayment(input: RecordPaymentInput): Promise<ActionResult> {
+  await requireOwner()
   const supabase = await createClient()
 
   // Basic validation
