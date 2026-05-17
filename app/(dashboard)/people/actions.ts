@@ -1,8 +1,10 @@
-'use server'
+﻿'use server'
 
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { requireOwner, requireAdminCaller } from '@/lib/auth/guard'
+import { isOwnerEquivalent } from '@/lib/auth/roles'
 
 export type UserRole = 'owner' | 'admin' | 'seller' | 'distributor' | 'customer'
 export type ClubTier = 'none' | 'bronze' | 'silver' | 'gold' | 'platinum'
@@ -73,7 +75,7 @@ function readForm(formData: FormData) {
   const club_joined_at = optional('club_joined_at')
   const birthday = optional('birthday')
 
-  // dollars in form → cents in DB
+  // dollars in form â†’ cents in DB
   const credit_limit_dollars = optionalNum('credit_limit')
   const credit_limit_cents = credit_limit_dollars === null
     ? 0
@@ -101,6 +103,10 @@ function readForm(formData: FormData) {
   }
 }
 export async function listPeople(filter: PeopleFilter = {}): Promise<ProfileListRow[]> {
+  const caller = await requireAdminCaller()
+  if (!isOwnerEquivalent(caller.role)) {
+    filter = { ...filter, role: 'customer', distributorOnly: false }
+  }
   const supabase = await createClient()
 
   let q = supabase.from('profiles').select(PROFILE_COLUMNS)
@@ -147,6 +153,7 @@ export async function listPeople(filter: PeopleFilter = {}): Promise<ProfileList
 }
 
 export async function getProfile(id: string): Promise<Profile | null> {
+  const caller = await requireAdminCaller()
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('profiles')
@@ -158,10 +165,15 @@ export async function getProfile(id: string): Promise<Profile | null> {
     if (error.code === 'PGRST116') return null
     throw new Error(error.message)
   }
-  return data as Profile
+  const profile = data as Profile
+  if (!isOwnerEquivalent(caller.role) && profile.role !== 'customer') {
+    return null
+  }
+  return profile
 }
 
 export async function createProfile(formData: FormData) {
+  await requireOwner()
   const values = readForm(formData)
   if (!values.full_name) return { error: 'Name is required.' }
 
@@ -179,6 +191,7 @@ export async function createProfile(formData: FormData) {
 }
 
 export async function updateProfile(id: string, formData: FormData) {
+  await requireOwner()
   const values = readForm(formData)
   if (!values.full_name) return { error: 'Name is required.' }
 
@@ -196,6 +209,7 @@ export async function updateProfile(id: string, formData: FormData) {
 }
 
 export async function deleteProfile(id: string) {
+  await requireOwner()
   const supabase = await createClient()
   const { error } = await supabase.from('profiles').delete().eq('id', id)
   if (error) {
