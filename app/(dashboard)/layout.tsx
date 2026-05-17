@@ -13,7 +13,7 @@ export default async function DashboardLayout({
   return (
     <div className="flex h-screen overflow-hidden">
       <Suspense fallback={<aside className="w-60 border-r bg-background" />}>
-        <Sidebar />
+        <Sidebar role={caller.role} />
       </Suspense>
       <main className="flex-1 overflow-y-auto">
         <div className="border-b bg-background">
