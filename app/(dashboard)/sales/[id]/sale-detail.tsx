@@ -3,7 +3,8 @@
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { ChevronDown, ChevronRight, MoreVertical, XCircle, RotateCcw, Plus, Banknote, CreditCard, ArrowRightLeft, Wallet } from 'lucide-react'
+import Link from 'next/link'
+import { ChevronDown, ChevronRight, MoreVertical, XCircle, RotateCcw, Plus, Banknote, CreditCard, ArrowRightLeft, Wallet, Printer } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -13,6 +14,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import {
@@ -123,7 +125,7 @@ function HeaderCard({ sale }: { sale: SaleDetailType }) {
     sale.status === 'confirmed' ||
     sale.status === 'paid' ||
     sale.status === 'partially_paid'
-  const hasAnyAction = canCancel || canRefund
+  const hasAnyAction = true // Print receipt is always available
 
   function doCancel() {
     startTransition(async () => {
@@ -182,6 +184,13 @@ function HeaderCard({ sale }: { sale: SaleDetailType }) {
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="start">
+                      <DropdownMenuItem asChild>
+                        <Link href={`/sales/${sale.id}/print`} target="_blank" rel="noopener noreferrer">
+                          <Printer className="mr-2 h-4 w-4" />
+                          Print receipt
+                        </Link>
+                      </DropdownMenuItem>
+                      {(canCancel || canRefund) && <DropdownMenuSeparator />}
                       {canCancel && (
                         <DropdownMenuItem onClick={() => setCancelOpen(true)}>
                           <XCircle className="mr-2 h-4 w-4" />
