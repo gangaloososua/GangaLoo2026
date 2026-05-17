@@ -60,6 +60,7 @@ type Props = {
   productWarehouseSettings?: ProductWarehouseSetting[]
   stockByWarehouse?: Record<string, number>
   costCalc?: CostCalcState | null
+  canSeeCosts?: boolean
   currentRate?: ExchangeRateRow | null
   justCreated?: boolean
 }
@@ -77,6 +78,7 @@ export function ProductForm({
   productWarehouseSettings = [],
   stockByWarehouse = {},
   costCalc = null,
+  canSeeCosts = false,
   currentRate = null,
   justCreated,
 }: Props) {
@@ -154,9 +156,11 @@ export function ProductForm({
           <TabsTrigger value="warehouses" disabled={mode === 'create'}>
             Warehouses
           </TabsTrigger>
+          {canSeeCosts && (
           <TabsTrigger value="calculator" disabled={mode === 'create'}>
             Calculator
           </TabsTrigger>
+          )}
         </TabsList>
 
         <TabsContent value="basics" forceMount className="pt-6">
@@ -206,7 +210,7 @@ export function ProductForm({
           </TabsContent>
         )}
 
-        {mode === 'edit' && productId && (
+        {mode === 'edit' && productId && canSeeCosts && (
           <TabsContent value="calculator" forceMount className="pt-6">
             <CalculatorTab
               productId={productId}

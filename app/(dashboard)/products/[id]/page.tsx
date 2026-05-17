@@ -10,6 +10,8 @@ import {
   fetchProductStockByWarehouse,
   fetchCurrentExchangeRate,
 } from '@/lib/products'
+import { requireAdminCaller } from '@/lib/auth/guard'
+import { isOwnerEquivalent } from '@/lib/auth/roles'
 
 export default async function EditProductPage({
   params,
@@ -18,17 +20,39 @@ export default async function EditProductPage({
   params: Promise<{ id: string }>
   searchParams: Promise<{ created?: string }>
 }) {
+  const caller = await requireAdminCaller()
+  const canSeeCosts = isOwnerEquivalent(caller.role)
+
   const { id } = await params
   const sp = await searchParams
   const supabase = await createClient()
+
+  // Non-owners never see cost_calc — leave it out of the SELECT entirely.
+  const selectFields = canSeeCosts
+    ? 'id, sku, name, slug, description, is_active, visible_in_store, price_cents, club_price_cents, commission_percent, target_payback_percent, cost_calc'
+    : 'id, sku, name, slug, description, is_active, visible_in_store, price_cents, club_price_cents, commission_percent, target_payback_percent'
+
   const { data: product, error } = await supabase
     .from('products')
-    .select(
-      'id, sku, name, slug, description, is_active, visible_in_store, price_cents, club_price_cents, commission_percent, target_payback_percent, cost_calc',
-    )
+    .select(selectFields)
     .eq('id', id)
     .maybeSingle()
   if (error || !product) notFound()
+
+  const productTyped = product as {
+    id: string
+    sku: string
+    name: string
+    slug: string
+    description: string | null
+    is_active: boolean
+    visible_in_store: boolean
+    price_cents: number
+    club_price_cents: number | null
+    commission_percent: number | string
+    target_payback_percent: number | string | null
+    cost_calc?: unknown
+  }
 
   const [
     productCategories,
@@ -39,32 +63,33 @@ export default async function EditProductPage({
     stockByWarehouse,
     currentRate,
   ] = await Promise.all([
-    fetchProductCategories(product.id),
+    fetchProductCategories(productTyped.id),
     fetchAllCategoriesFlat(),
-    fetchProductImages(product.id),
+    fetchProductImages(productTyped.id),
     fetchAllWarehouses(),
-    fetchProductWarehouseSettings(product.id),
-    fetchProductStockByWarehouse(product.id),
-    fetchCurrentExchangeRate(),
+    fetchProductWarehouseSettings(productTyped.id),
+    fetchProductStockByWarehouse(productTyped.id),
+    canSeeCosts ? fetchCurrentExchangeRate() : Promise.resolve(null),
   ])
 
   return (
     <ProductForm
       mode="edit"
-      productId={product.id}
+      productId={productTyped.id}
+      canSeeCosts={canSeeCosts}
       initial={{
-        sku: product.sku,
-        name: product.name,
-        slug: product.slug,
-        description: product.description ?? '',
-        is_active: product.is_active,
-        visible_in_store: product.visible_in_store,
-        price_cents: product.price_cents,
-        club_price_cents: product.club_price_cents,
-        commission_percent: Number(product.commission_percent),
+        sku: productTyped.sku,
+        name: productTyped.name,
+        slug: productTyped.slug,
+        description: productTyped.description ?? '',
+        is_active: productTyped.is_active,
+        visible_in_store: productTyped.visible_in_store,
+        price_cents: productTyped.price_cents,
+        club_price_cents: productTyped.club_price_cents,
+        commission_percent: Number(productTyped.commission_percent),
         target_payback_percent:
-          product.target_payback_percent != null
-            ? Number(product.target_payback_percent)
+          productTyped.target_payback_percent != null
+            ? Number(productTyped.target_payback_percent)
             : null,
       }}
       productCategories={productCategories}
@@ -73,7 +98,7 @@ export default async function EditProductPage({
       allWarehouses={allWarehouses}
       productWarehouseSettings={productWarehouseSettings}
       stockByWarehouse={stockByWarehouse}
-      costCalc={product.cost_calc ?? null}
+      costCalc={canSeeCosts ? (productTyped.cost_calc as never) ?? null : null}
       currentRate={currentRate}
       justCreated={sp.created === '1'}
     />
