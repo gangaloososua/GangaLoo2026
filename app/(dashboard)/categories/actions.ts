@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
-import { requireOwner } from '@/lib/auth/guard'
+import { requireOwner, requireAdminCaller } from '@/lib/auth/guard'
 
 export type Category = {
   id: string
@@ -27,6 +27,7 @@ function slugify(name: string): string {
 }
 
 export async function listCategories(): Promise<Category[]> {
+  await requireAdminCaller()
   const supabase = await createClient()
 
   const { data: rows, error } = await supabase

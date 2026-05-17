@@ -6,7 +6,7 @@ import {
   searchProductsForSale,
   type ProductSearchResult,
 } from '@/lib/sales'
-import { requireOwner } from '@/lib/auth/guard'
+import { requireOwner, requireAdminCaller } from '@/lib/auth/guard'
 
 export type ActionResult = { ok: true } | { ok: false; error: string }
 
@@ -363,6 +363,7 @@ export async function searchProductsForSaleAction(input: {
   query: string
   warehouseId: string
 }): Promise<SearchProductsResult> {
+  await requireAdminCaller()
   // Caller is responsible for ensuring auth — every page in (dashboard)
   // is already gated. We still don't take a sale-write action here, so
   // even an unauthenticated call would only leak read-side info.
@@ -418,6 +419,7 @@ export type ConfirmPosResult =
 export async function confirmPosSale(
   input: ConfirmPosInput
 ): Promise<ConfirmPosResult> {
+  await requireAdminCaller()
   // Light client-side validation so we surface a clean error before the
   // round-trip. The rpc validates again; this is just nicer UX.
   if (!input.seller_id) return { ok: false, error: 'Seller is required.' }
