@@ -5,17 +5,19 @@ import {
   listSellers,
   getCurrentSeller,
   listWarehousesForFilter,
+  listMoneyAccounts,
 } from '@/lib/sales'
 import { NewSaleForm } from './new-sale-form'
 
 export const dynamic = 'force-dynamic'
 
 export default async function NewSalePage() {
-  const [customers, sellers, currentSeller, warehouses] = await Promise.all([
+  const [customers, sellers, currentSeller, warehouses, moneyAccounts] = await Promise.all([
     listCustomersForPicker(),
     listSellers(),
     getCurrentSeller(),
     listWarehousesForFilter(),
+    listMoneyAccounts(),
   ])
 
   return (
@@ -42,6 +44,7 @@ export default async function NewSalePage() {
         sellers={sellers}
         defaultSellerId={currentSeller?.id ?? null}
         warehouses={warehouses}
+        moneyAccounts={moneyAccounts}
       />
     </div>
   )

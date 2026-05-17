@@ -1,6 +1,8 @@
 ﻿'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { toast } from 'sonner'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -12,12 +14,24 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { Badge } from '@/components/ui/badge'
-import { Trash2 } from 'lucide-react'
+import { Plus, Trash2 } from 'lucide-react'
 import { formatDOP } from '@/lib/format'
 import { ProductSearch } from './product-search'
+import { confirmPosSale } from '../actions'
 import type {
   CustomerPickerItem,
+  MoneyAccount,
   ProductSearchResult,
   SellerOption,
 } from '@/lib/sales'
@@ -29,6 +43,7 @@ type Props = {
   sellers: SellerOption[]
   defaultSellerId: string | null
   warehouses: LookupItem[]
+  moneyAccounts: MoneyAccount[]
 }
 
 // Sentinel for "walk-in" in the customer Select. Radix forbids "" as a value.
@@ -44,9 +59,30 @@ const FULFILLMENT_OPTIONS: Array<{
   { value: 'delivery', label: 'Delivery', hint: 'Sent from this warehouse to the customer' },
 ]
 
-// A cart line. unit_price_cents is the resolved default at add-time; the
-// operator can edit it. qty_on_hand_at_add is the stock indicator we froze
-// when the product was added (re-fetching as the cart grows is overkill).
+// Per-tender payment method options. Excludes 'mixed' — that's a sale-level
+// summary concept, not a tender row. Multi-tender sales are recorded as
+// multiple sale_payments rows with distinct methods.
+type PaymentMethod =
+  | 'cash'
+  | 'card'
+  | 'transfer'
+  | 'paypal'
+  | 'stripe'
+  | 'credit'
+
+const PAYMENT_METHOD_OPTIONS: Array<{
+  value: PaymentMethod
+  label: string
+}> = [
+  { value: 'cash', label: 'Cash' },
+  { value: 'card', label: 'Card' },
+  { value: 'transfer', label: 'Transfer' },
+  { value: 'paypal', label: 'PayPal' },
+  { value: 'stripe', label: 'Stripe' },
+  { value: 'credit', label: 'Store credit' },
+]
+
+// A cart line.
 type CartLine = {
   line_id: string
   product_id: string
@@ -58,6 +94,15 @@ type CartLine = {
   qty: number
   line_discount_cents: number
   qty_on_hand_at_add: number
+}
+
+// A payment tender.
+type CartPayment = {
+  tender_id: string
+  method: PaymentMethod
+  amount_cents: number
+  money_account_id: string
+  reference: string
 }
 
 // Pick the default unit price: warehouse override > club price (if customer
@@ -75,8 +120,17 @@ function resolveDefaultPrice(
   return product.base_price_cents
 }
 
-// User types DOP as integer pesos. Internally we store cents. The form has
-// no fractional input, matching how POS staff actually ring up sales.
+// Prefer an account whose kind matches the method (e.g. cash method → a
+// cash-kind account). Falls back to the first account.
+function pickDefaultAccountId(
+  accounts: MoneyAccount[],
+  method: PaymentMethod
+): string {
+  const byKind = accounts.find((a) => a.kind === method)
+  if (byKind) return byKind.id
+  return accounts[0]?.id ?? ''
+}
+
 function dopStringToCents(s: string): number {
   const n = parseInt(s, 10)
   if (!Number.isFinite(n) || n < 0) return 0
@@ -87,11 +141,18 @@ function centsToDopString(c: number): string {
   return Math.round(c / 100).toString()
 }
 
+function makeId(): string {
+  return typeof crypto !== 'undefined' && 'randomUUID' in crypto
+    ? crypto.randomUUID()
+    : `tmp-${Date.now()}-${Math.random().toString(36).slice(2)}`
+}
+
 export function NewSaleForm({
   customers,
   sellers,
   defaultSellerId,
   warehouses,
+  moneyAccounts,
 }: Props) {
   const [customerId, setCustomerId] = useState<string>(WALKIN)
   const [sellerId, setSellerId] = useState<string>(defaultSellerId ?? '')
@@ -100,21 +161,22 @@ export function NewSaleForm({
   const [fulfillmentMethod, setFulfillmentMethod] =
     useState<'in_store' | 'pickup' | 'delivery'>('in_store')
 
-  // Keep fulfillment warehouse in sync with source warehouse by default.
   const [fulfillmentLinked, setFulfillmentLinked] = useState(true)
 
-  // Cart state.
   const [lines, setLines] = useState<CartLine[]>([])
   const [saleDiscountCents, setSaleDiscountCents] = useState<number>(0)
+  const [payments, setPayments] = useState<CartPayment[]>([])
+  const [submitting, setSubmitting] = useState(false)
+  const [confirmOpen, setConfirmOpen] = useState(false)
+
+  const router = useRouter()
 
   function onSourceWarehouseChange(id: string) {
     setSourceWarehouseId(id)
     if (fulfillmentLinked) setFulfillmentWarehouseId(id)
-    // Changing the source warehouse invalidates existing line prices/stock
-    // (they were resolved against the old warehouse). Easiest correct move:
-    // clear the cart. Empty-cart case is a no-op.
     if (lines.length > 0 && id !== sourceWarehouseId) {
       setLines([])
+      setPayments([])
     }
   }
 
@@ -137,10 +199,7 @@ export function NewSaleForm({
     setLines((prev) => [
       ...prev,
       {
-        line_id:
-          typeof crypto !== 'undefined' && 'randomUUID' in crypto
-            ? crypto.randomUUID()
-            : `tmp-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        line_id: makeId(),
         product_id: p.id,
         sku: p.sku,
         name: p.name,
@@ -178,7 +237,114 @@ export function NewSaleForm({
     return { subtotal, lineDiscounts, grandTotal }
   }, [lines, saleDiscountCents])
 
-  // === render ===
+  // === payment ops ===
+
+  function addPayment(amountCents?: number) {
+    const method: PaymentMethod = 'cash'
+    setPayments((prev) => [
+      ...prev,
+      {
+        tender_id: makeId(),
+        method,
+        amount_cents: amountCents ?? 0,
+        money_account_id: pickDefaultAccountId(moneyAccounts, method),
+        reference: '',
+      },
+    ])
+  }
+
+  function updatePayment(tender_id: string, patch: Partial<CartPayment>) {
+    setPayments((prev) =>
+      prev.map((p) => {
+        if (p.tender_id !== tender_id) return p
+        // When method changes, swap the default account to match the new kind.
+        if (patch.method && patch.method !== p.method) {
+          return {
+            ...p,
+            ...patch,
+            money_account_id: pickDefaultAccountId(moneyAccounts, patch.method),
+          }
+        }
+        return { ...p, ...patch }
+      })
+    )
+  }
+
+  function removePayment(tender_id: string) {
+    setPayments((prev) => prev.filter((p) => p.tender_id !== tender_id))
+  }
+
+  // Auto-seed first tender when cart goes from empty to non-empty.
+  useEffect(() => {
+    if (lines.length > 0 && payments.length === 0 && moneyAccounts.length > 0) {
+      addPayment(totals.grandTotal)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lines.length])
+
+  const paymentTotal = useMemo(
+    () => payments.reduce((sum, p) => sum + p.amount_cents, 0),
+    [payments]
+  )
+  const outstanding = totals.grandTotal - paymentTotal // negative if overpaid
+
+  // === confirm gate ===
+
+  const confirmDisabledReason: string | null = useMemo(() => {
+    if (!metaReady) return 'Set seller and warehouses first'
+    if (lines.length === 0) return 'Add at least one product to the cart'
+    if (payments.length === 0) return 'Record at least one payment'
+    if (payments.some((p) => !p.money_account_id))
+      return 'Pick an account for every payment row'
+    if (paymentTotal <= 0) return 'Payment amount must be greater than zero'
+    return null
+  }, [metaReady, lines.length, payments, paymentTotal])
+
+  const confirmReady = confirmDisabledReason === null
+
+  const anyOverStock = useMemo(
+    () => lines.some((l) => l.qty > l.qty_on_hand_at_add),
+    [lines]
+  )
+
+  async function handleConfirm() {
+    if (!confirmReady) return
+    setSubmitting(true)
+    try {
+      const res = await confirmPosSale({
+        customer_id: customerId === WALKIN ? null : customerId,
+        seller_id: sellerId,
+        source_warehouse_id: sourceWarehouseId,
+        fulfillment_warehouse_id: fulfillmentWarehouseId,
+        fulfillment_method: fulfillmentMethod,
+        discount_cents: saleDiscountCents,
+        items: lines.map((l) => ({
+          product_id: l.product_id,
+          qty: l.qty,
+          unit_price_cents: l.unit_price_cents,
+          discount_cents: l.line_discount_cents,
+        })),
+        payments: payments.map((p) => ({
+          method: p.method,
+          amount_cents: p.amount_cents,
+          money_account_id: p.money_account_id,
+          reference: p.reference || null,
+        })),
+      })
+      if (res.ok) {
+        toast.success(`Sale ${res.invoice_number} confirmed.`)
+        router.push(`/sales/${res.sale_id}`)
+      } else {
+        toast.error(res.error)
+        setSubmitting(false)
+      }
+    } catch (err) {
+      const msg =
+        err instanceof Error ? err.message : 'Confirm sale failed.'
+      toast.error(msg)
+      setSubmitting(false)
+    }
+  }
 
   return (
     <div className="space-y-4">
@@ -510,18 +676,210 @@ export function NewSaleForm({
         </CardContent>
       </Card>
 
+      {metaReady && lines.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Payment</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {moneyAccounts.length === 0 && (
+              <p className="text-sm text-rose-700">
+                No active money accounts exist. Configure at least one before
+                ringing up sales.
+              </p>
+            )}
+
+            {payments.map((p) => (
+              <div
+                key={p.tender_id}
+                className="grid grid-cols-1 gap-2 rounded-md border p-3 sm:grid-cols-12"
+              >
+                <div className="space-y-1 sm:col-span-3">
+                  <Label className="text-xs">Method</Label>
+                  <Select
+                    value={p.method}
+                    onValueChange={(v) =>
+                      updatePayment(p.tender_id, { method: v as PaymentMethod })
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {PAYMENT_METHOD_OPTIONS.map((m) => (
+                        <SelectItem key={m.value} value={m.value}>
+                          {m.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-1 sm:col-span-3">
+                  <Label className="text-xs">Amount (DOP)</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    step={1}
+                    value={centsToDopString(p.amount_cents)}
+                    onChange={(e) =>
+                      updatePayment(p.tender_id, {
+                        amount_cents: dopStringToCents(e.target.value),
+                      })
+                    }
+                  />
+                </div>
+
+                <div className="space-y-1 sm:col-span-3">
+                  <Label className="text-xs">Account</Label>
+                  <Select
+                    value={p.money_account_id || undefined}
+                    onValueChange={(v) =>
+                      updatePayment(p.tender_id, { money_account_id: v })
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Pick…" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {moneyAccounts.map((a) => (
+                        <SelectItem key={a.id} value={a.id}>
+                          {a.name}{' '}
+                          <span className="text-xs text-muted-foreground">
+                            ({a.kind})
+                          </span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-1 sm:col-span-2">
+                  <Label className="text-xs">Reference</Label>
+                  <Input
+                    type="text"
+                    value={p.reference}
+                    onChange={(e) =>
+                      updatePayment(p.tender_id, { reference: e.target.value })
+                    }
+                    placeholder="(optional)"
+                  />
+                </div>
+
+                <div className="flex items-end justify-end sm:col-span-1">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => removePayment(p.tender_id)}
+                    aria-label="Remove tender"
+                  >
+                    <Trash2 className="size-4" />
+                  </Button>
+                </div>
+              </div>
+            ))}
+
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => addPayment(Math.max(0, outstanding))}
+                disabled={moneyAccounts.length === 0}
+              >
+                <Plus className="mr-1 size-4" />
+                Add tender
+              </Button>
+
+              <div className="text-sm tabular-nums">
+                <span className="text-muted-foreground">Paid:</span>{' '}
+                <span className="font-medium">{formatDOP(paymentTotal)}</span>
+                <span className="mx-2 text-muted-foreground">/</span>
+                <span className="text-muted-foreground">Total:</span>{' '}
+                <span className="font-medium">{formatDOP(totals.grandTotal)}</span>
+                {outstanding > 0 && (
+                  <span className="ml-3 text-amber-700">
+                    Outstanding: {formatDOP(outstanding)}
+                  </span>
+                )}
+                {outstanding < 0 && (
+                  <span className="ml-3 text-rose-700">
+                    Overpayment: {formatDOP(-outstanding)}
+                  </span>
+                )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <div className="flex items-center justify-end gap-2">
         <Button variant="outline" type="button" disabled>
           Save draft
         </Button>
         <Button
           type="button"
-          disabled
-          title="Payment + confirm wire up in 9.8"
+          disabled={!confirmReady || submitting}
+          title={confirmDisabledReason ?? 'Confirm sale'}
+          onClick={() => setConfirmOpen(true)}
         >
-          Confirm sale
+          {submitting ? 'Confirming…' : 'Confirm sale'}
         </Button>
       </div>
+
+      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirm this sale?</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2 text-sm">
+                <div>
+                  {lines.length} {lines.length === 1 ? 'item' : 'items'},{' '}
+                  total {formatDOP(totals.grandTotal)}, paid{' '}
+                  {formatDOP(paymentTotal)}.
+                </div>
+                {anyOverStock && (
+                  <div className="text-amber-700">
+                    Warning: one or more lines exceed the stock that was on
+                    hand when added. Confirming anyway will push the oldest
+                    lot negative.
+                  </div>
+                )}
+                {outstanding > 0 && (
+                  <div className="text-amber-700">
+                    Outstanding balance of {formatDOP(outstanding)} will
+                    remain after this sale.
+                  </div>
+                )}
+                {outstanding < 0 && (
+                  <div className="text-rose-700">
+                    Overpayment of {formatDOP(-outstanding)} will be recorded.
+                  </div>
+                )}
+                <div className="text-muted-foreground">
+                  This writes the sale, consumes inventory, and records
+                  payments + commissions atomically. It cannot be undone
+                  without a refund.
+                </div>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={submitting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={submitting}
+              onClick={(e) => {
+                e.preventDefault()
+                setConfirmOpen(false)
+                void handleConfirm()
+              }}
+            >
+              Confirm sale
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

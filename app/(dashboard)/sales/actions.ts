@@ -376,3 +376,83 @@ export async function searchProductsForSaleAction(input: {
     return { ok: false, error: msg }
   }
 }
+
+// ============================================================
+// 9.8 — POS confirm
+// ============================================================
+
+export type ConfirmPosPayment = {
+  method: 'cash' | 'card' | 'transfer' | 'paypal' | 'stripe' | 'credit' | 'mixed'
+  amount_cents: number
+  money_account_id: string
+  reference?: string | null
+  paid_at?: string | null // ISO; omit for now()
+}
+
+export type ConfirmPosItem = {
+  product_id: string
+  qty: number
+  unit_price_cents: number
+  discount_cents: number
+}
+
+export type ConfirmPosInput = {
+  customer_id: string | null
+  seller_id: string
+  source_warehouse_id: string
+  fulfillment_warehouse_id: string
+  fulfillment_method: 'in_store' | 'pickup' | 'delivery'
+  discount_cents: number
+  items: ConfirmPosItem[]
+  payments: ConfirmPosPayment[]
+}
+
+export type ConfirmPosResult =
+  | { ok: true; sale_id: string; invoice_number: string }
+  | { ok: false; error: string }
+
+export async function confirmPosSale(
+  input: ConfirmPosInput
+): Promise<ConfirmPosResult> {
+  // Light client-side validation so we surface a clean error before the
+  // round-trip. The rpc validates again; this is just nicer UX.
+  if (!input.seller_id) return { ok: false, error: 'Seller is required.' }
+  if (!input.source_warehouse_id)
+    return { ok: false, error: 'Source warehouse is required.' }
+  if (!input.fulfillment_warehouse_id)
+    return { ok: false, error: 'Fulfillment warehouse is required.' }
+  if (input.items.length < 1)
+    return { ok: false, error: 'Add at least one item to the cart.' }
+  if (input.payments.length < 1)
+    return { ok: false, error: 'Record at least one payment before confirming.' }
+
+  const supabase = await createClient()
+  const { data, error } = await supabase.rpc('confirm_pos_sale', {
+    p_payload: input,
+  })
+
+  if (error) {
+    // Postgres "raise exception" text comes through as error.message.
+    // Strip leading "no_lots_for_product:" prefix to a friendlier line.
+    const raw = error.message || 'Failed to confirm sale.'
+    const friendly = raw.startsWith('no_lots_for_product:')
+      ? 'One of the products has no inventory lots in the selected warehouse. ' +
+        'Receive stock for it first, or pick a different source warehouse.'
+      : raw
+    return { ok: false, error: friendly }
+  }
+
+  // rpc returns jsonb: { sale_id, invoice_number }
+  const row = data as { sale_id?: string; invoice_number?: string } | null
+  if (!row || !row.sale_id || !row.invoice_number) {
+    return { ok: false, error: 'Unexpected response from confirm_pos_sale.' }
+  }
+
+  revalidatePath('/sales')
+
+  return {
+    ok: true,
+    sale_id: row.sale_id,
+    invoice_number: row.invoice_number,
+  }
+}
