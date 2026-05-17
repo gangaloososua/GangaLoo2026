@@ -9,6 +9,7 @@
   Users,
   Truck,
   UsersRound,
+  UserCog,
   Settings,
   type LucideIcon,
 } from 'lucide-react'
@@ -28,6 +29,7 @@ export const navItems: NavItem[] = [
   { label: 'Categories', href: '/categories', icon: Tags },
   { label: 'Warehouses', href: '/warehouses', icon: Warehouse },
   { label: 'People', href: '/people', icon: UsersRound },
+  { label: 'Users', href: '/users', icon: UserCog },
   { label: 'Customers', href: '/people?role=customer', icon: Users },
   { label: 'Distributors', href: '/people?distributor=1', icon: Truck },
   { label: 'Settings', href: '/settings', icon: Settings },
