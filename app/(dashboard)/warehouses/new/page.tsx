@@ -1,11 +1,12 @@
-import Link from 'next/link'
+﻿import Link from 'next/link'
 import { ChevronLeft } from 'lucide-react'
 import { listStaff } from '../actions'
 import { WarehouseForm } from '../warehouse-form'
+import { requireOwner } from '@/lib/auth/guard'
 
 export default async function NewWarehousePage() {
+  await requireOwner()
   const staff = await listStaff()
-
   return (
     <div className="space-y-4 max-w-3xl">
       <Link href="/warehouses" className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground">

@@ -1,19 +1,19 @@
-import Link from 'next/link'
+﻿import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { ChevronLeft } from 'lucide-react'
 import { getWarehouse, listStaff } from '../../actions'
 import { WarehouseForm } from '../../warehouse-form'
+import { requireOwner } from '@/lib/auth/guard'
 
 export default async function EditWarehousePage({
   params,
 }: {
   params: Promise<{ id: string }>
 }) {
+  await requireOwner()
   const { id } = await params
   const [warehouse, staff] = await Promise.all([getWarehouse(id), listStaff()])
-
   if (!warehouse) notFound()
-
   return (
     <div className="space-y-4 max-w-3xl">
       <Link href="/warehouses" className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground">

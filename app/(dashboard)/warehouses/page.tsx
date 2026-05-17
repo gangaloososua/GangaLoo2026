@@ -1,12 +1,13 @@
-import Link from 'next/link'
+﻿import Link from 'next/link'
 import { Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { listWarehouses } from './actions'
 import { WarehousesTable } from './warehouses-table'
+import { requireOwner } from '@/lib/auth/guard'
 
 export default async function WarehousesPage() {
+  await requireOwner()
   const warehouses = await listWarehouses()
-
   return (
     <div className="space-y-4">
       <div className="flex items-start justify-between">

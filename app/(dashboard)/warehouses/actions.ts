@@ -1,8 +1,9 @@
-'use server'
+﻿'use server'
 
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { requireOwner } from '@/lib/auth/guard'
 
 export type WarehouseKind = 'store' | 'fulfillment' | 'virtual'
 
@@ -102,6 +103,7 @@ function readForm(formData: FormData) {
 }
 
 export async function listWarehouses(): Promise<WarehouseListRow[]> {
+  await requireOwner()
   const supabase = await createClient()
 
   const { data: rows, error } = await supabase
@@ -137,6 +139,7 @@ export async function listWarehouses(): Promise<WarehouseListRow[]> {
 }
 
 export async function getWarehouse(id: string): Promise<Warehouse | null> {
+  await requireOwner()
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('warehouses')
@@ -152,6 +155,7 @@ export async function getWarehouse(id: string): Promise<Warehouse | null> {
 }
 
 export async function listStaff(): Promise<StaffOption[]> {
+  await requireOwner()
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('profiles')
@@ -164,6 +168,7 @@ export async function listStaff(): Promise<StaffOption[]> {
 }
 
 export async function createWarehouse(formData: FormData) {
+  await requireOwner()
   const values = readForm(formData)
   if (!values.name) return { error: 'Name is required.' }
 
@@ -181,6 +186,7 @@ export async function createWarehouse(formData: FormData) {
 }
 
 export async function updateWarehouse(id: string, formData: FormData) {
+  await requireOwner()
   const values = readForm(formData)
   if (!values.name) return { error: 'Name is required.' }
 
@@ -198,6 +204,7 @@ export async function updateWarehouse(id: string, formData: FormData) {
 }
 
 export async function deleteWarehouse(id: string) {
+  await requireOwner()
   const supabase = await createClient()
   const { error } = await supabase.from('warehouses').delete().eq('id', id)
   if (error) return { error: error.message }
