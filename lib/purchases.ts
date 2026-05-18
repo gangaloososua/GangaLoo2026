@@ -588,3 +588,135 @@ export async function getTransportSummaryForOrder(orderId: string): Promise<Tran
     allocations: assembled,
   }
 }
+
+// ============================================================
+// Form-side fetchers (14b.3 - /purchases/new)
+// ============================================================
+// These are gated by the consuming page (requireOwner on
+// /purchases/new), matching the pattern of every other fetcher
+// in this file.
+
+// Couriers picker: name + id list, active suppliers with kind='courier'.
+export type CourierPickerItem = { id: string; name: string }
+
+export async function listCouriersForPicker(): Promise<CourierPickerItem[]> {
+  const supabase = await createClient()
+
+  const { data, error } = await supabase
+    .from('suppliers')
+    .select('id, name')
+    .eq('kind', 'courier')
+    .eq('is_active', true)
+    .order('name')
+
+  if (error) throw new Error(error.message)
+  return (data ?? []) as CourierPickerItem[]
+}
+
+// Suppliers picker: name + id list, active suppliers with kind='supplier'.
+// The form's combobox seeds from this list; typing a brand-new name and
+// submitting causes create_purchase_order to insert the supplier.
+export type SupplierPickerItem = { id: string; name: string }
+
+export async function listSuppliersForPicker(): Promise<SupplierPickerItem[]> {
+  const supabase = await createClient()
+
+  const { data, error } = await supabase
+    .from('suppliers')
+    .select('id, name')
+    .eq('kind', 'supplier')
+    .eq('is_active', true)
+    .order('name')
+
+  if (error) throw new Error(error.message)
+  return (data ?? []) as SupplierPickerItem[]
+}
+
+// Product picker grouped by category. A product appears under every
+// category it is tagged with (is_visible = true). Products with no
+// visible category memberships land in an "Uncategorized" bucket.
+//
+// Returns categories in display_order, then product groups within each
+// category alphabetised by product name. The "Uncategorized" bucket
+// goes last when present.
+export type ProductPickerItem = {
+  id: string
+  sku: string
+  name: string
+}
+
+export type ProductPickerCategoryGroup = {
+  category_id: string | null   // null for the Uncategorized bucket
+  category_name: string
+  products: ProductPickerItem[]
+}
+
+export async function listProductsGroupedByCategory(): Promise
+  ProductPickerCategoryGroup[]
+> {
+  const supabase = await createClient()
+
+  const { data: products, error: prodErr } = await supabase
+    .from('products')
+    .select('id, sku, name')
+    .eq('is_active', true)
+    .order('name')
+  if (prodErr) throw new Error(prodErr.message)
+
+  const { data: memberships, error: memErr } = await supabase
+    .from('product_categories')
+    .select('product_id, category_id, is_visible')
+    .eq('is_visible', true)
+  if (memErr) throw new Error(memErr.message)
+
+  const { data: categories, error: catErr } = await supabase
+    .from('categories')
+    .select('id, name, display_order, is_active')
+    .eq('is_active', true)
+    .order('display_order')
+    .order('name')
+  if (catErr) throw new Error(catErr.message)
+
+  const productMap = new Map<string, ProductPickerItem>()
+  for (const p of products ?? []) productMap.set(p.id, p as ProductPickerItem)
+
+  const taggedProductIds = new Set<string>()
+  const productsByCategory = new Map<string, Set<string>>()
+  for (const m of memberships ?? []) {
+    if (!productMap.has(m.product_id)) continue
+    taggedProductIds.add(m.product_id)
+    if (!productsByCategory.has(m.category_id)) {
+      productsByCategory.set(m.category_id, new Set())
+    }
+    productsByCategory.get(m.category_id)!.add(m.product_id)
+  }
+
+  const groups: ProductPickerCategoryGroup[] = []
+  for (const cat of categories ?? []) {
+    const pidSet = productsByCategory.get(cat.id)
+    if (!pidSet || pidSet.size === 0) continue
+    const productsInCat = Array.from(pidSet)
+      .map((pid) => productMap.get(pid)!)
+      .sort((a, b) => a.name.localeCompare(b.name))
+    groups.push({
+      category_id: cat.id,
+      category_name: cat.name,
+      products: productsInCat,
+    })
+  }
+
+  const orphans = (products ?? [])
+    .filter((p) => !taggedProductIds.has(p.id))
+    .map((p) => p as ProductPickerItem)
+    .sort((a, b) => a.name.localeCompare(b.name))
+
+  if (orphans.length > 0) {
+    groups.push({
+      category_id: null,
+      category_name: 'Uncategorized',
+      products: orphans,
+    })
+  }
+
+  return groups
+}
