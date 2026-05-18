@@ -1,14 +1,15 @@
 ﻿import { createClient } from '@/lib/supabase/server'
+import type {
+  ConfigValueType,
+  StoreConfigRow,
+  StoreInfo,
+} from './store-config-types'
+import { STORE_INFO_DEFAULTS } from './store-config-types'
 
-export type ConfigValueType = 'string' | 'number' | 'boolean'
-
-export type StoreConfigRow = {
-  key: string
-  value: string | number | boolean
-  valueType: ConfigValueType
-  description: string | null
-  updated_at: string
-}
+// Re-export for server-side caller convenience. Client components
+// must import directly from './store-config-types'.
+export type { ConfigValueType, StoreConfigRow, StoreInfo }
+export { STORE_INFO_DEFAULTS }
 
 function detectType(value: unknown): ConfigValueType | null {
   if (typeof value === 'string') return 'string'
@@ -24,7 +25,6 @@ export async function fetchStoreConfig(): Promise<StoreConfigRow[]> {
     .select('key, value, description, updated_at')
     .order('key', { ascending: true })
   if (error) throw error
-
   const rows: StoreConfigRow[] = []
   for (const row of data ?? []) {
     const t = detectType(row.value)
@@ -43,26 +43,6 @@ export async function fetchStoreConfig(): Promise<StoreConfigRow[]> {
   return rows
 }
 
-// ---------------------------------------------------------------------------
-// 9.9 — receipt header info
-// ---------------------------------------------------------------------------
-
-export type StoreInfo = {
-  name: string
-  address: string
-  phone: string
-  rnc: string
-}
-
-// Hardcoded fallbacks for when a key isn't set yet. The Settings UI
-// lets the owner override these without touching code.
-const STORE_INFO_DEFAULTS: StoreInfo = {
-  name: 'Gangaloo',
-  address: '',
-  phone: '',
-  rnc: '',
-}
-
 /**
  * Fetches the store_* keys from store_config in one round-trip and
  * returns a typed StoreInfo. Missing keys fall back to defaults; blank
@@ -75,13 +55,11 @@ export async function fetchStoreInfo(): Promise<StoreInfo> {
   for (const r of rows) {
     byKey[r.key] = r.value
   }
-
   function pickString(key: string, fallback: string): string {
     const v = byKey[key]
     if (typeof v === 'string') return v
     return fallback
   }
-
   return {
     name: pickString('store_name', STORE_INFO_DEFAULTS.name),
     address: pickString('store_address', STORE_INFO_DEFAULTS.address),

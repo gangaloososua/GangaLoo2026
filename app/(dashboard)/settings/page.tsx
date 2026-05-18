@@ -1,8 +1,7 @@
 ﻿import Link from 'next/link'
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { ArrowRight, Calendar, SlidersHorizontal } from 'lucide-react'
+import { ArrowRight, Calendar, Receipt, SlidersHorizontal } from 'lucide-react'
 import { requireOwner } from '@/lib/auth/guard'
-
 export default async function SettingsHubPage() {
   await requireOwner()
   return (
@@ -24,6 +23,20 @@ export default async function SettingsHubPage() {
               <CardTitle className="mt-2">Exchange Rates</CardTitle>
               <CardDescription>
                 Monthly USD→DOP rates used by the Calculator and reports.
+              </CardDescription>
+            </CardHeader>
+          </Card>
+        </Link>
+        <Link href="/settings/receipt" className="block">
+          <Card className="transition-colors hover:bg-accent/50">
+            <CardHeader>
+              <div className="flex items-start justify-between">
+                <Receipt className="h-5 w-5 text-muted-foreground" />
+                <ArrowRight className="h-4 w-4 text-muted-foreground" />
+              </div>
+              <CardTitle className="mt-2">Receipt</CardTitle>
+              <CardDescription>
+                Store name, address, phone, and RNC printed on every POS receipt.
               </CardDescription>
             </CardHeader>
           </Card>
