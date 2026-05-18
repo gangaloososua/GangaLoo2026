@@ -21,7 +21,8 @@ export default async function ExchangeRatesPage() {
         </Link>
         <h1 className="mt-2 text-2xl font-semibold tracking-tight">Exchange Rates</h1>
         <p className="text-sm text-muted-foreground">
-          Monthly USD → DOP rates. Used by the Calculator and any reports that convert costs.
+          Monthly rates to DOP, one per currency per month. Used by the Calculator,
+          the Money Accounts grand total, and any report that converts costs.
         </p>
       </div>
       <RatesTable rows={rows} />

@@ -1,18 +1,11 @@
 ﻿import { createClient } from '@/lib/supabase/server'
+import type { Currency, ExchangeRate, EffectiveRate, EffectiveRatesResult } from './exchange-rates-types'
+import { SUPPORTED_CURRENCIES } from './exchange-rates-types'
 
-export type Currency = 'DOP' | 'USD' | 'EUR'
-
-export const SUPPORTED_CURRENCIES: readonly Currency[] = ['DOP', 'USD', 'EUR'] as const
-
-export type ExchangeRate = {
-  year: number
-  month: number
-  currency: Currency
-  rate: number
-  source: string | null
-  notes: string | null
-  created_at: string
-}
+// Re-export so server-side callers can keep `from '@/lib/exchange-rates'`
+// as a single import.
+export type { Currency, ExchangeRate, EffectiveRate, EffectiveRatesResult }
+export { SUPPORTED_CURRENCIES }
 
 /**
  * All rates, newest first. Used by the Settings > Exchange Rates page.
@@ -38,10 +31,6 @@ export async function fetchAllExchangeRates(): Promise<ExchangeRate[]> {
  * `currency` is required. Defaulting it silently is exactly the
  * bug that motivated the 12.0.a schema change — every caller must
  * declare which currency it expects.
- *
- * DOP is allowed for symmetry (returns the special DOP-self row if
- * one exists), but callers should treat DOP as the base currency
- * and not call this function for it in normal flow.
  */
 export async function fetchCurrentExchangeRate(
   currency: Currency,
@@ -75,18 +64,6 @@ export async function fetchCurrentExchangeRate(
   if (latestErr) throw latestErr
   if (!latest) return null
   return { ...latest, rate: Number(latest.rate) } as ExchangeRate
-}
-
-export type EffectiveRate = {
-  currency: Currency
-  rate: number
-  year: number
-  month: number
-}
-
-export type EffectiveRatesResult = {
-  rates: Partial<Record<Currency, EffectiveRate>>
-  missing: Currency[]
 }
 
 /**

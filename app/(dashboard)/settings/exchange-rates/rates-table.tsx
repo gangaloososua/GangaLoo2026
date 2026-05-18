@@ -23,9 +23,10 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
+import { Badge } from '@/components/ui/badge'
 import { RateFormDialog } from './rate-form-dialog'
 import { deleteRate } from './actions'
-import type { ExchangeRate } from '@/lib/exchange-rates'
+import type { Currency, ExchangeRate } from '@/lib/exchange-rates-types'
 
 const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -36,33 +37,26 @@ function monthLabel(month: number): string {
   return MONTH_NAMES[month - 1] ?? String(month)
 }
 
-function nextMonthAfter(rows: ExchangeRate[]): { year: number; month: number } {
-  if (rows.length === 0) {
-    const now = new Date()
-    return { year: now.getFullYear(), month: now.getMonth() + 1 }
-  }
-  // rows are sorted desc, first row is latest
-  const latest = rows[0]
-  let m = latest.month + 1
-  let y = latest.year
-  if (m > 12) {
-    m = 1
-    y += 1
-  }
-  return { year: y, month: m }
+function rowKey(row: ExchangeRate): string {
+  return `${row.year}-${row.month}-${row.currency}`
 }
 
 export function RatesTable({ rows }: { rows: ExchangeRate[] }) {
   const [pendingKey, setPendingKey] = useState<string | null>(null)
   const [, startTransition] = useTransition()
 
-  const next = nextMonthAfter(rows)
+  // Default new rates to the current year/month; user can change.
+  // (The previous "next month after latest" heuristic doesn't fit
+  // multi-currency — "latest" depends on which currency.)
+  const now = new Date()
+  const defaultYear = now.getFullYear()
+  const defaultMonth = now.getMonth() + 1
 
-  function onDelete(year: number, month: number) {
-    const key = `${year}-${month}`
+  function onDelete(year: number, month: number, currency: Currency) {
+    const key = `${year}-${month}-${currency}`
     setPendingKey(key)
     startTransition(async () => {
-      const result = await deleteRate(year, month)
+      const result = await deleteRate(year, month, currency)
       setPendingKey(null)
       if (result.ok) {
         toast.success('Rate deleted.')
@@ -79,7 +73,7 @@ export function RatesTable({ rows }: { rows: ExchangeRate[] }) {
           {rows.length} {rows.length === 1 ? 'rate' : 'rates'} on file.
         </p>
         <RateFormDialog
-          mode={{ kind: 'create', defaultYear: next.year, defaultMonth: next.month }}
+          mode={{ kind: 'create', defaultYear, defaultMonth }}
           trigger={
             <Button size="sm">
               <Plus className="mr-2 h-4 w-4" />
@@ -94,7 +88,8 @@ export function RatesTable({ rows }: { rows: ExchangeRate[] }) {
           <TableHeader>
             <TableRow>
               <TableHead>Month</TableHead>
-              <TableHead className="text-right">Rate (DOP / USD)</TableHead>
+              <TableHead>Currency</TableHead>
+              <TableHead className="text-right">Rate (DOP per unit)</TableHead>
               <TableHead>Source</TableHead>
               <TableHead>Notes</TableHead>
               <TableHead className="w-32 text-right">Actions</TableHead>
@@ -103,18 +98,21 @@ export function RatesTable({ rows }: { rows: ExchangeRate[] }) {
           <TableBody>
             {rows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} className="h-24 text-center text-sm text-muted-foreground">
+                <TableCell colSpan={6} className="h-24 text-center text-sm text-muted-foreground">
                   No exchange rates yet. Add the first one to get started.
                 </TableCell>
               </TableRow>
             ) : (
               rows.map((row) => {
-                const key = `${row.year}-${row.month}`
+                const key = rowKey(row)
                 const isPending = pendingKey === key
                 return (
                   <TableRow key={key}>
                     <TableCell className="font-medium">
                       {monthLabel(row.month)} {row.year}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline">{row.currency}</Badge>
                     </TableCell>
                     <TableCell className="text-right font-mono tabular-nums">
                       {row.rate.toFixed(4)}
@@ -149,18 +147,18 @@ export function RatesTable({ rows }: { rows: ExchangeRate[] }) {
                           <AlertDialogContent>
                             <AlertDialogHeader>
                               <AlertDialogTitle>
-                                Delete rate for {monthLabel(row.month)} {row.year}?
+                                Delete {row.currency} rate for {monthLabel(row.month)} {row.year}?
                               </AlertDialogTitle>
                               <AlertDialogDescription>
                                 Products with this month in their Calculator state will keep their
                                 stored exchange rate, but no fallback will be available for new
-                                calculations targeting this month.
+                                calculations targeting this month and currency.
                               </AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>
                               <AlertDialogCancel>Cancel</AlertDialogCancel>
                               <AlertDialogAction
-                                onClick={() => onDelete(row.year, row.month)}
+                                onClick={() => onDelete(row.year, row.month, row.currency)}
                                 className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                               >
                                 Delete
