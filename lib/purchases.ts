@@ -1,4 +1,4 @@
-﻿// ============================================================
+// ============================================================
 // Round 14a - Purchases read surface
 //
 // SERVER-ONLY data layer. Imports next/headers via createClient
@@ -54,7 +54,7 @@ function compareTs(a: string | null, b: string | null): number {
 const PURCHASE_ORDER_COLUMNS =
   'id, supplier_id, warehouse_id, supplier_payment_account_id, ' +
   'status, ' +
-  'usd_subtotal, usd_shipping, usd_tax, usd_total, ' +
+  'usd_subtotal, usd_shipping, usd_tax, usd_discount, usd_total, ' +
   'dop_paid_total, exchange_rate, dop_bank_fee, ' +
   'official_rate_at_payment, ' +
   'ordered_at, expected_at, paid_at_dop, received_at, completed_at, ' +
@@ -70,6 +70,7 @@ type RawPurchaseOrder = {
   usd_subtotal: number | string
   usd_shipping: number | string
   usd_tax: number | string
+  usd_discount: number | string
   usd_total: number | string
   dop_paid_total: number | string | null
   exchange_rate: number | string | null
@@ -97,6 +98,7 @@ function coercePurchaseOrder(
     usd_subtotal: Number(r.usd_subtotal),
     usd_shipping: Number(r.usd_shipping),
     usd_tax: Number(r.usd_tax),
+    usd_discount: Number(r.usd_discount),
     usd_total: Number(r.usd_total),
     dop_paid_total: r.dop_paid_total == null ? null : Number(r.dop_paid_total),
     exchange_rate: r.exchange_rate == null ? null : Number(r.exchange_rate),

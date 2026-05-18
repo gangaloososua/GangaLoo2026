@@ -41,6 +41,7 @@ export type PurchaseOrderRow = {
   usd_subtotal: number
   usd_shipping: number
   usd_tax: number
+  usd_discount: number
   usd_total: number
   dop_paid_total: number | null
   exchange_rate: number | null
