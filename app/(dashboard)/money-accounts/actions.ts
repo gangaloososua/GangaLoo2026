@@ -106,3 +106,47 @@ export async function createAccount(formData: FormData) {
   revalidatePath('/money-accounts')
   redirect('/money-accounts')
 }
+
+// ---------------------------------------------------------------------------
+// updateAccount
+// ---------------------------------------------------------------------------
+// Owner-only. Updates only the editable fields per the Round 12 spec:
+// name, kind, scope, group_tag, allow_negative, is_active.
+//
+// Currency, balance_cents, and initial_balance_cents are intentionally
+// NOT updated here, even if present in FormData:
+//   - currency: changing it would lie about historical transactions
+//   - initial_balance_cents: that's accounting-rewrite territory
+//   - balance_cents: only transactions move the balance
+//
+// Returns { success } on success (caller refreshes), { error } on failure.
+// No redirect — edit page stays on the same URL after save.
+// ---------------------------------------------------------------------------
+
+export async function updateAccount(id: string, formData: FormData) {
+  await requireOwner()
+  const v = readForm(formData)
+
+  if (!v.name) return { error: 'Name is required.' }
+  if (!v.kind) return { error: 'Pick a kind.' }
+  if (!v.scope) return { error: 'Pick a scope.' }
+
+  const supabase = await createClient()
+  const { error } = await supabase
+    .from('money_accounts')
+    .update({
+      name: v.name,
+      kind: v.kind,
+      scope: v.scope,
+      group_tag: v.group_tag,
+      allow_negative: v.allow_negative,
+      is_active: v.is_active,
+    })
+    .eq('id', id)
+
+  if (error) return { error: error.message }
+
+  revalidatePath('/money-accounts')
+  revalidatePath(`/money-accounts/${id}/edit`)
+  return { success: true as const }
+}
