@@ -330,3 +330,96 @@ From prior rounds, applied here:
   rows flagged, suppress the dot until a real audit pass is done.
 - payment_receipts table exists per the 14.0b query, scope unclear;
   not touched in 14a.
+
+---
+
+## Amendment: transport semantics (added during 14a.2 work)
+
+Round 14a.1 shipped, then a clarification surfaced during the
+list-page work about what "complete" really means and how
+transport payments interact with order status. Recording it here
+so 14a.3 (detail page) and 14b (status transitions) inherit
+the right model.
+
+### Business flow (the truth, recorded)
+
+1. Order placed: `pending`. `usd_total` only.
+2. Bank statement comes in: user records `dop_paid_total`,
+   `exchange_rate`, `dop_bank_fee` directly on the order header.
+   Status -> `paid_supplier`.
+3. Courier bills (possibly bundling several orders): user creates
+   ONE `courier_payments` row, then allocates the DOP amount
+   across orders via `courier_payment_allocations`. The
+   courier_payments row IS the paid-event - the moment it exists
+   with a `money_account_id`, the courier has been paid out of
+   that account. No "paid?" flag needed. `paid_at` defaults to now()
+   on insert.
+4. Goods arrive: status -> `received`. `received_at` set.
+   **Partial receive is real**: a line ordered 10 may have lots
+   summing to 8 received. The schema supports this via
+   `inventory_lots.qty_received` independent of
+   `purchase_order_items.qty`.
+5. User decides the order is done: status -> `complete`.
+   `completed_at` set.
+
+### Critical finding from migrated data
+
+Q4 at 14a.2.3-pre on the 'complete' rows: four of five sampled
+orders have status='complete', `received_at` set, but
+`allocation_count = 0`. The migration legitimately marked them
+complete with NO transport allocations.
+
+Reading: some orders genuinely have no transport cost (direct
+supplier delivery, absorbed elsewhere, whatever). "No transport
+allocations" is a VALID terminal state, not a missing-data bug.
+
+Implication: `derivedStatus` does NOT incorporate transport at
+all. `complete` is whatever the user marked complete. The detail
+page surfaces transport as a separate panel - information, not
+status.
+
+### Updated derivedStatus (docstring tightening, no code change)
+
+Same 4-step ladder shipped at 14a.1:
+
+  completed_at  -> 'complete'      (user marked done)
+  received_at   -> 'received'      (goods arrived, possibly partial)
+  paid_at_dop   -> 'paid_supplier' (bank statement recorded)
+  else          -> 'pending'
+
+No fifth `paid_transport` status. Transport is independent data.
+
+### New data-layer helpers (added in 14a.2.3a)
+
+- `getTransportSummaryForOrder(orderId)`: returns allocated_dop
+  total + the list of allocations with courier name, money
+  account name, paid_at, description. Detail-page "Transport"
+  sub-section reads from this.
+- `partialReceiveStatus(line, lots)`: pure function. Given a
+  line and its lots, returns { ordered, received, is_partial,
+  is_unreceived }. Detail page renders "Ordered 10, received 8"
+  inline.
+
+### List page (14a.2.3b)
+
+Status column shows the 4 stored statuses, no transport column.
+Transport gets the spotlight on detail (where there's room to
+show payment dates and money accounts) rather than the list
+(where it would just be a number with no context).
+
+### Carried into 14b
+
+14b adds the write side - marking paid_supplier (writes the bank
+fields), marking received (creates inventory_lots, with partial
+qty support), marking complete. Crucially: 14b does NOT add a
+"mark transport paid" action because transport is just the
+existence of courier_payments + allocations, which is 14c's
+domain. 14b can mark `complete` regardless of transport state -
+matches the legacy data and the user's actual workflow.
+
+### Carried into 14c
+
+The detail page in 14a.3 shows allocated_dop per order. 14c will
+add the action to CREATE a courier payment, allocate it across
+orders, and (the harder part) recompute landed cost on the
+affected line items. Until 14c lands, allocations are read-only.
