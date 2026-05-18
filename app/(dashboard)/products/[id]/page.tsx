@@ -7,9 +7,9 @@ import {
   fetchProductImages,
   fetchAllWarehouses,
   fetchProductWarehouseSettings,
-  fetchProductStockByWarehouse,
-  fetchCurrentExchangeRate,
+  fetchProductStockByWarehouse
 } from '@/lib/products'
+import { fetchCurrentExchangeRate } from '@/lib/exchange-rates'
 import { requireAdminCaller } from '@/lib/auth/guard'
 import { isOwnerEquivalent } from '@/lib/auth/roles'
 
@@ -69,7 +69,7 @@ export default async function EditProductPage({
     fetchAllWarehouses(),
     fetchProductWarehouseSettings(productTyped.id),
     fetchProductStockByWarehouse(productTyped.id),
-    canSeeCosts ? fetchCurrentExchangeRate() : Promise.resolve(null),
+    canSeeCosts ? fetchCurrentExchangeRate('USD') : Promise.resolve(null),
   ])
 
   return (

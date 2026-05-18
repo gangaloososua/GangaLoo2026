@@ -28,9 +28,9 @@ import type {
   ProductCategory,
   ProductImage,
   Warehouse,
-  ProductWarehouseSetting,
-  ExchangeRateRow,
+  ProductWarehouseSetting
 } from '@/lib/products'
+import type { ExchangeRate } from '@/lib/exchange-rates-types'
 
 type Mode = 'create' | 'edit'
 
@@ -61,7 +61,7 @@ type Props = {
   stockByWarehouse?: Record<string, number>
   costCalc?: CostCalcState | null
   canSeeCosts?: boolean
-  currentRate?: ExchangeRateRow | null
+  currentRate?: ExchangeRate | null
   justCreated?: boolean
 }
 

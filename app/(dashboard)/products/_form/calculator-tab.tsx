@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { saveProductCostCalc, applyCalculatorPrice } from '../actions'
-import type { ExchangeRateRow } from '@/lib/products'
+import type { ExchangeRate } from '@/lib/exchange-rates-types'
 
 export type CostCalcState = {
   base_cost_usd: number | null
@@ -72,7 +72,7 @@ export function CalculatorTab({
   initialState: CostCalcState | null
   productCommissionPercent: number
   productTargetPaybackPercent: number | null
-  currentRate: ExchangeRateRow | null
+  currentRate: ExchangeRate | null
 }) {
   const router = useRouter()
 
