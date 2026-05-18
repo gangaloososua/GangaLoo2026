@@ -4,307 +4,390 @@ shadcn/ui + Supabase SSR + Tailwind v4). Project:
 Migration SQLs in admin repo at `db\migrations\`.
 Remote: https://github.com/gangaloososua/GangaLoo2026.git (private).
 
+== INSTRUCTIONS TO THE NEXT SESSION ==
+
+Go step by step. Give ONE PowerShell command (or one SQL paste,
+or one git command) per response. Wait for the user's output
+before giving the next step. The user prefers this rhythm over
+batched instructions. Don't bundle "do X then Y and paste Z" -
+do X, wait, then Y, wait, then Z.
+
+PowerShell snippets are preferred over describing file contents
+in prose. The user runs them, pastes output, you verify, next
+step. Match counts and Select-String spot-checks are good
+verification.
+
+Wrap state-changing SQL smoke tests in BEGIN/ROLLBACK so the
+DB stays clean. Supabase SQL editor only shows the LAST
+statement's output in a multi-statement query - so when chaining
+"call RPC then SELECT to verify", expect the SELECT to be the
+visible result, or run them as separate transactions.
+
 == STATE AS OF END OF LAST SESSION ==
 
 Modules complete and committed: Auth, Dashboard shell, Categories,
 Warehouses, People, Products, Settings (hub + Exchange Rates +
 Store Config + Receipt), Sales/POS, Users, RBAC, Money Accounts,
-**Purchases READ surface (Round 14a)**.
-
-Round 14a (Purchases read surface): COMPLETE end-to-end.
-  14a.0 spec               -- a3db84f
-  14a.1 data layer         -- f223034
-  14a.2.3a transport+partial -- 7c1c2b4
-  14a spec amendment       -- d160eac
-  14a.2 list page + types split -- f9c3739
-  14a.3 detail page        -- 9e1f348
-  14a.4 nav entry          -- 52697c2
+Purchases READ surface (Round 14a).
 
 Round 14b (Purchases write surface): IN PROGRESS
+
   14b.1 spec        -- f566dcf at docs/round-14b-purchases-write.md
-  14b.0 migration scaffolding -- a2eb8e2 at db/migrations/
-    NOT YET APPLIED TO DB. Apply is the immediate next step.
-  14b.2-14b.5: pending.
+  14b.0 migrations: ALL APPLIED, type system in sync
+    a2eb8e2 -- original scaffolding (status enum + usd_discount;
+                part 1 enum committed, part 2 failed on view dep)
+    fd6d3da -- fix migration: drop view, do column surgery,
+                recreate view with usd_discount surfaced
+    a6d72a9 -- types(14b.0): PurchaseOrderRow + fetchers add
+                usd_discount in lib/purchases-types.ts and
+                lib/purchases.ts
+    1cde0dd -- db(14b.0.refund): 3 nullable cols on
+                purchase_orders: dop_refund_total,
+                refund_at_dop, refund_account_id (Q3 amendment)
+
+  14b.2 RPCs (5 of 7 done):
+    ebb3842 -- _allocate_supplier_payment (helper, shared math)
+    123e3c7 -- mark_paid_supplier (pending -> paid_supplier)
+    2344dc8 -- mark_received (paid_supplier|received -> received,
+                creates inventory_lots, lot_number = max+1)
+    a3c09f8 -- mark_complete (received -> complete)
+    4e6adea -- mark_cancelled (pending|paid_supplier -> cancelled,
+                optional refund recording)
+
+  STILL PENDING in 14b.2:
+    - mark_lost (received -> lost; recompute landed cost on
+      surviving unconsumed lots, write off missing units)
+    - create_purchase_order (the big atomic RPC: supplier
+      upsert + header + lines + optional inline payment
+      + optional inline transport)
+
+  14b.3-14b.5: pending after 14b.2 completes.
+
+8 commits ahead of origin/master. NOT YET PUSHED.
 
 == IMMEDIATE NEXT STEP ==
 
-Apply the 14b.0 migration to the Supabase dev DB.
+Two options for the very next thing:
 
-The forward migration is at
-`db/migrations/round-14b-purchases-write.sql`. It does two
-things, each in its own BEGIN/COMMIT:
-1. Adds 'cancelled' and 'lost' to the purchase_status enum.
-2. Adds usd_discount column (default 0); drops the generated
-   usd_total column; re-creates usd_total with the new
-   expression (subtotal + shipping + tax - discount).
+Option A: push the 8 unpushed commits first, then continue.
+  `git push`
+  Cosmetic UTF-8 BOMs on commit subject lines are harmless.
 
-Procedure:
+Option B: continue building, push later. Decide based on
+  whether you want a checkpoint on the remote before more work.
 
-1. Open Supabase SQL editor.
-2. Paste the entire contents of round-14b-purchases-write.sql.
-3. Execute. Should succeed silently. Both BEGIN/COMMIT blocks
-   are independent; if part 1 succeeds and part 2 fails, the
-   enum changes stay, the column changes roll back. That's
-   acceptable.
+Then resume Round 14b.2 with mark_lost. After that,
+create_purchase_order. Then 14b.3 (the /purchases/new form).
 
-Smoke after applying:
+== KEY DECISIONS LOCKED THIS SESSION ==
 
-a) Confirm enum has 6 values:
-   ```
-   select unnest(enum_range(null::purchase_status))::text
-   order by 1;
-   ```
-   Expect 6 rows: cancelled, complete, lost, paid_supplier,
-   pending, received.
+(Add to the ones already in the spec.)
 
-b) Confirm usd_discount column exists and usd_total still works:
-   ```
-   select id, usd_subtotal, usd_shipping, usd_tax,
-          usd_discount, usd_total
-   from purchase_orders
-   order by ordered_at desc
-   limit 3;
-   ```
-   Expect usd_discount = 0 on all rows, usd_total unchanged
-   from pre-migration values.
+- Q1 RPC architecture: HYBRID (option C). Single Postgres
+  function for each action; shared math lives in PL/pgSQL
+  helper (_allocate_supplier_payment). Real atomicity via
+  Postgres transactions, no duplication. Same pattern as
+  confirm_pos_sale from the sales chain.
 
-c) Confirm /purchases list page still renders (lib/purchases.ts
-   selects usd_total - regenerated value should reach the UI
-   identically). Open http://localhost:3000/purchases as owner.
-   Expect 196 orders, same totals as before.
+- Q3 refund handling: AMENDED THE SPEC. mark_cancelled
+  optionally records refund: dop_refund_total, refund_at_dop,
+  refund_account_id added as three nullable columns on
+  purchase_orders. App enforces "all three or none" rule;
+  DB stays permissive. Refund amount NOT capped at
+  dop_paid_total - currency drift between payment date and
+  refund date is a real edge case.
 
-d) Open any detail page. The Money card's USD section should
-   render without crashing. Note: the form-input side will
-   complain at TypeScript compile time when 14b.2 lands and
-   imports PurchaseOrderRow expecting usd_discount; that's
-   when we update PurchaseOrderRow in lib/purchases-types.ts
-   to add the new field.
+- Bank fee math: derived inside the function as
+  dop_paid_total - (usd_total * exchange_rate). NOT an
+  input. User enters what bank actually charged in DOP; the
+  function computes the "difference from naive prediction"
+  as bank fee. Verified against legacy LOT-1929 single-line
+  AND a synthetic two-line case.
 
-If anything in a-c fails, paste output, do NOT proceed to 14b.2.
+- Distribution math: proportional to USD value per line,
+  using usd_subtotal (sum of line totals) as the denominator,
+  NOT usd_total. Shipping/tax/discount are header
+  adjustments that shift dop_paid_total but the proportional
+  share across lines is by raw line USD value. Verified
+  against an actual two-line Aliafee order screenshot
+  (96.78 USD line -> RD$5,981.42 / 143.83 USD line ->
+  RD$8,889.32 / RD$14,870.74 total paid - matched exactly).
 
-If all four checks pass, the migration is good and we move
-to 14b.2 (server actions).
+- New "landed cost" displayed in new system INCLUDES
+  transport_share, unlike old system which hid transport
+  in a separate column. Intentional improvement: ONE number
+  = true cost.
 
-== ROUND 14B PLAN (from spec, f566dcf) ==
+- Lot numbers: max(existing-numeric)+1, sequential within
+  one call. Pure SELECT-MAX, no row lock. Race accepted for
+  one-owner usage per spec.
 
-14b.0 - DB migration. SCAFFOLDED at a2eb8e2. APPLY pending.
-14b.1 - Spec on disk. DONE at f566dcf.
-14b.2 - lib/purchases-actions.ts with six server actions:
-        createPurchaseOrder, markPaidSupplier, markReceived,
-        markComplete, markCancelled, markLost.
-14b.3 - /purchases/new page. The big create-order form.
-        Likely sub-split into 14b.3.1 (server shell),
-        14b.3.2 (line-items editor), 14b.3.3 (validation
-        + live USD calc + submit). Biggest sub-round.
-14b.4 - Detail page action buttons + dialogs, per-state
-        affordances per the table in the spec.
-14b.5 - End-to-end smoke (create new order, mark paid,
-        mark received, mark complete; second order with
-        partial receive + cancel). Seller-404 of
-        /purchases/new and the new actions.
+- mark_received jsonb input shape:
+    [{"line_id": "uuid", "received_qty": numeric}, ...]
+  Lines with received_qty = 0 silently skipped (no lot row).
+  Whole call refused if NO line has received_qty > 0.
+  Overshoot refused: existing-received + this-call <=
+  ordered.
+  Status guard accepts paid_supplier OR received (allows
+  repeated partial-receive flow).
 
-After 14b.2 lands, also update:
-- lib/purchases-types.ts: add usd_discount: number to
-  PurchaseOrderRow.
-- lib/purchases.ts: add 'usd_discount' to
-  PURCHASE_ORDER_COLUMNS, add Number() coercion to
-  coercePurchaseOrder.
-- app/(dashboard)/purchases/[id]/page.tsx: surface
-  usd_discount in the USD breakdown.
+- mark_complete: pure acknowledgment, no inputs beyond order
+  id. Per spec, "complete" means all units arrived AND
+  transport paid - transport check NOT enforced (transport
+  is 14c). User takes responsibility.
 
-== KEY DECISIONS LOCKED FOR ROUND 14B ==
+- mark_cancelled refund inputs use the typed-scalar approach
+  (Q14=A) with "all three or none" enforced by counting nulls.
 
-- Status enum gains 'cancelled' and 'lost'. Both TERMINAL.
-  Reachable from different points in the ladder.
-  cancelled = paid but never arrived; refund received.
-  lost = partial receive accepted; missing units written off,
-  per-unit landed cost recomputes across surviving units.
-- derivedStatus stays UNCHANGED in purchases-types - it derives
-  from the four ladder timestamps. cancelled and lost don't
-  have their own timestamps; they piggyback on completed_at
-  with status != complete. Audit mismatch panel renders
-  amber - correct, not a bug.
-- usd_discount on purchase_orders: numeric(12,2) NOT NULL
-  DEFAULT 0. base + shipping + tax - discount = usd_total.
-- Lot numbers: per-line, auto-incremented at receipt time
-  (not pre-assigned per-order like the legacy system).
-  Each physical receipt event produces its own lot row.
-  Format: pure integer, max(existing numeric lot_numbers) + 1.
-  Legacy non-numeric lot_numbers ("LOT-1903", "1751") are
-  ignored when computing max. Partial receives create NEW
-  lots on each call.
-- Transport on create-order form: SHORTCUT field that writes
-  to courier_payments + courier_payment_allocations
-  atomically. ONE source of truth for transport amounts.
-  Fixes the double-entry bug from the legacy system. If
-  blank on create, transport stays null on lines; can be
-  added later via 14c.
-- Supplier picker: COMBOBOX (typeahead + create-on-blur).
-  Free text matching kind='supplier' rows. New name on
-  blur creates a new suppliers row with kind='supplier'.
-  No other supplier fields collected at create time
-  (a future suppliers admin can fill in contact info).
-- Action affordances by state:
-    pending       -> Mark paid, Cancel
-    paid_supplier -> Mark received, Mark lost, Cancel
-    received      -> Mark complete, Mark lost
-    complete/cancelled/lost -> (terminal, no actions)
-  Buttons that aren't allowed are NOT rendered (not disabled).
+- Edit-supplier-payment: explicitly DEFERRED (Q4=a). Current
+  mark_paid_supplier is strict pending-only. Edit feature
+  comes later as a separate edit_supplier_payment RPC reusing
+  the same _allocate_supplier_payment helper. Helper stays
+  permissive precisely so this future RPC will not need code
+  changes to the math.
 
-== DATA-LAYER OBSERVATIONS CARRIED FROM 14A ==
+== STILL TO BUILD IN 14b.2 ==
 
-- exchange_rate = 0.0000 on unpaid migration rows (sentinel).
-  Detail page treats 0 same as null for "is paid" check.
-- isPaid() currently requires paid_at_dop NOT NULL. Some
-  legacy complete orders have dop_paid_total set but
-  paid_at_dop NULL (migration recorded amount, not date).
-  Those render as "Not paid yet" on detail. One-line
-  loosening of isPaid() would fix; deferred. Could fold
-  into 14b.3 if it bothers during testing.
-- "(unknown)" supplier rows in 14a list = supplier_id points
-  at deleted suppliers row. v1 leaves as-is. New combobox
-  prevents new orphans going forward.
-- 182 of 196 orders flag status mismatch (93%). Migration
-  didn't backfill completed_at on 'complete' rows. A one-shot
-  SQL backfill of completed_at would clean it up. Out of
-  14b scope but worth knowing.
+### mark_lost (next)
 
-== POWERSHELL HEREDOC BUG (CRITICAL, from 14a.2 work) ==
+Per spec: "missing units written off, per-unit landed cost
+recomputes across surviving units." Reached from received state.
 
-PowerShell @'...'@ heredocs piped to Set-Content EAT the
-opening '<' character when it ends a line. Symptom: TypeScript
-multi-line generics like:
+Behavior to implement:
+  - status guard: received only
+  - For each line: lookup ordered qty vs total received qty
+  - If received < ordered, the surviving units absorb the
+    full line cost: their unit_cost_dop in inventory_lots
+    goes UP by ordered/received ratio.
+  - ONLY update unconsumed lots (qty_remaining > 0). Lots
+    that have already been consumed by sales keep their
+    original cost - retro-changing booked sale costs is
+    messy and out of scope.
+  - Update purchase_order_items.dop_unit_landed_cost to
+    match new effective cost.
+  - status -> 'lost', completed_at -> now()
 
-  const x = new Map<
-    string,
-    Value
-  >()
+Open question for the next session: should mark_lost take
+the "loss" per line, or compute it automatically as
+(ordered - received)? I lean automatic: any line where
+not all units were received has its surviving units'
+cost basis recomputed. Simpler API, no chance of bad
+inputs.
 
-land on disk as:
+### create_purchase_order (last RPC, biggest)
 
-  const x = new Map
-    string,
-    Value
-  >()
+Multi-table atomic write. Inputs:
+  - supplier name (typed string from combobox)
+  - warehouse_id
+  - ordered_at, expected_at, notes
+  - lines: array of {product_id, qty, usd_unit_cost}
+  - usd_shipping, usd_tax, usd_discount
+  - optional inline payment: dop_paid_total, exchange_rate,
+    official_rate_at_payment, supplier_payment_account_id,
+    paid_at_dop
+  - optional inline transport: amount_dop_total,
+    courier_id, money_account_id, paid_at, description,
+    reference
 
-Causing build errors like "Expected ',', got ';'" or
-"Parenthesized expression cannot be empty."
+Logic:
+  1. Resolve supplier_id: SELECT by name + kind='supplier',
+     INSERT with that name if not found. Race accepted
+     (one-owner usage).
+  2. INSERT purchase_orders header (status='pending', or
+     'paid_supplier' if inline payment provided).
+  3. INSERT purchase_order_items rows.
+  4. If inline payment: call _allocate_supplier_payment
+     (which does the header update + line cost allocation
+     atomically). This also flips status to 'paid_supplier'.
+  5. If inline transport: INSERT courier_payments +
+     courier_payment_allocations, then UPDATE
+     purchase_order_items.dop_transport_share and recompute
+     dop_unit_landed_cost.
 
-WORKAROUNDS:
-1. PREFERRED: write all generics on a single line.
-   const x = new Map<string, Value>() -- safe.
-2. PATCH AFTER THE FACT: regex with (?m) multiline mode:
-   $pattern = '(?m)^(\s+const x = new Map)$'
-   $replacement = '$1<'
-   $new = $content -replace $pattern, $replacement
-   Set-Content -LiteralPath $path -Value $new -Encoding utf8 -NoNewline
+Returns the new purchase_order_id so TS can redirect to
+/purchases/[id] after submit.
 
-Search the file with `Select-String -Pattern "new Map$"`
-to find all broken sites. Hit twice in 14a; cost ~15 minutes
-total.
+== TYPES-SIDE FOLLOW-UPS WHEN BUILDING TS LAYER ==
 
-== TYPES-SPLIT PATTERN (REAFFIRMED 14a.2) ==
+When lib/purchases-actions.ts lands (14b.2 TS work, after
+all 7 RPCs exist in DB):
 
-Client components MUST import types from lib/<thing>-types.ts,
-NOT from lib/<thing>.ts. The server lib imports next/headers
-transitively via createClient, which crashes when pulled into
-a client bundle even though the type imports are erased at
-compile time.
+- DO NOT add new exports to lib/purchases-actions.ts itself
+  beyond the async functions. Anything client components
+  consume goes in purchases-types.ts. The actions file
+  imports types from purchases-types itself.
 
-Current splits:
-- lib/exchange-rates-types.ts + lib/exchange-rates.ts
-- lib/store-config-types.ts + lib/store-config.ts
-- lib/purchases-types.ts + lib/purchases.ts
+- PurchaseOrderRow already has usd_discount (a6d72a9).
+  Still needs dop_refund_total, refund_at_dop,
+  refund_account_id added when consumed (the migration
+  applied them but PurchaseOrderRow does not yet reflect
+  them - waiting for TS consumer to surface them).
 
-When 14b.2 adds lib/purchases-actions.ts, that file should
-NOT add new exports -- anything client components consume
-goes in purchases-types.ts. The actions file imports types
-from purchases-types itself.
+- PURCHASE_ORDER_COLUMNS in lib/purchases.ts likewise needs
+  the three refund columns added when consumed. Detail
+  page needs to surface refund info on cancelled orders.
 
-== 14B SPECIFIC GOTCHAS TO REMEMBER ==
+== POWERSHELL HEREDOC + LINE-ENDING GOTCHAS (UPDATED 14b.0) ==
 
-- createPurchaseOrder is the biggest action: header upsert,
-  optional supplier creation, lines, optional inline supplier
-  payment with allocation math, optional inline courier
-  payment + allocation + transport-share math. Do it in
-  ONE transaction (RPC-style) to avoid partial states if
-  one of the legs fails. Supabase client doesn't directly
-  expose transactions; the right pattern is a Postgres
-  function (CREATE FUNCTION ... LANGUAGE plpgsql) that does
-  the multi-step write, called via supabase.rpc(). Same
-  pattern as confirm_pos_sale from the sales chain.
-  Worth designing carefully before writing.
+KNOWN: PowerShell @'...'@ heredoc piped to Set-Content EATS
+the '<' character when it ends a line. Multi-line generics
+must be single-line. Already in the spec.
 
-- markPaidSupplier and createPurchaseOrder's inline-payment
-  mode share the SAME allocation math. Extract into a
-  private helper from day one rather than duplicating.
+NEW THIS SESSION: Get-Content -Raw in PS 5.1 NORMALIZES line
+endings to CRLF in memory even when the file on disk is
+LF-only. Detection like `$le = if ($content -match "`r`n")
+{ "`r`n" } else { "`n" }` picks CRLF and then no patches
+match against LF files.
 
-- markReceived needs the lot_number generation. Pure
-  select-max approach is fine for one-owner usage. If you
-  want it to be a real sequence, that's an additional
-  schema migration; out of 14b scope unless it bites.
+WORKAROUND: read files with
+  $abs = (Resolve-Path "path").ProviderPath
+  $raw = [System.IO.File]::ReadAllText($abs)
+  # ... do replacements ...
+  [System.IO.File]::WriteAllText($abs, $raw,
+    [System.Text.UTF8Encoding]::new($false))
 
-- shadcn doesn't ship a Combobox primitive by default - it's
-  a Command + Popover composition shown in their docs. The
-  Sales POS already has a product search box; reuse that
-  pattern shape if applicable for supplier and product
-  pickers.
+This avoids PowerShell's CRLF translation entirely. Bytes
+in = bytes out.
 
-== POWERSHELL / DEV GOTCHAS (RECAP) ==
+Confirmed via diagnostic regex:
+  ([regex]::Matches($raw, "`r`n")).Count        -- CRLF
+  ([regex]::Matches($raw, "(?<!`r)`n")).Count   -- lone LF
 
-- @'...'@ heredoc eats '<' at line end (above). Single-line
-  generics, or regex patch after.
-- Turbopack dev cache can break specific routes. Resolved by
-  stopping `npm run dev`, deleting `.next`, restarting.
-- Newly created files with no importers won't trigger Turbopack
-  compilation. Type errors first appear when a consumer imports.
-- Commit messages via @'...'@ piped to Set-Content
-  .commitmsg.txt then `git commit -F`. Cosmetic UTF-8 BOM
-  on commit subject is harmless.
-- For paths with brackets, use -LiteralPath.
-- PS 5.1's Set-Content -Encoding has no utf8NoBOM, only utf8.
+If both are non-zero, the file is mixed. PS 5.1
+Set-Content -Encoding utf8 has no NoBOM option; use
+WriteAllText with UTF8Encoding(false) instead.
 
-== INFRA ==
+== SUPABASE SQL SMOKE TESTING PATTERN ==
 
-SUPABASE_SERVICE_ROLE_KEY in .env.local. Never committed
-(confirmed via git ls-files). Only lib/supabase/admin.ts is
-allowed to use it; has `import 'server-only'` at the top.
-ssr client (lib/supabase/server.ts) respects RLS as of
-Round 11.10.
+For RPCs that change state, wrap the test in
+BEGIN/ROLLBACK so the DB stays clean. Multi-statement
+queries in Supabase SQL editor only show the LAST
+statement's output - so for "call function then SELECT to
+verify", split into separate transactions or accept that
+intermediate SELECTs are invisible.
+
+Smoke test order this session:
+  1. Check function registered: pg_proc lookup
+  2. Test each RAISE guard in isolation (wrong inputs)
+  3. Test success path with hand-computed expected values
+  4. ROLLBACK at end
+
+For mark_received and chained RPCs (mark_complete needs the
+order to be in 'received' state), set up the precondition
+WITHIN the same transaction by chaining the previous RPC
+calls before the test, then ROLLBACK.
+
+The migration data has 196 orders, of which 182 have status
+mismatches (93%) - migration didn't backfill completed_at on
+'complete' rows. Smoke tests pick truly pending orders by
+status filter; for tests that need a 'paid_supplier' or
+'received' starting state, set up via chained RPC calls in
+the same transaction.
+
+Useful test orders found this session:
+  e5758b0a-4d7a-42b9-b606-a22fc6b97e28 (pending, $39.57,
+    1 line, 1 unit) -- trivial single-line case
+  dcb72974-3983-43f5-bb16-df682691a436 (pending, $356.40,
+    2 lines: 4u and 1u) -- proportional distribution test
+
+== INFRA RECAP ==
+
+SUPABASE_SERVICE_ROLE_KEY in .env.local. Never committed.
+Only lib/supabase/admin.ts uses it; has `import 'server-only'`
+at the top. ssr client (lib/supabase/server.ts) respects RLS.
+
+Migration files all in db/migrations/. Pattern this round:
+  round-14b-purchases-write.sql                  (original)
+  round-14b-purchases-write-rollback.sql         (original rollback)
+  round-14b-purchases-write-fix-view.sql         (fix for view)
+  round-14b-purchases-refund.sql                 (refund cols)
+  round-14b-purchases-refund-rollback.sql        (refund rollback)
+  round-14b-purchases-rpcs-01-allocate-supplier-payment.sql
+  round-14b-purchases-rpcs-02-mark-paid-supplier.sql
+  round-14b-purchases-rpcs-03-mark-received.sql
+  round-14b-purchases-rpcs-04-mark-complete.sql
+  round-14b-purchases-rpcs-05-mark-cancelled.sql
+
+NO rollback files for the RPCs - CREATE OR REPLACE FUNCTION
+is idempotent and re-runnable. If we need to revert one, the
+fix is to write a new version with the old behavior.
+
+== ROADMAP (rounds 15 through 21) ==
+
+15 - Online Orders (substantial). Sister to POS sales. Same
+  `sales` table, source='online'. Fulfillment workflow:
+  paid -> preparing -> shipped -> delivered. Owner-only per
+  spec. WRITE-SIDE CUTOVER BLOCKER - comes AFTER 14a/14b/14c,
+  not before.
+
+16 - Sale-discount auto-application (design first). Schema
+  has bulk_disc, club tier discounts, transfer_discount.
+  Unused at sale time. Multiple sensible designs; pick
+  before writing code.
+
+17 - Inventory / stock-movements UI. Manual adjustments,
+  breakage, transfers, audits. Sellers can read; writes
+  owner-only.
+
+18 - Cashback / commissions reports. Needed before paying
+  sellers. Cashback report depends on Round 14 Purchases
+  data being browsable.
+
+19 - Accounting / transactions module. Includes the deferred
+  money-account transfers from Round 12. Wraps payouts,
+  transfers, manual entries.
+
+20 - Real-numbers dashboard. The current /dashboard placeholder
+  gets real data: revenue, top products, low stock, commissions
+  due.
+
+21 - Spanish UI (i18n). Sellers are Dominican; the admin needs
+  to be in Spanish before they use it for daily work. Scope:
+  UI text only (labels, buttons, headers, toasts) plus date and
+  number locale ('en-GB' -> 'es-DO' throughout - the codebase
+  explicitly uses 'en-GB' to avoid hydration mismatches, so each
+  call site needs flipping). Whole-admin Spanish, not per-user.
+  Open question for the round: pick an i18n library (next-intl
+  vs react-intl, leaning next-intl as App-Router-native) with
+  an eye toward reusing the same approach in the customer-facing
+  store later. Don't lock into something admin-only.
+  Practical urgency: sellers already have logins (Sophia rang
+  a test sale). The deadline is "before sellers use the admin
+  daily" - could move ahead of Round 20 if cutover timing
+  pressures.
 
 == SEARCH ==
 
 Use conversation_search liberally. Useful queries:
-  "Round 14b spec migration usd_discount"
-  "Round 14b createPurchaseOrder action"
-  "purchase_status enum cancelled lost"
+  "Round 14b mark_paid_supplier mark_received"
+  "Round 14b _allocate_supplier_payment math"
+  "Round 14b mark_cancelled refund columns"
+  "Round 14b lot_number generation max"
+  "Round 14b RPC architecture hybrid pl/pgsql"
+  "Round 14b create_purchase_order spec"
+  "PowerShell Get-Content Raw CRLF normalization"
   "Round 14a.2 list page split client types"
-  "PowerShell heredoc Map angle bracket eaten"
-  "createPurchaseOrder Postgres function rpc"
-  "shadcn combobox supplier picker"
 
 == PICK UP AT ==
 
-Round 14b.0 -- APPLY the migration committed at a2eb8e2.
+Round 14b.2 -- write mark_lost RPC next.
 
-Files on disk, NOT yet executed:
-  db/migrations/round-14b-purchases-write.sql
-  db/migrations/round-14b-purchases-write-rollback.sql
+After mark_lost, write create_purchase_order (the big
+atomic RPC). After that, the TS layer in
+lib/purchases-actions.ts wraps all 7 RPCs as server actions
+with requireOwner().
 
-Procedure: open Supabase SQL editor, paste the forward
-migration, execute. Then run the four smoke checks listed
-in IMMEDIATE NEXT STEP above. If all four pass, proceed to
-14b.2 (lib/purchases-actions.ts).
+Then 14b.3 (/purchases/new form), 14b.4 (detail page
+action buttons), 14b.5 (end-to-end smoke).
 
-After applying, the IMMEDIATELY-FOLLOWING small commits
-should be:
-  1. Update PurchaseOrderRow in lib/purchases-types.ts to
-     include usd_discount: number.
-  2. Update PURCHASE_ORDER_COLUMNS in lib/purchases.ts to
-     include 'usd_discount'.
-  3. Update coercePurchaseOrder in lib/purchases.ts to
-     Number()-coerce usd_discount.
-These are the minimal type-side changes that keep 14a
-compiling after the migration. They should ship as one
-small post-migration commit BEFORE 14b.2 begins, so the
-type system reflects the DB.
+8 unpushed commits sitting locally:
+  4e6adea db(14b.2): mark_cancelled
+  a3c09f8 db(14b.2): mark_complete
+  2344dc8 db(14b.2): mark_received
+  123e3c7 db(14b.2): mark_paid_supplier
+  ebb3842 db(14b.2): _allocate_supplier_payment
+  1cde0dd db(14b.0.refund): add refund tracking columns
+  a6d72a9 types(14b.0): add usd_discount
+  fd6d3da db(14b.0): fix - drop dependent view
+
+Next session SHOULD push first to checkpoint the work.
