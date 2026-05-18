@@ -718,3 +718,244 @@ export async function getLotTrailForOrder(
 
   return trail
 }
+
+// ---- filter options for the list page ---------------------
+
+export type PurchaseFilterOptions = {
+  suppliers: Array<{ id: string; name: string }>
+  warehouses: Array<{ id: string; name: string }>
+}
+
+/**
+ * Look up the supplier and warehouse filter options the list page
+ * needs to populate its dropdowns.
+ *
+ *   suppliers - only ones that appear on at least one purchase
+ *               order. The dropdown should not surface suppliers
+ *               the business has never bought from. PostgREST has
+ *               no DISTINCT; dedup the supplier_id column in JS.
+ *
+ *   warehouses - all of them. There are only ~2 in the system and
+ *                the dropdown should include both even if no order
+ *                currently uses one.
+ *
+ * Three round trips total: distinct supplier_ids from
+ * purchase_orders (sequential), then supplier names + warehouses
+ * (parallel).
+ */
+export async function getPurchaseFilterOptions(): Promise<PurchaseFilterOptions> {
+  const supabase = await createClient()
+
+  // 1. Distinct supplier_ids appearing on any purchase_order
+  const { data: poRows, error: poErr } = await supabase
+    .from('purchase_orders')
+    .select('supplier_id')
+    .not('supplier_id', 'is', null)
+  if (poErr) throw poErr
+  const supplierIds = Array.from(
+    new Set(
+      ((poRows ?? []) as Array<{ supplier_id: string | null }>)
+        .map((r) => r.supplier_id)
+        .filter((x): x is string => !!x),
+    ),
+  )
+
+  // 2. Supplier names + warehouses in parallel
+  const [suppliersRes, warehousesRes] = await Promise.all([
+    supplierIds.length === 0
+      ? Promise.resolve({ data: [] as Array<{ id: string; name: string }>, error: null })
+      : supabase
+          .from('suppliers')
+          .select('id, name')
+          .in('id', supplierIds)
+          .order('name', { ascending: true }),
+    supabase
+      .from('warehouses')
+      .select('id, name')
+      .order('name', { ascending: true }),
+  ])
+  if (suppliersRes.error) throw suppliersRes.error
+  if (warehousesRes.error) throw warehousesRes.error
+
+  return {
+    suppliers: (suppliersRes.data ?? []) as Array<{ id: string; name: string }>,
+    warehouses: (warehousesRes.data ?? []) as Array<{ id: string; name: string }>,
+  }
+}
+
+// ---- transport summary (per order) ------------------------
+
+export type TransportAllocation = {
+  allocation_id: string
+  payment_id: string
+  amount_dop: number
+  paid_at: string
+  courier_name: string | null
+  money_account_name: string | null
+  description: string | null
+  reference: string | null
+}
+
+export type TransportSummary = {
+  allocated_dop: number
+  allocation_count: number
+  allocations: TransportAllocation[]
+}
+
+/**
+ * Read-side view of an order's transport activity. Returns the
+ * sum of all courier_payment_allocations rows against this order,
+ * along with the per-allocation detail (courier name, paid_at,
+ * source money account, description).
+ *
+ * A courier_payments row IS the payment event - it always has a
+ * paid_at (NOT NULL DEFAULT now()) and a money_account_id (NOT
+ * NULL). There is no "paid?" flag to compute. The presence of an
+ * allocation against an order means that order has had that
+ * portion of courier cost paid.
+ *
+ * "complete" status does NOT require any transport activity at
+ * all - many migrated complete orders have zero allocations
+ * (direct delivery, no courier). See the spec amendment.
+ *
+ * Sorted by paid_at ascending so the UI reads as a timeline.
+ */
+export async function getTransportSummaryForOrder(
+  orderId: string,
+): Promise<TransportSummary> {
+  const supabase = await createClient()
+
+  // 1. Allocations against this order
+  const { data: allocData, error: allocErr } = await supabase
+    .from('courier_payment_allocations')
+    .select('id, courier_payment_id, amount_dop')
+    .eq('purchase_order_id', orderId)
+  if (allocErr) throw allocErr
+  const allocs = (allocData ?? []) as Array<{
+    id: string
+    courier_payment_id: string
+    amount_dop: number | string
+  }>
+
+  if (allocs.length === 0) {
+    return { allocated_dop: 0, allocation_count: 0, allocations: [] }
+  }
+
+  // 2. Pull the corresponding courier_payments rows
+  const paymentIds = Array.from(
+    new Set(allocs.map((a) => a.courier_payment_id)),
+  )
+  const { data: payData, error: payErr } = await supabase
+    .from('courier_payments')
+    .select(
+      'id, courier_id, paid_at, money_account_id, description, reference',
+    )
+    .in('id', paymentIds)
+  if (payErr) throw payErr
+  const payments = (payData ?? []) as Array<{
+    id: string
+    courier_id: string
+    paid_at: string
+    money_account_id: string
+    description: string | null
+    reference: string | null
+  }>
+
+  const paymentById = new Map<string, (typeof payments)[number]>()
+  for (const p of payments) paymentById.set(p.id, p)
+
+  // 3. Look up courier (a suppliers row, kind='courier') names
+  //    and money account names in parallel
+  const courierIds = Array.from(new Set(payments.map((p) => p.courier_id)))
+  const accountIds = Array.from(new Set(payments.map((p) => p.money_account_id)))
+
+  const [couriersRes, accountsRes] = await Promise.all([
+    courierIds.length === 0
+      ? Promise.resolve({ data: [] as Array<{ id: string; name: string }>, error: null })
+      : supabase
+          .from('suppliers')
+          .select('id, name')
+          .in('id', courierIds),
+    accountIds.length === 0
+      ? Promise.resolve({ data: [] as Array<{ id: string; name: string }>, error: null })
+      : supabase
+          .from('money_accounts')
+          .select('id, name')
+          .in('id', accountIds),
+  ])
+  if (couriersRes.error) throw couriersRes.error
+  if (accountsRes.error) throw accountsRes.error
+
+  const courierNameById = new Map<string, string>()
+  for (const c of (couriersRes.data ?? []) as Array<{ id: string; name: string }>) {
+    courierNameById.set(c.id, c.name)
+  }
+  const accountNameById = new Map<string, string>()
+  for (const a of (accountsRes.data ?? []) as Array<{ id: string; name: string }>) {
+    accountNameById.set(a.id, a.name)
+  }
+
+  // 4. Assemble allocations with names, sort by paid_at asc
+  const assembled: TransportAllocation[] = allocs
+    .map((a) => {
+      const p = paymentById.get(a.courier_payment_id)
+      return {
+        allocation_id: a.id,
+        payment_id: a.courier_payment_id,
+        amount_dop: Number(a.amount_dop),
+        paid_at: p?.paid_at ?? '',
+        courier_name: p ? courierNameById.get(p.courier_id) ?? null : null,
+        money_account_name: p ? accountNameById.get(p.money_account_id) ?? null : null,
+        description: p?.description ?? null,
+        reference: p?.reference ?? null,
+      }
+    })
+    .sort((a, b) => compareTs(a.paid_at, b.paid_at))
+
+  const allocated_dop = assembled.reduce((s, x) => s + x.amount_dop, 0)
+
+  return {
+    allocated_dop,
+    allocation_count: assembled.length,
+    allocations: assembled,
+  }
+}
+
+// ---- partial receive (per line) ---------------------------
+
+export type PartialReceiveStatus = {
+  ordered: number
+  received: number
+  is_partial: boolean   // received > 0 but < ordered
+  is_unreceived: boolean // received === 0
+  is_complete: boolean   // received >= ordered
+}
+
+/**
+ * Pure helper. Given a line (qty ordered) and its lot trail
+ * entries (each lot has qty_received), report whether the line
+ * was fully received, partially received, or not yet received.
+ *
+ * is_complete: received >= ordered. Greater-than-or-equal because
+ * legacy data can have rounding quirks; "more than ordered" is
+ * treated as complete, not as a separate state.
+ *
+ * Notes:
+ * - Uses qty_received (what was booked into stock on receipt),
+ *   not qty_remaining (what is currently in stock after sales
+ *   have consumed some). qty_remaining decreases over time as
+ *   sales happen; that's a different concept.
+ * - "Partial" is strictly between 0 and ordered. Zero is its own
+ *   thing (is_unreceived).
+ */
+export function partialReceiveStatus(
+  line: { qty: number },
+  lots: LotTrailEntry[],
+): PartialReceiveStatus {
+  const ordered = Number(line.qty)
+  const received = lots.reduce((s, e) => s + Number(e.lot.qty_received), 0)
+  const is_unreceived = received === 0
+  const is_complete = received >= ordered
+  const is_partial = !is_unreceived && !is_complete
+  return { ordered, received, is_partial, is_unreceived, is_complete }
+}
