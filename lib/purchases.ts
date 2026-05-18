@@ -651,9 +651,7 @@ export type ProductPickerCategoryGroup = {
   products: ProductPickerItem[]
 }
 
-export async function listProductsGroupedByCategory(): Promise
-  ProductPickerCategoryGroup[]
-> {
+export async function listProductsGroupedByCategory(): Promise<ProductPickerCategoryGroup[]> {
   const supabase = await createClient()
 
   const { data: products, error: prodErr } = await supabase
