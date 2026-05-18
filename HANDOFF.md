@@ -10,56 +10,112 @@ Remote: https://github.com/gangaloososua/GangaLoo2026.git (private).
 
 Modules complete and committed: Auth, Dashboard shell, Categories,
 Warehouses, People, Products (all 6 tabs), Settings (hub + Exchange
-Rates + Store Config), Sales/POS (Round 9), Users (Round 10).
+Rates + Store Config), Sales/POS (Round 9), Users (Round 10), RBAC
+(Round 11, all sub-rounds including RLS + promotions).
 
-ROUND 11 (RBAC): COMPLETE. All sub-rounds committed. App layer
-(11.1-11.9), DB layer (11.10), promotions (11.11) all done.
+ROUND 12 (Money Accounts): IN PROGRESS. Spec landed; one foundation
+sub-round (12.0.a, multi-currency schema) done. Application-layer
+work pending. Detailed status:
 
-Round 11.11 (THIS SESSION): promoted Estafany and Fabienne via
-/users/new "Promote existing" tab. Delia was already promoted in
-a prior session, so the previous handoff's "three pending" was
-stale — it was two. Current state: owner + 3 sellers (Delia,
-Estafany, Fabienne) have logins to the admin app. Sophia remains
-the only one who has actually run a test sale through the new
-system.
+  12.1 (spec) — DONE. See docs/round-12-money-accounts.md.
+  12.0.a (DB schema for multi-currency rates) — DONE.
+  12.0.b (lib + UI updates for multi-currency) — NOT STARTED.
+  12.2+ (Money Accounts pages/actions) — NOT STARTED, blocked by 12.0.b.
 
-Pre-existing 404 cluster (THIS SESSION): closed, no code change
-needed. Five owner-facing pages — /sales/[id], /products/[id],
-/settings/exchange-rates, /settings/store-config, /users/new —
-were 404'ing for the owner. Root cause: stale Turbopack dev cache,
-NOT a bug in requireOwner() or any guard logic. Diagnosed by
-adding console.log probes around requireOwner() in
-/users/new/page.tsx — probes printed in order, page rendered 200,
-and rebuilding the one file also unblocked all four other routes.
-The DEBUG file write itself was reverted; nothing needed committing
-for the fix. See "DEV SERVER GOTCHAS" below.
+== WHY 12.0.a EXISTS (CONTEXT FOR NEXT SESSION) ==
 
-Canonical RBAC spec at `docs/rbac.md`. Source of truth.
+Round 12 spec calls for a DOP-equivalent grand total over accounts
+in DOP, EUR, USD. Discovered mid-design that monthly_exchange_rates
+had no currency column and a PK on (year, month) — i.e. only one
+foreign currency rate was supported per month. Existing row was
+USD->DOP.
 
-== ROADMAP ==
+Two migrations applied (both committed at 889214a):
+  round-12-exchange-rates-currency.sql      — add currency column
+  round-12-exchange-rates-pk-fix.sql        — replace PK to include currency
 
-Round 12 — Money Accounts module (small) — NEXT
+Verified: USD and EUR rows now coexist for the same year+month.
+PK is now (year, month, currency). Schema is multi-currency capable.
+
+== 12.0.b — WORK TO DO NEXT SESSION ==
+
+The schema change broke callers that weren't updated. Three places
+need fixing before any Money Accounts code lands. Order:
+
+  12.0.b.1 — lib/exchange-rates.ts (currency-aware)
+    - Add `Currency` type (literal union: 'DOP' | 'USD' | 'EUR')
+    - Add `currency: Currency` to ExchangeRate type
+    - MOVE fetchCurrentExchangeRate from lib/products.ts to here
+    - Make `currency` a REQUIRED parameter (no default — explicit is safer)
+    - Add fetchEffectiveRatesForCurrencies(currencies: Currency[]):
+        returns { rates: Record<Currency, { rate, year, month }>,
+                  missing: Currency[] }
+        Per currency: current month preferred, fall back to most
+        recent prior month, then to "missing" if no rate ever set.
+
+  12.0.b.2 — settings/exchange-rates/actions.ts (currently BROKEN)
+    Three functions to fix. None can stay as written:
+    - createRate: insert without currency would 500 (NOT NULL violation)
+    - updateRate: .eq('year', X).eq('month', Y) updates ALL currencies
+    - deleteRate: same issue
+    All three need currency added to their identification keys.
+
+  12.0.b.3 — settings/exchange-rates UI (page, dialog, table)
+    Surface the currency column. Likely:
+    - rates-table.tsx: new Currency column, sort by year DESC, month DESC, currency
+    - rate-form-dialog.tsx: Currency select (DOP/USD/EUR) on create only
+      (currency immutable post-creation, same rationale as account currency)
+    - page.tsx: pass currency to fetchAllExchangeRates if filtering;
+      may just render all and let the table group
+
+  12.0.b.4 — lib/products.ts + products/[id]/page.tsx
+    - Remove the duplicate ExchangeRateRow + fetchCurrentExchangeRate
+      from lib/products.ts (moved to lib/exchange-rates.ts in 12.0.b.1)
+    - products/[id]/page.tsx: update import path, pass 'USD' explicitly
+    - Verify Products Calculator still works after the change
+
+After 12.0.b ships, Round 12 proper picks up:
+  12.2 lib/money-accounts.ts fetchers
+  12.3 list page
+  12.4 create page + action
+  12.5 edit page + action
+  12.6 nav entry
+  12.7 end-to-end smoke + seller-404 verification
+
+== BROKEN UI WARNING ==
+
+Do NOT add an exchange rate via /settings/exchange-rates until
+12.0.b.2 ships. The create form will hit a NOT NULL violation on
+currency. Existing rates can still be displayed; they just can't
+be inserted or updated cleanly until the actions are fixed.
+
+If you genuinely need to add a EUR rate before next session, do
+it via SQL editor:
+  INSERT INTO monthly_exchange_rates (year, month, currency, rate, source, notes)
+  VALUES (2026, 5, 'EUR', <your rate>, 'manual', 'pre-12.0.b workaround');
+
+== ROADMAP AFTER ROUND 12 ==
+
 Round 13 — Settings Receipt tab (small)
 Round 14 — Purchases module (substantial; pre-req for Round 18)
-    Note: purchase_orders + purchase_order_items already RLS'd.
     Real table names: purchase_orders, purchase_order_items,
     courier_payments, courier_payment_allocations, payment_receipts.
 Round 15 — Online Orders (substantial; cutover blocker)
 Round 16 — Sale-discount auto-application (design first)
 Round 17 — Inventory / stock-movements UI
 Round 18 — Cashback / commissions reports
-Round 19 — Accounting / transactions module
+Round 19 — Accounting / transactions module (transfers between
+           money accounts live here)
 Round 20 — Real-numbers dashboard
 
 == MIGRATION CUTOVER STATUS ==
 
-Unchanged in substance. DB has frozen snapshot from cutoff: 135 sales
-(126 POS + 9 online), all products, all people, etc. Anything entered
-in OLD system since cutoff is NOT in new DB. Cutover decision still
-pending. POS technically works in new system (proven by Sophia's test
-sale). With Delia, Estafany, and Fabienne now logged in, parallel
-running is operationally feasible. Online orders still need Round 15
-+ delta migration if keeping the old system live for them.
+Unchanged. DB has frozen snapshot from cutoff: 135 sales (126 POS
++ 9 online), all products, all people, etc. Anything entered in
+OLD system since cutoff is NOT in new DB. Cutover decision still
+pending. POS technically works in new system. With Delia,
+Estafany, Fabienne now logged in (plus Sophia from before),
+parallel running is operationally feasible.
 
 == DB CONTEXT ==
 
@@ -78,6 +134,11 @@ running is operationally feasible. Online orders still need Round 15
 - confirm_pos_sale is SECURITY DEFINER + search_path=public; it
   bypasses RLS. POS still works under RLS via this.
 - auth_role() helper: SECURITY DEFINER, STABLE, search_path locked.
+- money_accounts: 20 rows live, 3 currencies (DOP, EUR, USD), 4
+  kinds (bank/cash/digital/credit_line), 2 scopes (business/private).
+  Owner-only per RLS.
+- monthly_exchange_rates: NOW multi-currency. PK is (year, month,
+  currency). One row exists: 2026-05 USD = 62.5000.
 
 == KEY FK STRUCTURE FOR FUTURE RLS WORK ==
 
@@ -118,6 +179,11 @@ sale_items to reach the owning sales.seller_id.
 - New DB migrations: drop into db/migrations/round-NN-name.sql,
   paired round-NN-name-rollback.sql, wrap in BEGIN/COMMIT, make
   idempotent (CREATE OR REPLACE, DROP POLICY IF EXISTS first).
+- When a migration changes a shared table, GREP for callers FIRST.
+  12.0.a learned this the hard way: shipped the schema, then
+  discovered fetchCurrentExchangeRate (in lib/products.ts) and the
+  settings/exchange-rates/actions.ts trio all needed updates. Now
+  in the checklist.
 
 == DEV SERVER GOTCHAS ==
 
@@ -138,6 +204,9 @@ sale_items to reach the owning sales.seller_id.
 
 - @"..."@ heredocs eat ${...} and backticks. ALWAYS use @'...'@ for
   TS/JS with template literals.
+- @'...'@ heredocs are LITERAL. Single quotes inside the body stay
+  as single quotes — DO NOT double them. (Doubled them once and
+  had to clean up; the close-out of Round 11.)
 - PS 5.1's Set-Content -Encoding has no utf8NoBOM — only utf8.
   Cosmetic BOM on commit subject is harmless.
 - DO NOT use $content.Replace(...) for multi-line text patches. It
@@ -166,31 +235,27 @@ top. The admin client BYPASSES RLS — guards in lib/auth/guard.ts
 carry the load for code paths that use it.
 
 The ssr client (lib/supabase/server.ts) RESPECTS RLS as of Round
-11.10. All previously working pages still work under RLS (verified
-end of Round 11.10, re-verified after the 404-cluster fix).
+11.10.
 
 == SEARCH ==
 
 Use conversation_search liberally. Useful queries:
-  "Gangaloo Round 11.10 RLS"
-  "auth_role SECURITY DEFINER"
+  "Gangaloo Round 12 money accounts spec"
+  "monthly_exchange_rates currency primary key"
+  "fetchCurrentExchangeRate currency parameter"
+  "Round 11.10 RLS auth_role"
   "404 cluster Turbopack cache"
-  "sale_lot_consumption two-hop join"
-  "purchase_orders RLS"
   "confirm_pos_sale SECURITY DEFINER bypass"
-  "Round 12 money accounts"
 
 == PICK UP AT ==
 
-Round 12 — Money Accounts module (small confidence-builder before
-Round 14 Purchases).
+Round 12.0.b — update lib/exchange-rates.ts, then settings actions,
+then settings UI, then products consumer. Detailed sub-step plan
+above under "12.0.b — WORK TO DO NEXT SESSION". After 12.0.b
+ships, move to 12.2 (Money Accounts fetchers) per the spec at
+docs/round-12-money-accounts.md.
 
-Money accounts is the table of where money sits (cash drawer, bank
-account, mobile wallet, etc). Already exists in DB and is RLS'd as
-of 11.10 (owner-only). Sales payments and transactions reference
-money_account_id.
-
-No spec written yet — first step in Round 12 is a small design pass
-covering: schema review, list/form shape, balance computation (sum
-from transactions or stored on the row?), and whether to include a
-transfer-between-accounts action in this round or defer.
+Before starting 12.0.b, confirm dev server is clean (`npm run dev`
+in a fresh terminal, hard-refresh /settings/exchange-rates as
+owner — list should render, just don't try to create/edit/delete
+a rate).
