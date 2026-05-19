@@ -293,3 +293,35 @@ Three scenarios to walk end to end before closing the round:
   IS supported on the data side (schema doesn't constrain it),
   but each courier payment is created as a separate row in this
   round. Editing UI is deferred.
+
+
+## Schema-name corrections (added 14c.2.0a)
+
+The original spec draft inferred column names; actual schema verified
+at step 14c.2.0a against information_schema differs. The names below
+are authoritative going forward. UI-section references above
+(paid_on, dop_total, payment_account, notes, dop_amount) still appear
+in the early draft; treat them as having been replaced.
+
+courier_payments:
+  paid_on              -> paid_at (timestamptz, not date)
+  dop_total            -> amount_dop_total
+  payment_account_id   -> money_account_id
+  notes                -> description
+  + reference text NULL (invoice / external ref) — surface in form + detail
+  + legacy_id text NULL (migration only; not in write paths)
+  + receipt_id text NULL (migration only; not in write paths)
+  NO updated_at column. write-once table.
+
+courier_payment_allocations:
+  dop_amount           -> amount_dop
+  + created_at timestamptz NOT NULL (default now())
+  ON DELETE behavior of FKs: verify at 14c.2.0b before relying on
+  CASCADE-on-courier_payment-delete for write-once mistake correction
+  (deletion path is SQL, not UI, in v1).
+
+RPC parameter naming follows real columns:
+  p_paid_at, p_amount_dop_total, p_money_account_id, p_description,
+  p_reference, p_allocations (jsonb with amount_dop per row).
+
+Form field labels in UI also follow real names.
