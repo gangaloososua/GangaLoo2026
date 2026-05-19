@@ -224,8 +224,7 @@ export function PurchaseActionsBar({
   const canCancel   = status === 'pending' || status === 'paid_supplier'
   const canPay      = status === 'pending'
 
-  if (!canReceive && !canComplete && !canLost && !canCancel && !canPay) return null
-
+  // Add transport is always shown, so the bar always renders.
   return (
     <div className="flex flex-wrap gap-2">
       {/* Add transport (link to courier payments new with prefill) */}
