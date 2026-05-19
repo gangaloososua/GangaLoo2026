@@ -140,11 +140,17 @@ begin
 
     v_per_unit_share := round(v_total_transport_dop / v_total_units, 4);
 
-    -- Rewrite transport share on every line of this PO. The line's
-    -- dop_unit_landed_cost is a generated column, so it picks up
-    -- the new transport share automatically.
+    -- Rewrite transport share AND landed cost on every line of this PO.
+    -- dop_unit_landed_cost is NOT a generated column (verified at 14c.9.6.s1):
+    -- it must be set explicitly. Formula:
+    --   landed = coalesce(base,0) + coalesce(bank,0) + per_unit_transport
     update public.purchase_order_items
-      set dop_transport_share = round(v_per_unit_share * qty, 4)
+      set dop_transport_share = round(v_per_unit_share * qty, 4),
+          dop_unit_landed_cost = round(
+            coalesce(dop_unit_cost_base, 0)
+            + coalesce(dop_bank_share, 0)
+            + v_per_unit_share,
+            4)
       where purchase_order_id = v_po.po_id;
 
     -- Rewrite inventory_lots.unit_cost_dop for UNCONSUMED qty only,
