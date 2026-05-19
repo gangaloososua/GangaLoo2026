@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { Check, ChevronsUpDown } from 'lucide-react'
+import { Check, ChevronsUpDown, Trash2 } from 'lucide-react'
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -33,8 +33,11 @@ import type {
   SupplierPickerItem,
   CourierPickerItem,
   ProductPickerCategoryGroup,
+  ProductPickerItem,
 } from '@/lib/purchases'
 import type { MoneyAccount } from '@/lib/sales'
+
+import { ProductPicker } from './product-picker'
 
 type LookupItem = { id: string; name: string }
 
@@ -44,6 +47,19 @@ type Props = {
   productGroups: ProductPickerCategoryGroup[]
   warehouses: LookupItem[]
   moneyAccounts: MoneyAccount[]
+}
+
+// One line in the draft order. id is client-only (crypto.randomUUID) for
+// React keys; the server doesn't see it.
+type DraftLine = {
+  id: string
+  productId: string
+  productName: string
+  productSku: string
+  // Stored as raw strings so partial entries like "1." or empty fields
+  // work naturally. Parsed via Number() in derivations and at submit.
+  qty: string
+  usdUnitCost: string
 }
 
 // Format a Date as YYYY-MM-DDTHH:mm for <input type="datetime-local">.
@@ -56,6 +72,17 @@ function toLocalDatetimeInputValue(d: Date): string {
     'T' + pad(d.getHours()) +
     ':' + pad(d.getMinutes())
   )
+}
+
+// USD formatter for the summary panel. Lives in this file (not @/lib/format)
+// because @/lib/format is DOP-centric; cost basis is USD.
+function formatUSD(n: number): string {
+  return new Intl.NumberFormat('en-GB', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(n)
 }
 
 export function NewPurchaseForm({
@@ -78,18 +105,69 @@ export function NewPurchaseForm({
   const [supplierPickerOpen, setSupplierPickerOpen] = useState(false)
   const [supplierQuery,      setSupplierQuery]      = useState('')
 
+  // ---- Lines state ----
+  const [lines, setLines] = useState<DraftLine[]>([])
+
   const supplierMatches = useMemo(() => {
     const q = supplierQuery.trim().toLowerCase()
     if (!q) return suppliers
     return suppliers.filter((s) => s.name.toLowerCase().includes(q))
   }, [suppliers, supplierQuery])
 
-  // Is the typed value already in the list (case-insensitive)?
   const supplierExactMatch = useMemo(() => {
     const q = supplierQuery.trim().toLowerCase()
     if (!q) return null
     return suppliers.find((s) => s.name.toLowerCase() === q) ?? null
   }, [suppliers, supplierQuery])
+
+  // ---- Line helpers ----
+  function addLine(p: ProductPickerItem) {
+    setLines((prev) => [
+      ...prev,
+      {
+        id: crypto.randomUUID(),
+        productId: p.id,
+        productName: p.name,
+        productSku: p.sku,
+        qty: '1',
+        usdUnitCost: '',
+      },
+    ])
+  }
+
+  function removeLine(lineId: string) {
+    setLines((prev) => prev.filter((l) => l.id !== lineId))
+  }
+
+  function updateLineQty(lineId: string, raw: string) {
+    setLines((prev) =>
+      prev.map((l) => (l.id === lineId ? { ...l, qty: raw } : l)),
+    )
+  }
+
+  function updateLineCost(lineId: string, raw: string) {
+    setLines((prev) =>
+      prev.map((l) => (l.id === lineId ? { ...l, usdUnitCost: raw } : l)),
+    )
+  }
+
+  // ---- Derived ----
+  const usdSubtotal = useMemo(
+    () =>
+      lines.reduce(
+        (sum, l) => sum + (Number(l.qty) || 0) * (Number(l.usdUnitCost) || 0),
+        0,
+      ),
+    [lines],
+  )
+
+  const linesValid =
+    lines.length > 0 &&
+    lines.every((l) => {
+      const q = Number(l.qty)
+      const c = Number(l.usdUnitCost)
+      return Number.isFinite(q) && q > 0 && Number.isFinite(c) && c >= 0
+    })
 
   const headerValid =
     supplierName.trim().length > 0 &&
@@ -99,7 +177,7 @@ export function NewPurchaseForm({
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
       {/* ============================================================
-          LEFT/MIDDLE COLUMN — header + lines + adjustments + options
+          LEFT/MIDDLE COLUMN
           ============================================================ */}
       <div className="space-y-4 lg:col-span-2">
         {/* ---- Header card ---- */}
@@ -241,15 +319,79 @@ export function NewPurchaseForm({
           </CardContent>
         </Card>
 
-        {/* ---- Lines placeholder (14b.3.b) ---- */}
+        {/* ---- Lines card (14b.3.b) ---- */}
         <Card>
-          <CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0">
             <CardTitle>Line items</CardTitle>
+            <ProductPicker productGroups={productGroups} onPick={addLine} />
           </CardHeader>
           <CardContent>
-            <p className="text-sm text-muted-foreground">
-              Coming in 14b.3.b — product picker, qty, unit cost.
-            </p>
+            {lines.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                No lines yet. Click <span className="font-medium">Add line</span> to pick a product.
+              </p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b text-left text-xs text-muted-foreground">
+                      <th className="py-2 pr-2 font-medium">Product</th>
+                      <th className="w-24 px-2 py-2 font-medium">Qty</th>
+                      <th className="w-32 px-2 py-2 font-medium">USD unit cost</th>
+                      <th className="w-32 px-2 py-2 text-right font-medium">Line total</th>
+                      <th className="w-10 py-2"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {lines.map((l) => {
+                      const lineTotal = (Number(l.qty) || 0) * (Number(l.usdUnitCost) || 0)
+                      return (
+                        <tr key={l.id} className="border-b last:border-b-0 align-top">
+                          <td className="py-2 pr-2">
+                            <div className="font-medium">{l.productName}</div>
+                            <div className="text-xs text-muted-foreground">{l.productSku}</div>
+                          </td>
+                          <td className="px-2 py-2">
+                            <Input
+                              type="number"
+                              min="0"
+                              step="1"
+                              value={l.qty}
+                              onChange={(e) => updateLineQty(l.id, e.target.value)}
+                              className="h-8"
+                            />
+                          </td>
+                          <td className="px-2 py-2">
+                            <Input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={l.usdUnitCost}
+                              onChange={(e) => updateLineCost(l.id, e.target.value)}
+                              className="h-8"
+                            />
+                          </td>
+                          <td className="px-2 py-2 text-right tabular-nums">
+                            {formatUSD(lineTotal)}
+                          </td>
+                          <td className="py-2 text-right">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => removeLine(l.id)}
+                              aria-label="Remove line"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -260,14 +402,14 @@ export function NewPurchaseForm({
           </CardHeader>
           <CardContent>
             <p className="text-sm text-muted-foreground">
-              Coming in 14b.3.c — shipping, tax, discount, optional inline supplier payment, optional inline transport.
+              Coming in 14b.3.c - shipping, tax, discount, optional inline supplier payment, optional inline transport.
             </p>
           </CardContent>
         </Card>
       </div>
 
       {/* ============================================================
-          RIGHT COLUMN — summary + submit
+          RIGHT COLUMN - summary + submit
           ============================================================ */}
       <div className="space-y-4">
         <Card className="sticky top-4">
@@ -275,32 +417,40 @@ export function NewPurchaseForm({
             <CardTitle>Summary</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            <div className="text-sm text-muted-foreground">
-              Live totals land here once line items and adjustments are in.
+            <div className="space-y-1 text-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Lines</span>
+                <span className="tabular-nums">{lines.length}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">USD subtotal</span>
+                <span className="tabular-nums font-medium">{formatUSD(usdSubtotal)}</span>
+              </div>
             </div>
 
             <Button
               type="button"
               className="w-full"
               disabled={true}
-              title="Disabled in 14b.3.a — lines and submit wiring land in 14b.3.b and 14b.3.c"
+              title="Disabled in 14b.3.b - submit wiring lands in 14b.3.c"
             >
               Create order
             </Button>
 
             <p className="text-xs text-muted-foreground">
-              {headerValid
-                ? 'Header looks good. Add lines next.'
-                : 'Pick a supplier, warehouse, and date to continue.'}
+              {!headerValid
+                ? 'Pick a supplier, warehouse, and date to continue.'
+                : !linesValid
+                ? 'Add at least one line with qty > 0.'
+                : 'Adjustments & submit wiring lands in 14b.3.c.'}
             </p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Reference unused props so TS doesn't complain in 14b.3.a.
-          Removed when 14b.3.b/.c consume these.
+      {/* Keep-alive for props not yet consumed (14b.3.c will use them).
           eslint-disable-next-line @typescript-eslint/no-unused-vars */}
-      <span hidden>{couriers.length}|{productGroups.length}|{moneyAccounts.length}</span>
+      <span hidden>{couriers.length}|{moneyAccounts.length}</span>
     </div>
   )
 }
