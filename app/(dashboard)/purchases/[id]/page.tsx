@@ -85,6 +85,18 @@ function StatusBadge({ status }: { status: PurchaseStatus }) {
           Complete
         </Badge>
       )
+    case 'cancelled':
+      return (
+        <Badge variant="outline" className="border-red-500 bg-red-50 text-red-900">
+          Cancelled
+        </Badge>
+      )
+    case 'lost':
+      return (
+        <Badge variant="outline" className="border-amber-500 bg-amber-50 text-amber-900">
+          Lost
+        </Badge>
+      )
     default:
       return <Badge variant="secondary">{status}</Badge>
   }
@@ -196,7 +208,12 @@ export default async function PurchaseDetailPage({
     return Math.abs(expected - line.dop_unit_landed_cost) > 0.01
   }
 
-  const lineMismatchCount = items.filter(lineAuditMismatch).length
+  // Skip the audit on terminal states where (base + bank + transport != landed)
+  // is the expected outcome rather than a data issue:
+  //   - lost: markLost recomputes landed cost upward on surviving lots
+  //   - cancelled: no payments allocated, only base may be set
+  const auditApplies = stored !== 'lost' && stored !== 'cancelled'
+  const lineMismatchCount = auditApplies ? items.filter(lineAuditMismatch).length : 0
   const showLineMismatchDots = lineMismatchCount > 0 && lineMismatchCount / Math.max(items.length, 1) <= 0.10
 
   // Header label: prefer legacy_id, else short id.
