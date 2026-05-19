@@ -1,4 +1,4 @@
-﻿Continuing Gangaloo admin build (Next.js 16 + Turbopack + Netlify +
+Continuing Gangaloo admin build (Next.js 16 + Turbopack + Netlify +
 shadcn/ui + Supabase SSR + Tailwind v4). Project:
 `C:\Users\Perkins\Documents\Apps\GangaLoo New 05-26\gangaloo-admin\`.
 Migration SQLs in admin repo at `db\migrations\`.
@@ -12,30 +12,47 @@ before giving the next step. The user prefers this rhythm over
 batched instructions. Don't bundle "do X then Y and paste Z" -
 do X, wait, then Y, wait, then Z.
 
-PowerShell snippets are preferred over describing file contents
-in prose. The user runs them, pastes output, you verify, next
-step. Match counts and Select-String spot-checks are good
-verification.
+When asking the user to write large generated code blocks, briefly
+say what the file IS and what they'll do with it BEFORE the code.
+The user has said "I do not understand anything, what do I do with
+this ts file" when handed code without context.
 
-When asking the user to read or write large generated code
-blocks, briefly say what the file IS and what they'll do with
-it BEFORE the code. The user has said "I do not understand
-anything, what do I do with this ts file" when handed code
-without context.
+The user has tap-pickable options enabled (ask_user_input_v0) and
+prefers those for choices. Avoid jargon without explanation — the
+user is the business owner, not the dev. When they say "i do not
+understand", explain in plain language and re-offer.
+
+NEVER use the "use the option that picks for me" pattern when the
+choice is technical and the user has explicitly said they don't
+understand. Explain first, then ask. The exception is when they
+say "choose for me, take the most accurate" — then pick and
+justify briefly.
 
 DO NOT TRUST `BEGIN/ROLLBACK` in Supabase SQL editor when
 state-changing RPCs are involved (esp. with temp tables).
 SMOKE-001 from Round 14c.2.3 persisted through a ROLLBACK
-and required a separate cleanup pass. For RPC state-change
-testing: either accept data will stick (and clean up after
-with delete+recompute), or use throwaway test data you don't
-mind keeping.
+and required a separate cleanup pass. CTE-with-side-effects
+gotcha: `WITH created AS (SELECT public.foo(...))` followed by
+`SELECT FROM the_written_table` may not see the side effects
+(snapshot isolation). Use a temp table instead.
 
-CTE-with-side-effects gotcha: a `WITH created AS (SELECT
-public.foo(...))` followed by `SELECT FROM the_written_table`
-in the same statement may not see the side effects (snapshot
-isolation). Use a temp table instead:
-  `CREATE TEMP TABLE _t ON COMMIT DROP AS SELECT public.foo(...) AS x;`
+NEW THIS SESSION (Round 15.2.3 smoke): Supabase SQL editor WRAPS
+EVERY "RUN" IN A TRANSACTION. If you paste two statements and the
+second raises an exception, the first rolls back too. We lost
+ONL-0002 this way during a bundled "create then attempt-bad-dispatch"
+test. RULE: when smoke-testing state-changing RPCs, only put ONE
+state-changing statement per Run. Verification SELECTs in the
+same paste are fine (they don't error). Negative-test cases must
+be in their OWN Run, separate from any preceding state-changers.
+
+NOTE: Sequences DO NOT rollback (they are non-transactional by
+design). The sales_onl_seq was already at 2 before the rollback;
+the next online order minted was ONL-0003, not ONL-0002.
+
+ALSO NEW: PowerShell pasted heredocs sometimes leave the prompt
+stuck at `>>` waiting for a missing close-bracket. Press Ctrl+C
+to escape, not Enter (which feeds more empty lines to the open
+expression). If still stuck, close and reopen the window.
 
 == STATE AS OF END OF LAST SESSION ==
 
@@ -43,149 +60,179 @@ Modules complete and committed: Auth, Dashboard shell, Categories,
 Warehouses, People, Products, Settings (hub + Exchange Rates +
 Store Config + Receipt), Sales/POS, Users, RBAC, Money Accounts,
 Purchases READ (14a), Purchases WRITE (14b), Courier Payments (14c).
-All work pushed to origin/master at ff8be28.
+Round 15 (Online Orders) IN PROGRESS — sub-rounds 15.0 through 15.3
+DONE. All pushed to origin/master at 71a3750.
 
-== ROUND 14c COMPLETE ==
+== ROUND 15 PROGRESS ==
 
-  14c.1 spec        -- f0def94 at docs/round-14c-courier-payments.md
-                       includes "Schema-name corrections" appendix
-                       documenting the actual column names that
-                       differ from the original spec draft
-  14c.2 RPC         -- 7d9ecf3 (create_courier_payment)
-                       Later fixed at ff8be28 to set dop_unit_landed_cost
-                       explicitly (it is NOT a generated column,
-                       contrary to handoff prior assumption)
-  14c.3 server action  -- e518e81 (createCourierPayment in actions.ts)
-  14c.4 data layer  -- aba4d5b (lib/courier-payments.ts), 4 fetchers
-                       Plus listPurchaseOrdersForPicker appended in
-                       a15e018.
-  14c.5 list page   -- 92de510 (/courier-payments)
-  14c.6 detail page -- 5e4e889 (/courier-payments/[id])
-  14c.7 new form    -- a15e018 (/courier-payments/new, ~575-line
-                       client form with multi-PO allocations grid)
-  14c.8 prefill     -- 1798900 ("Add transport" button on PO detail
-                       page links to ?prefill_po=<id> on the new
-                       form, which seeds the first allocation row)
-  14c.9 nav         -- a809f6e (Courier Payments between Purchases
-                       and Money Accounts, Receipt icon, OWNER_ONLY)
-        actions-bar fix -- 0a38ee7 (removed early-return that
-                       hid the actions-bar on terminal-status POs,
-                       so Add transport renders on complete/lost/
-                       cancelled too — per spec, visible in any
-                       status)
-
-All three e2e scenarios from the spec passed:
-  S1: single-PO retro attach (caught the generated-column bug)
-  S2: multi-PO courier payment across 3 POs (correct rounding)
-  S3: edit-by-recreate (cascade delete + replacement payment
-      correctly overwrites stale shares)
+  15.0 spec               -- d438cb7 at docs/round-15-online-orders.md
+                             Also bundled 3ef286e: 14c schema-name
+                             corrections appendix that was sitting
+                             unstaged from prior session.
+  15.1 schema migration   -- 4aebeb1
+                             ALTER TABLE sales ADD dispatched_at,
+                             delivered_at (both timestamptz, nullable).
+                             Migration applied to live DB and verified.
+  15.2.1 create_online_order RPC  -- d333a4e
+                             ~250 lines. Hardcodes source='online',
+                             tracking_status='received'. ONL-NNNN
+                             invoice format from new sales_onl_seq
+                             (4-digit zero-padded). RBAC owner+admin
+                             only. STRICT no-oversell guard
+                             (insufficient_stock raise). Distributor
+                             commission resolution from
+                             warehouses.distributor_id +
+                             distributor_commission_percent, with
+                             profiles.commission_percent_override.
+                             paid_cents set manually (no trigger on
+                             sale_payments — confirmed via
+                             information_schema.triggers).
+                             Smoke: ONL-0001 (Montellano warehouse,
+                             distributor=c23c1b44 at 5%, 1 unit
+                             Ondulado 12a at 100000 cents). All
+                             side effects verified.
+  15.2.2 mark_dispatched + mark_delivered  -- 952707c
+                             Bundled into one migration file (both
+                             tiny, ~30 lines each, tightly coupled
+                             by state). Sourcecode lives at
+                             db/migrations/round-15-online-orders-
+                             02-mark-dispatched-delivered.sql.
+                             RBAC owner+admin; mark_dispatched
+                             rejects pickup/in_store. Smoke: ONL-0001
+                             received -> dispatched (with tracking
+                             "TRACK-SMOKE-15.2.2-A") -> delivered.
+                             Plus 5 negative-case smokes (POS sale,
+                             already-delivered, pickup order all
+                             correctly rejected with code 22023).
+  15.2.3 mark_cancelled_online + SCHEMA FIX  -- bed3b43
+                             ~160 lines RPC.
+                             Atomic transaction with five effects:
+                             stock reversal (qty restore + return_in
+                             stock_movement), payment reversal
+                             (compensating negative sale_payments
+                             rows), commission void, sale row reset,
+                             refund metadata stamped. Idempotency
+                             guard on sale_status='cancelled'.
+                             SCHEMA FIX BUNDLED: relaxed
+                             sale_payments_amount_cents_check from
+                             (amount_cents > 0) to (amount_cents <> 0).
+                             Required to permit compensating negative
+                             rows. Discovered during smoke testing.
+                             Smoke: S2 (cancel unpaid pickup, ONL-0003,
+                             no compensating payment needed),
+                             S3 (cancel paid delivery, ONL-0004, +100000
+                             original + -100000 compensation written,
+                             payments_sum=0). Plus idempotency
+                             rejection on second-cancel-attempt.
+  15.3 server actions     -- 71a3750
+                             app/(dashboard)/online-orders/actions.ts
+                             ~240 lines, 4 actions wrapping the 4 RPCs.
+                             Uses requireRole(['owner','admin'] as const)
+                             from @/lib/auth/guard.
+                             Return shape: { ok: true, ... } | { ok: false,
+                             error: string }. Camel/snake-case mapping
+                             between TS inputs and RPC payload params.
+                             revalidatePath('/online-orders') and the
+                             detail page after every action.
+                             TypeScript check clean: 0 errors mentioning
+                             online-orders.
 
 == IMMEDIATE NEXT STEP ==
 
-Round 15 (Online Orders). Sister-module to POS sales. The write-
-side cutover blocker per the roadmap. Realistically multi-session.
+Round 15.4 (data layer). Sister to lib/courier-payments.ts and
+lib/sales.ts. ~300 lines expected. Three or four fetcher functions:
 
-Order suggested:
-  15.0 spec to disk (docs/round-15-online-orders.md)
-  15.1 schema verification + migrations if needed
-  15.2 RPCs: create_online_order, mark_received_online,
-       mark_dispatched, mark_delivered, mark_cancelled_online
-  15.3 server actions wrapping the RPCs
-  15.4 data layer lib/online-orders.ts
-  15.5 list page
-  15.6 detail page
-  15.7 new form
-  15.8 nav entry + seller-404 + e2e smoke
+  listOnlineOrders(filters)
+  getOnlineOrderById(id)  -- with items, lot consumption, payments,
+                              commissions, side panel data
+  listOnlineOrdersByStatus(tracking_status)  -- optional, may merge
+                              into listOnlineOrders with filter param
 
-Before writing the spec, expect to verify column names on the
-online_orders table the same way 14c did (don't assume!).
-Online orders likely live in `public.sales` with `source='online'`
-per the prior handoff, but verify.
+Modeled on lib/courier-payments.ts. ~1500 LOC at lib/sales.ts
+also relevant (online orders share sub-tables with POS sales).
+File goes at lib/online-orders.ts. No types file separation yet
+(matches courier-payments convention; consider extracting if it
+grows past 400 lines).
 
-== FINDINGS & DECISIONS FROM THIS SESSION ==
+After 15.4:
+  15.5 - list page  /online-orders
+  15.6 - detail page  /online-orders/[id]
+  15.7 - new form  /online-orders/new
+  15.8 - nav entry + RBAC + e2e
 
-(In addition to ones from prior sessions.)
+== ROUND 15 DESIGN DECISIONS (FROM 15.0 SPEC) ==
 
-- DOP_UNIT_LANDED_COST IS NOT A GENERATED COLUMN. Prior handoff
-  was wrong about this. Only usd_line_total on purchase_order_items
-  is generated (expression: qty * usd_unit_cost). Confirmed via
-  information_schema.columns is_generated query. Any RPC that
-  changes per-unit cost components (base / bank_share / transport)
-  MUST write dop_unit_landed_cost explicitly. Round 14b RPCs
-  may have the same bug — TO VERIFY when next touching them.
+Confirm or revisit at start of next session; user may want to revise.
 
-- HEREDOC LINE ENDINGS: PowerShell @'...'@ heredocs paired with
-  [System.IO.File]::WriteAllText produce LONE-LF line endings
-  (166 LF, 1 CRLF in our 14c RPC file). Any subsequent .Replace()
-  patch must use `n separator, NOT `r`n, or the probe returns
-  False and the patch silently no-ops. ALWAYS use the probe:
-    Write-Host "contains? $($raw.Contains($o))"
-  before the .Replace() call. If it prints False, abort and
-  re-examine actual whitespace before retrying. Saved an hour
-  this session catching three silent failures.
+  - Stock LOCKS at order creation (not at dispatch). Rationale:
+    qty=1 items frequently. Only mark_cancelled_online releases.
+  - ONL-NNNN invoice format, sales_onl_seq sequence. First was
+    ONL-0001. Currently sequence at 4 (ONL-0001, ONL-0003, ONL-0004
+    minted; ONL-0002 rolled back).
+  - No couriers on outgoing online orders. Couriers are
+    inbound-only (Round 14c). Online dispatch uses optional
+    free-form tracking_number text field, no FK.
+  - Inter-warehouse pickup fee = shipping_cents on the sale.
+    Total_cents (generated col) includes it.
+  - Cancel-when-paid writes compensating sale_payments rows
+    (negative amount_cents). REQUIRED the schema fix in 15.2.3.
+  - mark_received_online deferred until public shop integrates
+    (creation IS receipt in v1).
 
-- DOUBLED-QUOTE SNIFF: pattern "''" finds legitimate empty
-  strings too (Select-String false positive). For real heredoc
-  doubled-quote bugs, use pattern "''''" (four single quotes
-  in a row, indicating a doubled '' that should have been
-  one '). The empty-string '' is normal TS, not a problem.
+== TEST DATA STILL IN DB ==
 
-- COURIER PAYMENTS DO NOT POST TO public.transactions either.
-  Same gap as purchases (noted in prior handoff). Round 19
-  Accounting will need to reconcile both.
+From 15.2 smokes (intentionally left, per project convention):
 
-- COURIER PAYMENTS ARE WRITE-ONCE in v1. No edit/delete UI.
-  Mistake correction = SQL delete (cascade drops allocations),
-  then re-recompute affected POs manually (NOT triggered by
-  cascade), then create replacement via UI. The transport shares
-  on affected POs go STALE after the cascade delete until
-  something triggers a recompute. Documented as expected behavior
-  in 14c spec.
+  ONL-0001 (c45011ba-f739-4608-acac-ac48f3aacf6d)
+    Delivered, fully traced. Source/fulfillment = 2-Montellano.
+    Product: Ondulado 12a, 1 unit, 100000 cents, unpaid.
+    Verifies: full lifecycle received -> dispatched -> delivered.
+  ONL-0003 (7a8da3fb-953f-4766-8dc2-3f045c207a78)
+    Cancelled (was unpaid pickup). Source/fulfillment = 2-Montellano.
+    Same product. Stock returned to lot. Commissions voided.
+    Verifies: cancel-unpaid path.
+  ONL-0004 (525169a0-369a-4ac4-a019-e42bd7143b89)
+    Cancelled (was paid delivery, transfer to Banreservas Perkins).
+    Same warehouse + product. 2 payment rows: +100000 original
+    plus -100000 compensation with reference='CANCEL <id>'.
+    Verifies: cancel-paid path with payment reversal.
 
-- ACTIONS-BAR GATING: actions-bar.tsx had an early-return that
-  hid the entire bar when no status-transition was applicable.
-  Added "Add transport" needs to render on terminal-status POs
-  (complete/lost/cancelled — the whole point is post-fact
-  attachment), so the early return was removed at 0a38ee7.
-  Note: status-transition AlertDialogs are gated individually
-  via canPay / canReceive / canComplete / canLost / canCancel
-  flags, so removing the early return only ever shows buttons
-  that have a real action.
+8 legacy migrated online rows untouched (all status=paid, mostly
+fulfillment=delivery, tracking_status=delivered with one legacy
+"pending" — leave alone).
 
-- SUPPLIER NAMES: many migrated suppliers have the literal
-  string "(unknown)" as their name. The data layer's fallback
-  string was also "(unknown)" — coincidentally identical. Not
-  a bug, just data hygiene. Worth flagging to user if Round 17
-  Inventory ever surfaces supplier names.
+Plus 14b smoke fixtures and 14c smoke fixtures from prior sessions.
 
-== POWERSHELL GOTCHAS (UPDATED) ==
+== KEY VERIFIED FACTS ==
 
-NEW THIS SESSION: HEREDOC LINE-ENDING MISMATCH IN PATCH PROBES.
-@'...'@ heredocs written via [IO.File]::WriteAllText with the
-no-BOM UTF-8 encoder produce lone-LF line endings. Subsequent
-.Replace($old, $new) patches against that file MUST use `n
-separators in $old, not `r`n, or the probe silently fails.
-Always probe BEFORE the replace:
-   Write-Host "contains? $($raw.Contains($old))"
-If False, abort.
+  - public.sales is source of truth. NO separate online_orders table.
+    source='online' rows are online orders.
+  - tracking_status is TEXT, not an enum. v1 vocabulary:
+    received | dispatched | delivered | cancelled
+    Legacy: pending (one row, do not generate from v1).
+  - sale_status enum: draft | confirmed | paid | partially_paid |
+    refunded | cancelled. Drives payment lifecycle. Cancel is the
+    only RPC that flips it to cancelled.
+  - NO trigger on sale_payments. paid_cents is NOT self-maintained
+    by inserts; the RPC must update it manually. Verified via
+    information_schema.triggers (zero rows).
+  - sale_payments_amount_cents_check is NOW (amount_cents <> 0)
+    (was > 0). Permits compensating negative rows.
+  - warehouses.distributor_id (uuid, nullable) and
+    warehouses.distributor_commission_percent (numeric, default 0).
+    profiles.commission_percent_override (nullable numeric) overrides
+    the warehouse default for both sellers and distributors.
 
-DIAGNOSTIC: dump line-ending counts:
-   $crlf = ([regex]::Matches($raw, "``r``n")).Count
-   $lf   = ([regex]::Matches($raw, "(?<!``r)``n")).Count
+== KEY FILES TOUCHED THIS SESSION ==
 
-(Note doubled-backtick in the diagnostic above — single
-backtick in actual code.)
-
-KNOWN STILL: PowerShell -LiteralPath needed for paths with
-brackets like app\(dashboard)\purchases\[id]\.
-
-KNOWN STILL: PS 5.1's Get-Content -Raw NORMALIZES line endings
-to CRLF in memory. Workaround for writes:
-  $abs = (Resolve-Path "path").ProviderPath
-  $raw = [System.IO.File]::ReadAllText($abs)
-  # ... do replacements with `n not `r`n ...
-  [System.IO.File]::WriteAllText($abs, $raw,
-    [System.Text.UTF8Encoding]::new($false))
+  docs/round-15-online-orders.md             (15.0 spec)
+  docs/round-14c-courier-payments.md         (appendix retro-commit)
+  db/migrations/round-15-online-orders-01-schema.sql
+  db/migrations/round-15-online-orders-02-create-online-order.sql
+  db/migrations/round-15-online-orders-02-mark-dispatched-delivered.sql
+  db/migrations/round-15-online-orders-02-mark-cancelled-online.sql
+  db/migrations/round-15-online-orders-02-relax-sale-payments-check.sql
+  app/(dashboard)/online-orders/actions.ts   (15.3 server actions)
 
 == TYPESCRIPT VERIFICATION PATTERN ==
 
@@ -193,78 +240,105 @@ After writing or patching any .ts/.tsx file:
   npx tsc --noEmit 2>&1 | Select-String -Pattern "<filename>" -Context 0,2
 Empty output = clean. First run slow (15-60s cold).
 
+KNOWN PRE-EXISTING TS ERRORS: 4 errors in app/bounce/page.tsx
+(unmatched JSX bracket, last touched commit 7839c9a from Round 11).
+NOT introduced by Round 15. Filed; not fixed this round. Future
+session should fix if it ever causes runtime issues — currently
+silent because tsc errors but Next.js still serves the page.
+
+== POWERSHELL GOTCHAS (UPDATED) ==
+
+NEW THIS SESSION: prompt stuck at `>>` after pasted heredoc.
+Means PowerShell still thinks an expression is open (e.g. a
+missing close-paren or unclosed quote). Press Ctrl+C to escape.
+Pressing Enter just feeds another empty line to the open
+expression and prompt stays stuck. If Ctrl+C also fails,
+close window and reopen.
+
+NEW THIS SESSION: Set-Location does NOT update
+[System.IO.Directory]::SetCurrentDirectory (process-level cwd),
+which is what [System.IO.Path]::GetFullPath('relative-path')
+resolves against. Result: WriteAllText('docs\foo.md') wrote to
+C:\Users\Perkins\docs\foo.md instead of project. Fix: use
+Join-Path $PWD.ProviderPath 'relative-path' OR explicitly call
+[System.IO.Directory]::SetCurrentDirectory($PWD.ProviderPath)
+at the start of any block that uses GetFullPath. The preamble
+pattern used reliably:
+  $ErrorActionPreference = 'Stop'
+  Set-Location -LiteralPath $PWD.ProviderPath
+  [System.IO.Directory]::SetCurrentDirectory($PWD.ProviderPath)
+
+KNOWN: PowerShell `@'...'@` heredocs via [IO.File]::WriteAllText
+with the no-BOM UTF-8 encoder produce LONE-LF line endings.
+Any subsequent .Replace($old, $new) patches MUST use `n
+separators in $old, not `r`n. Always probe BEFORE the replace:
+  Write-Host "contains? $($raw.Contains($old))"
+If False, abort.
+
+KNOWN: PS 5.1's Get-Content -Raw NORMALIZES line endings to CRLF
+in memory. For writes:
+  $abs = (Resolve-Path "path").ProviderPath
+  $raw = [System.IO.File]::ReadAllText($abs)
+  # ... do replacements with `n not `r`n ...
+  [System.IO.File]::WriteAllText($abs, $raw,
+    [System.Text.UTF8Encoding]::new($false))
+
+KNOWN: -LiteralPath needed for paths with brackets like
+app\(dashboard)\online-orders\.
+
 == INFRA RECAP ==
-
-SUPABASE_SERVICE_ROLE_KEY in .env.local. Never committed.
-Only lib/supabase/admin.ts uses it; has `import 'server-only'`.
-ssr client (lib/supabase/server.ts) respects RLS.
-
-Migration files all in db/migrations/. Round 14c additions:
-  round-14c-courier-payments-rpc-01-create-courier-payment.sql
-
-NO rollback files for RPCs - CREATE OR REPLACE FUNCTION is
-idempotent.
 
 Two PowerShell windows in use:
   Window 1: `npm run dev`, leave running
   Window 2: cd to project, git/file writes/tsc/etc
 
-== TEST DATA STILL IN DB ==
+SUPABASE_SERVICE_ROLE_KEY in .env.local. Never committed.
+Only lib/supabase/admin.ts uses it; has `import 'server-only'`.
+ssr client (lib/supabase/server.ts) respects RLS.
 
-From 14c e2e (left in place — same convention as 14b):
-  - E2E-S2 (1 courier payment, 3 allocations across
-    PO d91ec4d2, 20433d2b, c6d40b99) -- multi-PO scenario
-  - E2E-S3 (1 courier payment, 1 allocation against
-    PO 9544f895) -- final state after edit-by-recreate
+Auth guard helpers at lib/auth/guard.ts:
+  requireAdminCaller()  -> CallerProfile (any non-customer)
+  requireRole(allowed)  -> generic role allowlist
+  requireOwner()        -> sugar for OWNER_ROLES
 
-Plus everything from 14b smoke testing (Test Receive, Test
-Complete, Test Cancel, Test Cancel Refund, Test Pay,
-Smoke Test 14b5 — see prior handoff).
+For Round 15 we use requireRole(['owner','admin'] as const).
 
-These are useful as realistic test fixtures and don't interfere
-with anything. Cleanup is optional.
+== JWT IMPERSONATION FOR RPC SMOKES ==
 
-== ROADMAP (rounds 15 through 21) ==
+The Supabase SQL editor doesn't authenticate by default —
+auth.uid() is NULL — so SECURITY DEFINER RPCs with RBAC gates
+will reject. To smoke an RPC that calls auth.uid():
 
-15 - Online Orders. Sister to POS sales. WRITE-SIDE CUTOVER
-  BLOCKER. NEXT.
-16 - Sale-discount auto-application (design first).
-17 - Inventory / stock-movements UI. Damage/theft write-off
-  (mark_lost is for shipping loss; 17 handles post-receipt
-  damage/theft).
-18 - Cashback / commissions reports.
-19 - Accounting / transactions module. PURCHASES + COURIER
-  PAYMENTS do not currently post to public.transactions.
-  This module either extends those RPCs to write transaction
-  rows, or its reports join across purchase_orders +
-  courier_payments + sales directly. Design first.
-20 - Real-numbers dashboard. Same data-source caveat as 19.
-21 - Spanish UI (i18n). en-GB locale used throughout to avoid
-  hydration mismatches; each call site needs flipping to es-DO.
-  datetime-local inputs inherit browser locale (Perkins's
-  browser is German); Round 21 should explicitly set Spanish.
+  SET LOCAL request.jwt.claims =
+    '{"sub":"<auth_user_id>","role":"authenticated"}';
+  SELECT public.your_rpc(...);
+
+User's auth_user_id: 3f135a05-76fb-4859-9009-3a0b606815c1
+User's profile id:    17b11149-5480-4716-8a55-5f7905c94543
+
+SET LOCAL is per-transaction; the JWT and the SELECT must be in
+the same Run.
 
 == SEARCH ==
 
 Use conversation_search liberally. Useful queries:
+  "Round 15 online orders spec"
+  "create_online_order RPC distributor commission"
+  "mark_cancelled_online compensating sale_payments"
+  "sale_payments_amount_cents_check relaxed"
+  "Supabase SQL editor transaction rollback"
+  "tracking_status text not enum"
+  "sales_onl_seq invoice ONL-NNNN"
+  "PowerShell heredoc lone-LF line ending"
+  "JWT impersonation SET LOCAL request jwt claims"
   "Round 14c create_courier_payment RPC"
-  "Round 14c dop_unit_landed_cost generated column bug"
-  "Round 14c heredoc line ending lone LF patch probe"
-  "Round 14c actions-bar early return gating"
-  "Round 14c spec courier payments allocations"
-  "Round 14c e2e scenarios single multi recreate"
-  "Round 14b mark_lost cost basis recompute"
-  "Round 14b create_purchase_order generated column"
-  "Supabase SQL editor only last statement output"
-  "Supabase BEGIN ROLLBACK unreliable temp table"
 
 == PICK UP AT ==
 
-Round 15 (Online Orders). Start with spec to disk. Verify
-schema first — the sales table is hypothesized to be source-
-of-truth (source='online' rows) but VERIFY before assuming.
+Round 15.4 (data layer). Open the spec at docs/round-15-online-orders.md
+(section 10) for the file layout. Model after lib/courier-payments.ts.
+Verify column names against information_schema before writing fetchers
+(same convention as 14c).
 
-Round 14c is FULLY DONE. No outstanding loose ends. RPC fix
-shipped, actions-bar gating fix shipped, all 9 sub-rounds
-done, e2e verified for all three spec scenarios. Last
-commit pushed: ff8be28.
+Round 15.3 is FULLY DONE. All 4 server actions written, type-check
+clean. Last commit pushed: 71a3750.
