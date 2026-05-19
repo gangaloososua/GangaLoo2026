@@ -1,4 +1,4 @@
-﻿// ============================================================
+// ============================================================
 // Round 14 - Purchases module
 //
 // CLIENT-SAFE pure types and helpers. Safe to import from
@@ -47,6 +47,9 @@ export type PurchaseOrderRow = {
   exchange_rate: number | null
   dop_bank_fee: number | null
   official_rate_at_payment: number | null
+  dop_refund_total: number | null
+  refund_at_dop: string | null
+  refund_account_id: string | null
   ordered_at: string
   expected_at: string | null
   paid_at_dop: string | null
@@ -59,6 +62,7 @@ export type PurchaseOrderRow = {
   updated_at: string
   supplier_name: string | null
   warehouse_name: string | null
+  refund_account_name: string | null
 }
 
 export type PurchaseOrderItemRow = {

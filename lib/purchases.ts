@@ -57,6 +57,7 @@ const PURCHASE_ORDER_COLUMNS =
   'usd_subtotal, usd_shipping, usd_tax, usd_discount, usd_total, ' +
   'dop_paid_total, exchange_rate, dop_bank_fee, ' +
   'official_rate_at_payment, ' +
+  'dop_refund_total, refund_at_dop, refund_account_id, ' +
   'ordered_at, expected_at, paid_at_dop, received_at, completed_at, ' +
   'notes, legacy_id, legacy_lot_numbers, ' +
   'created_at, updated_at'
@@ -76,6 +77,9 @@ type RawPurchaseOrder = {
   exchange_rate: number | string | null
   dop_bank_fee: number | string | null
   official_rate_at_payment: number | string | null
+    dop_refund_total: number | string | null
+    refund_at_dop: string | null
+    refund_account_id: string | null
   ordered_at: string
   expected_at: string | null
   paid_at_dop: string | null
@@ -92,6 +96,7 @@ function coercePurchaseOrder(
   r: RawPurchaseOrder,
   supplier_name: string | null,
   warehouse_name: string | null,
+  refund_account_name: string | null,
 ): PurchaseOrderRow {
   return {
     ...r,
@@ -105,8 +110,10 @@ function coercePurchaseOrder(
     dop_bank_fee: r.dop_bank_fee == null ? null : Number(r.dop_bank_fee),
     official_rate_at_payment:
       r.official_rate_at_payment == null ? null : Number(r.official_rate_at_payment),
+    dop_refund_total: r.dop_refund_total == null ? null : Number(r.dop_refund_total),
     supplier_name,
     warehouse_name,
+    refund_account_name,
   }
 }
 
@@ -116,17 +123,22 @@ async function attachNames(
 ): Promise<PurchaseOrderRow[]> {
   const supplierIds = Array.from(new Set(raws.map((r) => r.supplier_id).filter((x): x is string => !!x)))
   const warehouseIds = Array.from(new Set(raws.map((r) => r.warehouse_id).filter((x): x is string => !!x)))
+  const refundAccountIds = Array.from(new Set(raws.map((r) => r.refund_account_id).filter((x): x is string => !!x)))
 
-  const [suppliersRes, warehousesRes] = await Promise.all([
+  const [suppliersRes, warehousesRes, refundAccountsRes] = await Promise.all([
     supplierIds.length === 0
       ? Promise.resolve({ data: [], error: null })
       : supabase.from('suppliers').select('id, name').in('id', supplierIds),
     warehouseIds.length === 0
       ? Promise.resolve({ data: [], error: null })
       : supabase.from('warehouses').select('id, name').in('id', warehouseIds),
+    refundAccountIds.length === 0
+      ? Promise.resolve({ data: [], error: null })
+      : supabase.from('money_accounts').select('id, name').in('id', refundAccountIds),
   ])
   if (suppliersRes.error) throw suppliersRes.error
   if (warehousesRes.error) throw warehousesRes.error
+  if (refundAccountsRes.error) throw refundAccountsRes.error
 
   const supplierNameById = new Map<string, string>()
   for (const s of (suppliersRes.data ?? []) as Array<{ id: string; name: string }>) {
@@ -136,12 +148,17 @@ async function attachNames(
   for (const w of (warehousesRes.data ?? []) as Array<{ id: string; name: string }>) {
     warehouseNameById.set(w.id, w.name)
   }
+  const refundAccountNameById = new Map<string, string>()
+  for (const a of (refundAccountsRes.data ?? []) as Array<{ id: string; name: string }>) {
+    refundAccountNameById.set(a.id, a.name)
+  }
 
   return raws.map((r) =>
     coercePurchaseOrder(
       r,
       r.supplier_id ? supplierNameById.get(r.supplier_id) ?? null : null,
       r.warehouse_id ? warehouseNameById.get(r.warehouse_id) ?? null : null,
+      r.refund_account_id ? refundAccountNameById.get(r.refund_account_id) ?? null : null,
     ),
   )
 }

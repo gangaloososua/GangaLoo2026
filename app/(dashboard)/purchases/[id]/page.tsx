@@ -28,6 +28,8 @@ import {
   type PurchaseOrderRow,
 } from '@/lib/purchases-types'
 
+import { listMoneyAccounts } from '@/lib/sales'
+
 import { PurchaseDetailLineRow } from './detail-line-row'
 import { PurchaseActionsBar } from './actions-bar'
 
@@ -162,10 +164,11 @@ export default async function PurchaseDetailPage({
   if (!order) notFound()
 
   // Fetch the four side-data sets in parallel.
-  const [items, lotTrail, transport] = await Promise.all([
+  const [items, lotTrail, transport, moneyAccounts] = await Promise.all([
     getPurchaseOrderItems(order.id),
     getLotTrailForOrder(order.id),
     getTransportSummaryForOrder(order.id),
+    listMoneyAccounts(),
   ])
 
   const stored = order.status
@@ -222,7 +225,7 @@ export default async function PurchaseDetailPage({
         </div>
         <div className="flex flex-col items-end gap-2">
           <StatusBadge status={stored} />
-          <PurchaseActionsBar orderId={order.id} status={stored} items={items} lotTrail={lotTrail} />
+          <PurchaseActionsBar orderId={order.id} status={stored} items={items} lotTrail={lotTrail} moneyAccounts={moneyAccounts} />
         </div>
       </div>
 
@@ -343,6 +346,22 @@ export default async function PurchaseDetailPage({
                     <dt className="text-muted-foreground">Paid on</dt>
                     <dd className="tabular-nums">{formatDate(order.paid_at_dop)}</dd>
                   </div>
+                  {order.dop_refund_total != null && order.dop_refund_total > 0 && (
+                    <>
+                      <div className="flex justify-between pt-2 border-t font-semibold">
+                        <dt>Refund</dt>
+                        <dd className="tabular-nums">{formatNumber(order.dop_refund_total)}</dd>
+                      </div>
+                      <div className="flex justify-between text-xs">
+                        <dt className="text-muted-foreground">To</dt>
+                        <dd>{order.refund_account_name ?? '\u2014'}</dd>
+                      </div>
+                      <div className="flex justify-between text-xs">
+                        <dt className="text-muted-foreground">Refunded on</dt>
+                        <dd className="tabular-nums">{formatDate(order.refund_at_dop)}</dd>
+                      </div>
+                    </>
+                  )}
                 </dl>
               ) : (
                 <div className="text-sm text-muted-foreground italic">

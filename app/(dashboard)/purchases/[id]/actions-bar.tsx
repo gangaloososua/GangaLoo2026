@@ -3,10 +3,18 @@
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { CheckCircle2, PackageMinus, Truck } from 'lucide-react'
+import { CheckCircle2, PackageMinus, Truck, XCircle } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -19,38 +27,60 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
 
-import { markComplete, markLost, markReceived } from '../actions'
+import {
+  markComplete,
+  markLost,
+  markReceived,
+  markCancelled,
+} from '../actions'
 import type {
   PurchaseStatus,
   PurchaseOrderItemRow,
   LotRow,
 } from '@/lib/purchases-types'
+import type { MoneyAccount } from '@/lib/sales'
 
 type Props = {
   orderId: string
   status: PurchaseStatus
   items: PurchaseOrderItemRow[]
-  // Map keyed by line id (purchase_order_item.id) -> lots created for that line.
   lotTrail: Map<string, LotRow[]>
+  moneyAccounts: MoneyAccount[]
 }
 
-// Sum already-received qty for a given line from its lot trail.
 function alreadyReceivedQty(lineId: string, lotTrail: Map<string, LotRow[]>): number {
   const lots = lotTrail.get(lineId) ?? []
   return lots.reduce((sum, l) => sum + (l.qty_received ?? 0), 0)
 }
 
-export function PurchaseActionsBar({ orderId, status, items, lotTrail }: Props) {
+function toLocalDatetimeInputValue(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return (
+    d.getFullYear() +
+    '-' + pad(d.getMonth() + 1) +
+    '-' + pad(d.getDate()) +
+    'T' + pad(d.getHours()) +
+    ':' + pad(d.getMinutes())
+  )
+}
+
+export function PurchaseActionsBar({
+  orderId,
+  status,
+  items,
+  lotTrail,
+  moneyAccounts,
+}: Props) {
   const router = useRouter()
 
   const [busyAction, setBusyAction] =
-    useState<null | 'complete' | 'lost' | 'received'>(null)
+    useState<null | 'complete' | 'lost' | 'received' | 'cancelled'>(null)
   const [completeOpen, setCompleteOpen] = useState(false)
   const [lostOpen, setLostOpen] = useState(false)
   const [receiveOpen, setReceiveOpen] = useState(false)
+  const [cancelOpen, setCancelOpen] = useState(false)
 
   // ---- Receive dialog state ----
-  // Map keyed by line id -> string typed by user. Defaults to outstanding qty.
   const initialReceipts = useMemo(() => {
     const m = new Map<string, string>()
     for (const ln of items) {
@@ -71,7 +101,6 @@ export function PurchaseActionsBar({ orderId, status, items, lotTrail }: Props) 
     })
   }
 
-  // Validity: at least one line with qty > 0, none with qty < 0, none NaN.
   const receiveValid = useMemo(() => {
     let anyPositive = false
     for (const ln of items) {
@@ -84,32 +113,38 @@ export function PurchaseActionsBar({ orderId, status, items, lotTrail }: Props) 
     return anyPositive
   }, [items, receipts])
 
+  // ---- Cancel dialog state ----
+  const wasPaid = status === 'paid_supplier'
+  const [refundOn, setRefundOn] = useState<boolean>(false)
+  const [refundAmount, setRefundAmount] = useState<string>('')
+  const [refundAccount, setRefundAccount] = useState<string>('')
+  const [refundAt, setRefundAt] = useState<string>(
+    toLocalDatetimeInputValue(new Date()),
+  )
+
+  const cancelValid =
+    !refundOn ||
+    (
+      Number(refundAmount) > 0 &&
+      refundAccount.length > 0 &&
+      refundAt.length > 0
+    )
+
+  // ---- Handlers ----
   async function handleMarkComplete() {
     setBusyAction('complete')
     const res = await markComplete(orderId)
-    if (!res.ok) {
-      toast.error(res.error)
-      setBusyAction(null)
-      return
-    }
+    if (!res.ok) { toast.error(res.error); setBusyAction(null); return }
     toast.success('Order marked complete.')
-    setCompleteOpen(false)
-    setBusyAction(null)
-    router.refresh()
+    setCompleteOpen(false); setBusyAction(null); router.refresh()
   }
 
   async function handleMarkLost() {
     setBusyAction('lost')
     const res = await markLost(orderId)
-    if (!res.ok) {
-      toast.error(res.error)
-      setBusyAction(null)
-      return
-    }
+    if (!res.ok) { toast.error(res.error); setBusyAction(null); return }
     toast.success('Order marked lost. Cost basis recomputed on surviving lots.')
-    setLostOpen(false)
-    setBusyAction(null)
-    router.refresh()
+    setLostOpen(false); setBusyAction(null); router.refresh()
   }
 
   async function handleMarkReceived() {
@@ -120,27 +155,38 @@ export function PurchaseActionsBar({ orderId, status, items, lotTrail }: Props) 
       receivedQty: Number(receipts.get(ln.id) ?? '0'),
     }))
     const res = await markReceived({ orderId, receipts: payload })
-    if (!res.ok) {
-      toast.error(res.error)
-      setBusyAction(null)
-      return
-    }
+    if (!res.ok) { toast.error(res.error); setBusyAction(null); return }
     toast.success('Receipts recorded. Inventory lots created.')
-    setReceiveOpen(false)
-    setBusyAction(null)
-    router.refresh()
+    setReceiveOpen(false); setBusyAction(null); router.refresh()
   }
 
-  // Visibility rules by status:
-  //   pending        - no buttons in 14b.4.a (markPaidSupplier/cancel come later)
-  //   paid_supplier  - receive
-  //   received       - receive (partial), complete, lost
-  //   complete/lost  - none
+  async function handleMarkCancelled() {
+    if (!cancelValid) return
+    setBusyAction('cancelled')
+    const refund = refundOn
+      ? {
+          dopRefundTotal: Number(refundAmount),
+          refundAtDop: new Date(refundAt).toISOString(),
+          refundAccountId: refundAccount,
+        }
+      : undefined
+    const res = await markCancelled({ orderId, refund })
+    if (!res.ok) { toast.error(res.error); setBusyAction(null); return }
+    toast.success(
+      refund
+        ? 'Order cancelled and refund recorded.'
+        : 'Order cancelled.',
+    )
+    setCancelOpen(false); setBusyAction(null); router.refresh()
+  }
+
+  // ---- Visibility ----
   const canReceive  = status === 'paid_supplier' || status === 'received'
   const canComplete = status === 'received'
   const canLost     = status === 'received'
+  const canCancel   = status === 'pending' || status === 'paid_supplier'
 
-  if (!canReceive && !canComplete && !canLost) return null
+  if (!canReceive && !canComplete && !canLost && !canCancel) return null
 
   return (
     <div className="flex flex-wrap gap-2">
@@ -212,10 +258,7 @@ export function PurchaseActionsBar({ orderId, status, items, lotTrail }: Props) 
               <AlertDialogCancel disabled={busyAction === 'received'}>Cancel</AlertDialogCancel>
               <AlertDialogAction
                 disabled={!receiveValid || busyAction === 'received'}
-                onClick={(e) => {
-                  e.preventDefault()
-                  void handleMarkReceived()
-                }}
+                onClick={(e) => { e.preventDefault(); void handleMarkReceived() }}
               >
                 {busyAction === 'received' ? 'Recording...' : 'Record receipts'}
               </AlertDialogAction>
@@ -252,10 +295,7 @@ export function PurchaseActionsBar({ orderId, status, items, lotTrail }: Props) 
               <AlertDialogCancel disabled={busyAction === 'complete'}>Cancel</AlertDialogCancel>
               <AlertDialogAction
                 disabled={busyAction === 'complete'}
-                onClick={(e) => {
-                  e.preventDefault()
-                  void handleMarkComplete()
-                }}
+                onClick={(e) => { e.preventDefault(); void handleMarkComplete() }}
               >
                 {busyAction === 'complete' ? 'Working...' : 'Mark complete'}
               </AlertDialogAction>
@@ -298,12 +338,104 @@ export function PurchaseActionsBar({ orderId, status, items, lotTrail }: Props) 
               <AlertDialogCancel disabled={busyAction === 'lost'}>Cancel</AlertDialogCancel>
               <AlertDialogAction
                 disabled={busyAction === 'lost'}
-                onClick={(e) => {
-                  e.preventDefault()
-                  void handleMarkLost()
-                }}
+                onClick={(e) => { e.preventDefault(); void handleMarkLost() }}
               >
                 {busyAction === 'lost' ? 'Working...' : 'Mark lost'}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
+
+      {/* Cancel order */}
+      {canCancel && (
+        <AlertDialog open={cancelOpen} onOpenChange={setCancelOpen}>
+          <AlertDialogTrigger asChild>
+            <Button type="button" variant="outline" size="sm">
+              <XCircle className="mr-1.5 h-4 w-4" />
+              Cancel order
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent className="max-w-xl">
+            <AlertDialogHeader>
+              <AlertDialogTitle>Cancel this order?</AlertDialogTitle>
+              <AlertDialogDescription asChild>
+                <div className="space-y-2 text-sm">
+                  <div>
+                    {wasPaid
+                      ? 'This order has already been paid. If you got money back from the supplier, tick the box below to record the refund.'
+                      : 'This order has not been paid yet, so there is nothing to refund.'}
+                  </div>
+                  <div className="text-muted-foreground">
+                    Cancellation is terminal. You cannot reopen a cancelled order.
+                  </div>
+                </div>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+
+            {wasPaid && (
+              <div className="space-y-3">
+                <label className="flex cursor-pointer items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4"
+                    checked={refundOn}
+                    onChange={(e) => setRefundOn(e.target.checked)}
+                  />
+                  Record a refund
+                </label>
+
+                {refundOn && (
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="refund-amount">DOP refund total</Label>
+                      <Input
+                        id="refund-amount"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={refundAmount}
+                        onChange={(e) => setRefundAmount(e.target.value)}
+                        placeholder="0.00"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="refund-account">To account</Label>
+                      <Select value={refundAccount} onValueChange={setRefundAccount}>
+                        <SelectTrigger id="refund-account">
+                          <SelectValue placeholder="Pick an account..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {moneyAccounts.map((a) => (
+                            <SelectItem key={a.id} value={a.id}>
+                              {a.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1.5 md:col-span-2">
+                      <Label htmlFor="refund-at">Refunded at</Label>
+                      <Input
+                        id="refund-at"
+                        type="datetime-local"
+                        value={refundAt}
+                        onChange={(e) => setRefundAt(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={busyAction === 'cancelled'}>Keep order</AlertDialogCancel>
+              <AlertDialogAction
+                disabled={!cancelValid || busyAction === 'cancelled'}
+                onClick={(e) => { e.preventDefault(); void handleMarkCancelled() }}
+                className="bg-red-600 hover:bg-red-700"
+              >
+                {busyAction === 'cancelled' ? 'Working...' : 'Cancel order'}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
