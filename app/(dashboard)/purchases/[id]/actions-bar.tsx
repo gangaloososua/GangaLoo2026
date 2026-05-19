@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
@@ -227,6 +228,13 @@ export function PurchaseActionsBar({
 
   return (
     <div className="flex flex-wrap gap-2">
+      {/* Add transport (link to courier payments new with prefill) */}
+      <Button asChild variant="outline">
+        <Link href={`/courier-payments/new?prefill_po=${orderId}`}>
+          <Truck className="mr-1 h-4 w-4" />
+          Add transport
+        </Link>
+      </Button>
       {/* Pay supplier */}
       {canPay && (
         <AlertDialog open={payOpen} onOpenChange={setPayOpen}>

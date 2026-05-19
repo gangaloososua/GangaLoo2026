@@ -1,4 +1,4 @@
-﻿import Link from 'next/link'
+import Link from 'next/link'
 import { ChevronLeft } from 'lucide-react'
 import { requireOwner } from '@/lib/auth/guard'
 import { listCouriersForPicker } from '@/lib/purchases'
@@ -8,8 +8,18 @@ import { NewCourierPaymentForm } from './new-courier-payment-form'
 
 export const dynamic = 'force-dynamic'
 
-export default async function NewCourierPaymentPage() {
+type SearchParams = {
+  prefill_po?: string
+}
+
+export default async function NewCourierPaymentPage({
+  searchParams,
+}: {
+  searchParams: Promise<SearchParams>
+}) {
   await requireOwner()
+  const sp = await searchParams
+  const prefillPoId = sp.prefill_po?.trim() || null
   const [couriers, moneyAccounts, purchaseOrders] = await Promise.all([
     listCouriersForPicker(),
     listMoneyAccounts(),
@@ -40,6 +50,7 @@ export default async function NewCourierPaymentPage() {
         couriers={couriers}
         moneyAccounts={moneyAccounts}
         purchaseOrders={purchaseOrders}
+        prefillPurchaseOrderId={prefillPoId}
       />
     </div>
   )

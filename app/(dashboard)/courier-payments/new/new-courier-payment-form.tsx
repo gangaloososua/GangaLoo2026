@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import * as React from 'react'
 import { useState, useMemo } from 'react'
@@ -55,6 +55,7 @@ type Props = {
   couriers: CourierPickerItem[]
   moneyAccounts: MoneyAccount[]
   purchaseOrders: PurchaseOrderPickerItem[]
+  prefillPurchaseOrderId?: string | null
 }
 
 type DraftAllocation = {
@@ -116,6 +117,7 @@ export function NewCourierPaymentForm({
   couriers,
   moneyAccounts,
   purchaseOrders,
+  prefillPurchaseOrderId,
 }: Props) {
   const router = useRouter()
 
@@ -144,9 +146,14 @@ export function NewCourierPaymentForm({
   }, [couriers, courierId])
 
   // ---- Allocations state ----
-  const [allocations, setAllocations] = useState<DraftAllocation[]>([
-    { key: newAllocationKey(), purchaseOrderId: '', amountDopRaw: '' },
-  ])
+  const [allocations, setAllocations] = useState<DraftAllocation[]>(() => {
+    const seedPoId =
+      prefillPurchaseOrderId &&
+      purchaseOrders.some((p) => p.id === prefillPurchaseOrderId)
+        ? prefillPurchaseOrderId
+        : ''
+    return [{ key: newAllocationKey(), purchaseOrderId: seedPoId, amountDopRaw: '' }]
+  })
 
   function addAllocation() {
     setAllocations((xs) => [
