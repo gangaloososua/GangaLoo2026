@@ -39,6 +39,11 @@ import type { MoneyAccount } from '@/lib/sales'
 
 import { ProductPicker } from './product-picker'
 
+import { useRouter } from 'next/navigation'
+import { toast } from 'sonner'
+
+import { createPurchaseOrder } from '../actions'
+
 type LookupItem = { id: string; name: string }
 
 type Props = {
@@ -49,8 +54,6 @@ type Props = {
   moneyAccounts: MoneyAccount[]
 }
 
-// One line in the draft order. id is client-only (crypto.randomUUID) for
-// React keys; the server doesn't see it.
 type DraftLine = {
   id: string
   productId: string
@@ -62,7 +65,6 @@ type DraftLine = {
   usdUnitCost: string
 }
 
-// Format a Date as YYYY-MM-DDTHH:mm for <input type="datetime-local">.
 function toLocalDatetimeInputValue(d: Date): string {
   const pad = (n: number) => String(n).padStart(2, '0')
   return (
@@ -74,12 +76,19 @@ function toLocalDatetimeInputValue(d: Date): string {
   )
 }
 
-// USD formatter for the summary panel. Lives in this file (not @/lib/format)
-// because @/lib/format is DOP-centric; cost basis is USD.
 function formatUSD(n: number): string {
   return new Intl.NumberFormat('en-GB', {
     style: 'currency',
     currency: 'USD',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(n)
+}
+
+function formatDOP(n: number): string {
+  return new Intl.NumberFormat('en-GB', {
+    style: 'currency',
+    currency: 'DOP',
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(n)
@@ -98,7 +107,7 @@ export function NewPurchaseForm({
   const [orderedAt,    setOrderedAt]      = useState<string>(
     toLocalDatetimeInputValue(new Date()),
   )
-  const [expectedAt,   setExpectedAt]     = useState<string>('') // optional
+  const [expectedAt,   setExpectedAt]     = useState<string>('')
   const [notes,        setNotes]          = useState<string>('')
 
   // ---- Supplier combobox UI state ----
@@ -108,6 +117,37 @@ export function NewPurchaseForm({
   // ---- Lines state ----
   const [lines, setLines] = useState<DraftLine[]>([])
 
+  // ---- Submit state ----
+  const router = useRouter()
+  const [submitting, setSubmitting] = useState<boolean>(false)
+
+  // ---- Adjustments state (USD, string-typed) ----
+  const [usdShipping, setUsdShipping] = useState<string>('')
+  const [usdTax,      setUsdTax]      = useState<string>('')
+  const [usdDiscount, setUsdDiscount] = useState<string>('')
+
+  // ---- Optional inline supplier payment ----
+  const [payInline,              setPayInline]              = useState<boolean>(false)
+  const [dopPaidTotal,           setDopPaidTotal]           = useState<string>('')
+  const [exchangeRate,           setExchangeRate]           = useState<string>('')
+  const [officialRateAtPayment,  setOfficialRateAtPayment]  = useState<string>('')
+  const [supplierPaymentAccount, setSupplierPaymentAccount] = useState<string>('')
+  const [paidAtDop,              setPaidAtDop]              = useState<string>(
+    toLocalDatetimeInputValue(new Date()),
+  )
+
+  // ---- Optional inline transport ----
+  const [payTransportInline,    setPayTransportInline]    = useState<boolean>(false)
+  const [transportAmountDop,    setTransportAmountDop]    = useState<string>('')
+  const [transportCourierId,    setTransportCourierId]    = useState<string>('')
+  const [transportAccountId,    setTransportAccountId]    = useState<string>('')
+  const [transportPaidAt,       setTransportPaidAt]       = useState<string>(
+    toLocalDatetimeInputValue(new Date()),
+  )
+  const [transportDescription,  setTransportDescription]  = useState<string>('')
+  const [transportReference,    setTransportReference]    = useState<string>('')
+
+  // ---- Supplier filtering ----
   const supplierMatches = useMemo(() => {
     const q = supplierQuery.trim().toLowerCase()
     if (!q) return suppliers
@@ -151,7 +191,7 @@ export function NewPurchaseForm({
     )
   }
 
-  // ---- Derived ----
+  // ---- Derived totals ----
   const usdSubtotal = useMemo(
     () =>
       lines.reduce(
@@ -161,6 +201,17 @@ export function NewPurchaseForm({
     [lines],
   )
 
+  const usdShippingN = Number(usdShipping) || 0
+  const usdTaxN      = Number(usdTax)      || 0
+  const usdDiscountN = Number(usdDiscount) || 0
+  const usdTotal     = usdSubtotal + usdShippingN + usdTaxN - usdDiscountN
+
+  // ---- Validation ----
+  const headerValid =
+    supplierName.trim().length > 0 &&
+    warehouseId.length > 0 &&
+    orderedAt.length > 0
+
   const linesValid =
     lines.length > 0 &&
     lines.every((l) => {
@@ -169,10 +220,92 @@ export function NewPurchaseForm({
       return Number.isFinite(q) && q > 0 && Number.isFinite(c) && c >= 0
     })
 
-  const headerValid =
-    supplierName.trim().length > 0 &&
-    warehouseId.length > 0 &&
-    orderedAt.length > 0
+  const adjustmentsValid =
+    usdShippingN >= 0 && usdTaxN >= 0 && usdDiscountN >= 0
+
+  const paymentValid =
+    !payInline ||
+    (
+      Number(dopPaidTotal)          > 0 &&
+      Number(exchangeRate)          > 0 &&
+      Number(officialRateAtPayment) > 0 &&
+      supplierPaymentAccount.length > 0 &&
+      paidAtDop.length              > 0
+    )
+
+  const transportValid =
+    !payTransportInline ||
+    (
+      payInline && // transport requires payment per action
+      Number(transportAmountDop) > 0 &&
+      transportCourierId.length  > 0 &&
+      transportAccountId.length  > 0 &&
+      transportPaidAt.length     > 0
+    )
+
+  const formValid =
+    headerValid && linesValid && adjustmentsValid && paymentValid && transportValid
+
+  // ---- Submit ----
+  async function handleSubmit() {
+    if (!formValid || submitting) return
+    setSubmitting(true)
+
+    // Convert local datetime-local strings to ISO. The browser gives us
+    // "YYYY-MM-DDTHH:mm" (no seconds, no timezone); new Date(...) parses
+    // that as local time, and toISOString() gives us UTC.
+    const orderedAtIso  = new Date(orderedAt).toISOString()
+    const expectedAtIso = expectedAt ? new Date(expectedAt).toISOString() : null
+    const paidAtDopIso  = payInline ? new Date(paidAtDop).toISOString() : null
+    const transportPaidAtIso = payTransportInline
+      ? new Date(transportPaidAt).toISOString()
+      : null
+
+    const res = await createPurchaseOrder({
+      supplierName: supplierName.trim(),
+      warehouseId,
+      orderedAt: orderedAtIso,
+      expectedAt: expectedAtIso,
+      notes: notes.trim() ? notes.trim() : null,
+      lines: lines.map((l) => ({
+        productId: l.productId,
+        qty: Number(l.qty),
+        usdUnitCost: Number(l.usdUnitCost),
+      })),
+      usdShipping: usdShippingN,
+      usdTax: usdTaxN,
+      usdDiscount: usdDiscountN,
+      payment: payInline
+        ? {
+            dopPaidTotal: Number(dopPaidTotal),
+            exchangeRate: Number(exchangeRate),
+            officialRateAtPayment: Number(officialRateAtPayment),
+            supplierPaymentAccountId: supplierPaymentAccount,
+            paidAtDop: paidAtDopIso!,
+          }
+        : undefined,
+      transport: payTransportInline
+        ? {
+            amountDop: Number(transportAmountDop),
+            courierId: transportCourierId,
+            accountId: transportAccountId,
+            paidAt: transportPaidAtIso!,
+            description: transportDescription.trim() || null,
+            reference: transportReference.trim() || null,
+          }
+        : undefined,
+    })
+
+    if (!res.ok) {
+      setSubmitting(false)
+      toast.error(res.error)
+      return
+    }
+
+    toast.success('Purchase order created.')
+    router.push('/purchases/' + res.orderId)
+    // Don't reset submitting; the navigation unmounts this form.
+  }
 
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
@@ -283,7 +416,6 @@ export function NewPurchaseForm({
                 </Select>
               </div>
 
-              {/* Order date */}
               <div className="space-y-1.5">
                 <Label htmlFor="ordered-at">Ordered at</Label>
                 <Input
@@ -294,7 +426,6 @@ export function NewPurchaseForm({
                 />
               </div>
 
-              {/* Expected date (optional) */}
               <div className="space-y-1.5">
                 <Label htmlFor="expected-at">Expected at (optional)</Label>
                 <Input
@@ -319,7 +450,7 @@ export function NewPurchaseForm({
           </CardContent>
         </Card>
 
-        {/* ---- Lines card (14b.3.b) ---- */}
+        {/* ---- Lines card ---- */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0">
             <CardTitle>Line items</CardTitle>
@@ -395,21 +526,255 @@ export function NewPurchaseForm({
           </CardContent>
         </Card>
 
-        {/* ---- Adjustments + options placeholder (14b.3.c) ---- */}
+        {/* ---- Adjustments card (14b.3.c) ---- */}
         <Card>
           <CardHeader>
-            <CardTitle>Adjustments &amp; payments</CardTitle>
+            <CardTitle>Adjustments</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-sm text-muted-foreground">
-              Coming in 14b.3.c - shipping, tax, discount, optional inline supplier payment, optional inline transport.
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="usd-shipping">USD shipping</Label>
+                <Input
+                  id="usd-shipping"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={usdShipping}
+                  onChange={(e) => setUsdShipping(e.target.value)}
+                  placeholder="0.00"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="usd-tax">USD tax</Label>
+                <Input
+                  id="usd-tax"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={usdTax}
+                  onChange={(e) => setUsdTax(e.target.value)}
+                  placeholder="0.00"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="usd-discount">USD discount</Label>
+                <Input
+                  id="usd-discount"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={usdDiscount}
+                  onChange={(e) => setUsdDiscount(e.target.value)}
+                  placeholder="0.00"
+                />
+              </div>
+            </div>
+            <p className="mt-3 text-xs text-muted-foreground">
+              Shipping and tax add to the order total; discount subtracts. All values are in USD.
             </p>
           </CardContent>
+        </Card>
+
+        {/* ---- Optional inline supplier payment (14b.3.c) ---- */}
+        <Card>
+          <CardHeader>
+            <CardTitle>
+              <label className="flex cursor-pointer items-center gap-2">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4"
+                  checked={payInline}
+                  onChange={(e) => setPayInline(e.target.checked)}
+                />
+                Pay supplier now (optional)
+              </label>
+            </CardTitle>
+          </CardHeader>
+          {payInline && (
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label htmlFor="dop-paid-total">DOP paid total</Label>
+                  <Input
+                    id="dop-paid-total"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={dopPaidTotal}
+                    onChange={(e) => setDopPaidTotal(e.target.value)}
+                    placeholder="0.00"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="supplier-payment-account">From account</Label>
+                  <Select
+                    value={supplierPaymentAccount}
+                    onValueChange={setSupplierPaymentAccount}
+                  >
+                    <SelectTrigger id="supplier-payment-account">
+                      <SelectValue placeholder="Pick an account..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {moneyAccounts.map((a) => (
+                        <SelectItem key={a.id} value={a.id}>
+                          {a.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="exchange-rate">Exchange rate (DOP per USD)</Label>
+                  <Input
+                    id="exchange-rate"
+                    type="number"
+                    min="0"
+                    step="0.0001"
+                    value={exchangeRate}
+                    onChange={(e) => setExchangeRate(e.target.value)}
+                    placeholder="0.0000"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    The negotiated rate you paid at.
+                  </p>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="official-rate">Official rate (DOP per USD)</Label>
+                  <Input
+                    id="official-rate"
+                    type="number"
+                    min="0"
+                    step="0.0001"
+                    value={officialRateAtPayment}
+                    onChange={(e) => setOfficialRateAtPayment(e.target.value)}
+                    placeholder="0.0000"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Market reference rate at payment time. Used to book the bank fee.
+                  </p>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="paid-at-dop">Paid at</Label>
+                  <Input
+                    id="paid-at-dop"
+                    type="datetime-local"
+                    value={paidAtDop}
+                    onChange={(e) => setPaidAtDop(e.target.value)}
+                  />
+                </div>
+              </div>
+            </CardContent>
+          )}
+        </Card>
+
+        {/* ---- Optional inline transport (14b.3.c) ---- */}
+        <Card>
+          <CardHeader>
+            <CardTitle>
+              <label className="flex cursor-pointer items-center gap-2">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4"
+                  checked={payTransportInline}
+                  onChange={(e) => setPayTransportInline(e.target.checked)}
+                  disabled={!payInline}
+                />
+                Pay transport now (optional)
+              </label>
+            </CardTitle>
+          </CardHeader>
+          {payTransportInline && (
+            <CardContent className="space-y-4">
+              {!payInline && (
+                <p className="text-sm text-amber-700">
+                  Inline transport requires inline supplier payment. Toggle that on first.
+                </p>
+              )}
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label htmlFor="transport-amount-dop">Transport amount (DOP)</Label>
+                  <Input
+                    id="transport-amount-dop"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={transportAmountDop}
+                    onChange={(e) => setTransportAmountDop(e.target.value)}
+                    placeholder="0.00"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="transport-courier">Courier</Label>
+                  <Select
+                    value={transportCourierId}
+                    onValueChange={setTransportCourierId}
+                  >
+                    <SelectTrigger id="transport-courier">
+                      <SelectValue placeholder="Pick a courier..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {couriers.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="transport-account">From account</Label>
+                  <Select
+                    value={transportAccountId}
+                    onValueChange={setTransportAccountId}
+                  >
+                    <SelectTrigger id="transport-account">
+                      <SelectValue placeholder="Pick an account..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {moneyAccounts.map((a) => (
+                        <SelectItem key={a.id} value={a.id}>
+                          {a.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="transport-paid-at">Paid at</Label>
+                  <Input
+                    id="transport-paid-at"
+                    type="datetime-local"
+                    value={transportPaidAt}
+                    onChange={(e) => setTransportPaidAt(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1.5 md:col-span-2">
+                  <Label htmlFor="transport-description">Description (optional)</Label>
+                  <Input
+                    id="transport-description"
+                    value={transportDescription}
+                    onChange={(e) => setTransportDescription(e.target.value)}
+                    placeholder="e.g. air freight, customs, etc."
+                  />
+                </div>
+                <div className="space-y-1.5 md:col-span-2">
+                  <Label htmlFor="transport-reference">Reference (optional)</Label>
+                  <Input
+                    id="transport-reference"
+                    value={transportReference}
+                    onChange={(e) => setTransportReference(e.target.value)}
+                    placeholder="Tracking number, invoice ref, etc."
+                  />
+                </div>
+              </div>
+            </CardContent>
+          )}
         </Card>
       </div>
 
       {/* ============================================================
-          RIGHT COLUMN - summary + submit
+          RIGHT COLUMN
           ============================================================ */}
       <div className="space-y-4">
         <Card className="sticky top-4">
@@ -424,33 +789,69 @@ export function NewPurchaseForm({
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground">USD subtotal</span>
-                <span className="tabular-nums font-medium">{formatUSD(usdSubtotal)}</span>
+                <span className="tabular-nums">{formatUSD(usdSubtotal)}</span>
               </div>
+              {usdShippingN > 0 && (
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">+ Shipping</span>
+                  <span className="tabular-nums">{formatUSD(usdShippingN)}</span>
+                </div>
+              )}
+              {usdTaxN > 0 && (
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">+ Tax</span>
+                  <span className="tabular-nums">{formatUSD(usdTaxN)}</span>
+                </div>
+              )}
+              {usdDiscountN > 0 && (
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">- Discount</span>
+                  <span className="tabular-nums">{formatUSD(usdDiscountN)}</span>
+                </div>
+              )}
+              <div className="flex items-center justify-between border-t pt-1 font-medium">
+                <span>USD total</span>
+                <span className="tabular-nums">{formatUSD(usdTotal)}</span>
+              </div>
+              {payInline && Number(dopPaidTotal) > 0 && (
+                <div className="flex items-center justify-between pt-1 text-xs">
+                  <span className="text-muted-foreground">DOP paid (supplier)</span>
+                  <span className="tabular-nums">{formatDOP(Number(dopPaidTotal))}</span>
+                </div>
+              )}
+              {payTransportInline && Number(transportAmountDop) > 0 && (
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-muted-foreground">DOP paid (transport)</span>
+                  <span className="tabular-nums">{formatDOP(Number(transportAmountDop))}</span>
+                </div>
+              )}
             </div>
 
             <Button
               type="button"
               className="w-full"
-              disabled={true}
-              title="Disabled in 14b.3.b - submit wiring lands in 14b.3.c"
+              disabled={!formValid || submitting}
+              onClick={() => { void handleSubmit() }}
             >
-              Create order
+              {submitting ? 'Creating...' : 'Create order'}
             </Button>
 
             <p className="text-xs text-muted-foreground">
               {!headerValid
                 ? 'Pick a supplier, warehouse, and date to continue.'
                 : !linesValid
-                ? 'Add at least one line with qty > 0.'
-                : 'Adjustments & submit wiring lands in 14b.3.c.'}
+                ? 'Add at least one line with qty > 0 and unit cost set.'
+                : !paymentValid
+                ? 'Fill in all supplier payment fields.'
+                : !transportValid
+                ? 'Fill in all transport fields (and turn on supplier payment first).'
+                : !formValid
+                ? 'Fix the highlighted fields.'
+                : 'Click Create order to write this purchase to the database.'}
             </p>
           </CardContent>
         </Card>
       </div>
-
-      {/* Keep-alive for props not yet consumed (14b.3.c will use them).
-          eslint-disable-next-line @typescript-eslint/no-unused-vars */}
-      <span hidden>{couriers.length}|{moneyAccounts.length}</span>
     </div>
   )
 }
