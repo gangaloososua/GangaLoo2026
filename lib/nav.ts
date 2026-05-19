@@ -1,9 +1,10 @@
-﻿import {
+import {
   LayoutDashboard,
   ShoppingCart,
   Globe,
   Package,
   PackagePlus,
+  Receipt,
   Boxes,
   Tags,
   Warehouse,
@@ -33,6 +34,7 @@ export const navItems: NavItem[] = [
   { label: 'Categories',     href: '/categories',                icon: Tags,            roles: ALL },
   { label: 'Warehouses',     href: '/warehouses',                icon: Warehouse,       roles: OWNER_ONLY },
   { label: 'Purchases',      href: '/purchases',                 icon: PackagePlus,     roles: OWNER_ONLY },
+  { label: 'Courier Payments', href: '/courier-payments',       icon: Receipt,         roles: OWNER_ONLY },
   { label: 'Money Accounts', href: '/money-accounts',            icon: Wallet,          roles: OWNER_ONLY },
   { label: 'People',         href: '/people',                    icon: UsersRound,      roles: ALL },
   { label: 'Users',          href: '/users',                     icon: UserCog,         roles: OWNER_ONLY },
