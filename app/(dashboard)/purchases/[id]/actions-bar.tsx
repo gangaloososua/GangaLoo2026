@@ -3,7 +3,13 @@
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { CheckCircle2, PackageMinus, Truck, XCircle } from 'lucide-react'
+import {
+  CheckCircle2,
+  PackageMinus,
+  Truck,
+  XCircle,
+  Banknote,
+} from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -32,6 +38,7 @@ import {
   markLost,
   markReceived,
   markCancelled,
+  markPaidSupplier,
 } from '../actions'
 import type {
   PurchaseStatus,
@@ -74,11 +81,12 @@ export function PurchaseActionsBar({
   const router = useRouter()
 
   const [busyAction, setBusyAction] =
-    useState<null | 'complete' | 'lost' | 'received' | 'cancelled'>(null)
+    useState<null | 'complete' | 'lost' | 'received' | 'cancelled' | 'paid'>(null)
   const [completeOpen, setCompleteOpen] = useState(false)
   const [lostOpen, setLostOpen] = useState(false)
   const [receiveOpen, setReceiveOpen] = useState(false)
   const [cancelOpen, setCancelOpen] = useState(false)
+  const [payOpen, setPayOpen] = useState(false)
 
   // ---- Receive dialog state ----
   const initialReceipts = useMemo(() => {
@@ -130,6 +138,22 @@ export function PurchaseActionsBar({
       refundAt.length > 0
     )
 
+  // ---- Pay supplier dialog state ----
+  const [payDopTotal, setPayDopTotal]   = useState<string>('')
+  const [payExchange, setPayExchange]   = useState<string>('')
+  const [payOfficial, setPayOfficial]   = useState<string>('')
+  const [payAccount,  setPayAccount]    = useState<string>('')
+  const [payAt,       setPayAt]         = useState<string>(
+    toLocalDatetimeInputValue(new Date()),
+  )
+
+  const payValid =
+    Number(payDopTotal) > 0 &&
+    Number(payExchange) > 0 &&
+    Number(payOfficial) > 0 &&
+    payAccount.length > 0 &&
+    payAt.length > 0
+
   // ---- Handlers ----
   async function handleMarkComplete() {
     setBusyAction('complete')
@@ -172,12 +196,24 @@ export function PurchaseActionsBar({
       : undefined
     const res = await markCancelled({ orderId, refund })
     if (!res.ok) { toast.error(res.error); setBusyAction(null); return }
-    toast.success(
-      refund
-        ? 'Order cancelled and refund recorded.'
-        : 'Order cancelled.',
-    )
+    toast.success(refund ? 'Order cancelled and refund recorded.' : 'Order cancelled.')
     setCancelOpen(false); setBusyAction(null); router.refresh()
+  }
+
+  async function handleMarkPaidSupplier() {
+    if (!payValid) return
+    setBusyAction('paid')
+    const res = await markPaidSupplier({
+      orderId,
+      dopPaidTotal:          Number(payDopTotal),
+      exchangeRate:          Number(payExchange),
+      officialRateAtPayment: Number(payOfficial),
+      supplierPaymentAccountId: payAccount,
+      paidAtDop: new Date(payAt).toISOString(),
+    })
+    if (!res.ok) { toast.error(res.error); setBusyAction(null); return }
+    toast.success('Supplier marked paid. Cost basis allocated across lines.')
+    setPayOpen(false); setBusyAction(null); router.refresh()
   }
 
   // ---- Visibility ----
@@ -185,11 +221,121 @@ export function PurchaseActionsBar({
   const canComplete = status === 'received'
   const canLost     = status === 'received'
   const canCancel   = status === 'pending' || status === 'paid_supplier'
+  const canPay      = status === 'pending'
 
-  if (!canReceive && !canComplete && !canLost && !canCancel) return null
+  if (!canReceive && !canComplete && !canLost && !canCancel && !canPay) return null
 
   return (
     <div className="flex flex-wrap gap-2">
+      {/* Pay supplier */}
+      {canPay && (
+        <AlertDialog open={payOpen} onOpenChange={setPayOpen}>
+          <AlertDialogTrigger asChild>
+            <Button type="button" variant="default" size="sm">
+              <Banknote className="mr-1.5 h-4 w-4" />
+              Pay supplier
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent className="max-w-2xl">
+            <AlertDialogHeader>
+              <AlertDialogTitle>Record supplier payment</AlertDialogTitle>
+              <AlertDialogDescription asChild>
+                <div className="space-y-2 text-sm">
+                  <div>
+                    Record the DOP you paid the supplier. This will allocate the
+                    payment across the order&apos;s lines and compute the bank fee
+                    (the spread between your negotiated and the official exchange rates).
+                  </div>
+                  <div className="text-muted-foreground">
+                    Status flips to <span className="font-medium">Paid supplier</span>.
+                    From there you can record receipts.
+                  </div>
+                </div>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="pay-dop-total">DOP paid total</Label>
+                <Input
+                  id="pay-dop-total"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={payDopTotal}
+                  onChange={(e) => setPayDopTotal(e.target.value)}
+                  placeholder="0.00"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="pay-account">From account</Label>
+                <Select value={payAccount} onValueChange={setPayAccount}>
+                  <SelectTrigger id="pay-account">
+                    <SelectValue placeholder="Pick an account..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {moneyAccounts.map((a) => (
+                      <SelectItem key={a.id} value={a.id}>
+                        {a.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="pay-exchange">Exchange rate (DOP per USD)</Label>
+                <Input
+                  id="pay-exchange"
+                  type="number"
+                  min="0"
+                  step="0.0001"
+                  value={payExchange}
+                  onChange={(e) => setPayExchange(e.target.value)}
+                  placeholder="0.0000"
+                />
+                <p className="text-xs text-muted-foreground">
+                  The negotiated rate you paid at.
+                </p>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="pay-official">Official rate (DOP per USD)</Label>
+                <Input
+                  id="pay-official"
+                  type="number"
+                  min="0"
+                  step="0.0001"
+                  value={payOfficial}
+                  onChange={(e) => setPayOfficial(e.target.value)}
+                  placeholder="0.0000"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Market reference at payment time. Used to book the bank fee.
+                </p>
+              </div>
+              <div className="space-y-1.5 md:col-span-2">
+                <Label htmlFor="pay-at">Paid at</Label>
+                <Input
+                  id="pay-at"
+                  type="datetime-local"
+                  value={payAt}
+                  onChange={(e) => setPayAt(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={busyAction === 'paid'}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                disabled={!payValid || busyAction === 'paid'}
+                onClick={(e) => { e.preventDefault(); void handleMarkPaidSupplier() }}
+              >
+                {busyAction === 'paid' ? 'Recording...' : 'Record payment'}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
+
       {/* Mark received */}
       {canReceive && (
         <AlertDialog open={receiveOpen} onOpenChange={setReceiveOpen}>
