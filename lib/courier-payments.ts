@@ -353,3 +353,69 @@ export async function getCourierPaymentFilterOptions(): Promise<CourierPaymentFi
     })),
   }
 }
+
+
+// ============================================================
+// listPurchaseOrdersForPicker
+//
+// Used by the new-courier-payment form to populate the PO picker
+// on each allocation row. Returns enough info to build a
+// disambiguating label (date + supplier + USD total).
+// ============================================================
+
+export type PurchaseOrderPickerItem = {
+  id: string
+  legacyId: string | null
+  orderedAt: string | null
+  supplierId: string | null
+  supplierName: string | null
+  usdTotal: number
+}
+
+export async function listPurchaseOrdersForPicker(): Promise<PurchaseOrderPickerItem[]> {
+  const supabase = await createClient()
+
+  const { data: pos, error: poErr } = await supabase
+    .from('purchase_orders')
+    .select('id, legacy_id, ordered_at, supplier_id, usd_total')
+    .order('ordered_at', { ascending: false })
+    .limit(500)
+  if (poErr) throw poErr
+
+  type RawPo = {
+    id: string
+    legacy_id: string | null
+    ordered_at: string | null
+    supplier_id: string | null
+    usd_total: number | string | null
+  }
+  const raw = (pos ?? []) as RawPo[]
+
+  const supplierIds = Array.from(
+    new Set(
+      raw.map((p) => p.supplier_id).filter((x): x is string => !!x),
+    ),
+  )
+  const supplierNameById = new Map<string, string>()
+  if (supplierIds.length > 0) {
+    const { data: ss, error: sErr } = await supabase
+      .from('suppliers')
+      .select('id, name')
+      .in('id', supplierIds)
+    if (sErr) throw sErr
+    for (const s of (ss ?? []) as Array<{ id: string; name: string }>) {
+      supplierNameById.set(s.id, s.name)
+    }
+  }
+
+  return raw.map((p) => ({
+    id: p.id,
+    legacyId: p.legacy_id,
+    orderedAt: p.ordered_at,
+    supplierId: p.supplier_id,
+    supplierName: p.supplier_id
+      ? supplierNameById.get(p.supplier_id) ?? null
+      : null,
+    usdTotal: toNumber(p.usd_total),
+  }))
+}
