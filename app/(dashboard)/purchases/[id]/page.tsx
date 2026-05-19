@@ -1,4 +1,4 @@
-﻿import Link from 'next/link'
+import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { ChevronLeft, AlertTriangle, Check, Minus } from 'lucide-react'
 
@@ -29,6 +29,7 @@ import {
 } from '@/lib/purchases-types'
 
 import { PurchaseDetailLineRow } from './detail-line-row'
+import { PurchaseActionsBar } from './actions-bar'
 
 export const dynamic = 'force-dynamic'
 
@@ -219,7 +220,10 @@ export default async function PurchaseDetailPage({
             <span className="tabular-nums">{formatDate(order.ordered_at)}</span>
           </p>
         </div>
-        <StatusBadge status={stored} />
+        <div className="flex flex-col items-end gap-2">
+          <StatusBadge status={stored} />
+          <PurchaseActionsBar orderId={order.id} status={stored} items={items} lotTrail={lotTrail} />
+        </div>
       </div>
 
       {/* Order overview */}
