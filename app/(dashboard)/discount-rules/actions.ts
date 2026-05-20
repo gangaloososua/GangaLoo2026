@@ -174,7 +174,7 @@ export type SetRuleActiveInput = {
   isActive: boolean
 }
 
-export type SetRuleActiveResult = Ok<Record<string, never>> | Err
+export type SetRuleActiveResult = Ok<object> | Err
 
 export async function setRuleActive(
   input: SetRuleActiveInput,
@@ -192,7 +192,7 @@ export async function setRuleActive(
   if (error) return { ok: false, error: error.message }
 
   revalidatePath('/discount-rules')
-  return { ok: true }
+  return { ok: true } as const
 }
 
 // ----------------------------------------------------------------------
@@ -204,7 +204,7 @@ export async function setRuleActive(
 // ----------------------------------------------------------------------
 
 export type DeleteRuleInput = { ruleId: string }
-export type DeleteRuleResult = Ok<Record<string, never>> | Err
+export type DeleteRuleResult = Ok<object> | Err
 
 export async function deleteRule(
   input: DeleteRuleInput,
@@ -236,5 +236,5 @@ export async function deleteRule(
   }
 
   revalidatePath('/discount-rules')
-  return { ok: true }
+  return { ok: true } as const
 }

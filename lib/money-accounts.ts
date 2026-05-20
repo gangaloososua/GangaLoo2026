@@ -1,4 +1,4 @@
-﻿import { createClient } from '@/lib/supabase/server'
+import { createClient } from '@/lib/supabase/server'
 import type { Currency } from './exchange-rates-types'
 
 export type MoneyAccountKind = 'bank' | 'card' | 'cash' | 'credit_line' | 'digital'
@@ -75,7 +75,7 @@ export async function listAccounts(
   const { data, error } = await q
   if (error) throw error
 
-  return (data ?? []).map((r) => ({
+  return ((data ?? []) as unknown as MoneyAccount[]).map((r) => ({
     ...r,
     balance_cents: Number(r.balance_cents),
     initial_balance_cents: Number(r.initial_balance_cents),
@@ -100,10 +100,11 @@ export async function getAccount(id: string): Promise<MoneyAccount | null> {
     .maybeSingle()
   if (error) throw error
   if (!data) return null
+  const row = data as unknown as MoneyAccount
   return {
-    ...data,
-    balance_cents: Number(data.balance_cents),
-    initial_balance_cents: Number(data.initial_balance_cents),
+    ...row,
+    balance_cents: Number(row.balance_cents),
+    initial_balance_cents: Number(row.initial_balance_cents),
   } as MoneyAccount
 }
 

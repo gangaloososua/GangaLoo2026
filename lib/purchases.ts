@@ -224,7 +224,7 @@ export async function listPurchaseOrders(
   if (opts.mismatchOnly) {
     const { data, error } = await q
     if (error) throw error
-    const raw = (data ?? []) as RawPurchaseOrder[]
+    const raw = (data ?? []) as unknown as RawPurchaseOrder[]
     const filtered = raw.filter((r) => statusMismatch(r))
     const total = filtered.length
     const sliceStart = (page - 1) * pageSize
@@ -237,7 +237,7 @@ export async function listPurchaseOrders(
   const toIdx = fromIdx + pageSize - 1
   const { data, error, count } = await q.range(fromIdx, toIdx)
   if (error) throw error
-  const raw = (data ?? []) as RawPurchaseOrder[]
+  const raw = (data ?? []) as unknown as RawPurchaseOrder[]
   const rows = await attachNames(supabase, raw)
   return { rows, total: count ?? rows.length, page, pageSize }
 }

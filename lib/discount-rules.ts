@@ -119,7 +119,7 @@ export async function listDiscountRules(
 
   const { data, error } = await q
   if (error) throw error
-  const raw = (data ?? []) as RawRule[]
+  const raw = (data ?? []) as unknown as RawRule[]
 
   // Batch resolve names for all scope fields
   const productIds = new Set<string>()

@@ -172,7 +172,7 @@ export type MarkDispatchedInput = {
   saleId: string
   trackingNumber: string | null
 }
-export type MarkDispatchedResult = Ok<Record<string, never>> | Err
+export type MarkDispatchedResult = Ok<object> | Err
 
 export async function markOnlineOrderDispatched(
   input: MarkDispatchedInput,
@@ -191,14 +191,14 @@ export async function markOnlineOrderDispatched(
 
   revalidatePath('/online-orders')
   revalidatePath(`/online-orders/${input.saleId}`)
-  return { ok: true }
+  return { ok: true } as const
 }
 
 // ----------------------------------------------------------------------
 // markOnlineOrderDelivered
 // ----------------------------------------------------------------------
 export type MarkDeliveredInput = { saleId: string }
-export type MarkDeliveredResult = Ok<Record<string, never>> | Err
+export type MarkDeliveredResult = Ok<object> | Err
 
 export async function markOnlineOrderDelivered(
   input: MarkDeliveredInput,
@@ -216,7 +216,7 @@ export async function markOnlineOrderDelivered(
 
   revalidatePath('/online-orders')
   revalidatePath(`/online-orders/${input.saleId}`)
-  return { ok: true }
+  return { ok: true } as const
 }
 
 // ----------------------------------------------------------------------
@@ -226,7 +226,7 @@ export type CancelOnlineOrderInput = {
   saleId: string
   reason: string
 }
-export type CancelOnlineOrderResult = Ok<Record<string, never>> | Err
+export type CancelOnlineOrderResult = Ok<object> | Err
 
 export async function cancelOnlineOrder(
   input: CancelOnlineOrderInput,
@@ -248,5 +248,5 @@ export async function cancelOnlineOrder(
 
   revalidatePath('/online-orders')
   revalidatePath(`/online-orders/${input.saleId}`)
-  return { ok: true }
+  return { ok: true } as const
 }

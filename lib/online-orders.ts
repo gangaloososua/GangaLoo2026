@@ -337,7 +337,7 @@ export async function listOnlineOrders(
   const { data, error, count } = await q
   if (error) throw error
 
-  const raw = (data ?? []) as RawSaleListRow[]
+  const raw = (data ?? []) as unknown as RawSaleListRow[]
   const saleIds = raw.map((r) => r.id)
   const customerIds = Array.from(
     new Set(raw.map((r) => r.customer_id).filter((x): x is string => !!x)),
@@ -479,7 +479,7 @@ export async function getOnlineOrderById(
   if (error) throw error
   if (!data) return null
 
-  const sale = data as RawSaleDetailRow
+  const sale = data as unknown as RawSaleDetailRow
 
   // Customer (full profile)
   let customerName: string | null = null
@@ -544,7 +544,7 @@ export async function getOnlineOrderById(
     .eq('sale_id', id)
     .order('created_at', { ascending: true })
   if (iErr) throw iErr
-  const itemsRow = (itemsRaw ?? []) as RawSaleItem[]
+  const itemsRow = (itemsRaw ?? []) as unknown as RawSaleItem[]
   const itemIds = itemsRow.map((it) => it.id)
   const productIds = Array.from(new Set(itemsRow.map((it) => it.product_id)))
 
@@ -594,7 +594,7 @@ export async function getOnlineOrderById(
     .eq('sale_id', id)
     .order('paid_at', { ascending: true })
   if (payErr) throw payErr
-  const paysRow = (paysRaw ?? []) as RawSalePayment[]
+  const paysRow = (paysRaw ?? []) as unknown as RawSalePayment[]
   const accountIds = Array.from(new Set(paysRow.map((p) => p.money_account_id)))
   const accountNameById = new Map<string, string>()
   if (accountIds.length > 0) {
@@ -684,7 +684,7 @@ export async function getOnlineOrderById(
       .in('sale_item_id', itemIds)
       .order('created_at', { ascending: true })
     if (cmErr) throw cmErr
-    const csRow = (csRaw ?? []) as RawCommission[]
+    const csRow = (csRaw ?? []) as unknown as RawCommission[]
     const earnerIds = Array.from(new Set(csRow.map((c) => c.earner_id)))
     const earnerNameById = new Map<string, string>()
     if (earnerIds.length > 0) {

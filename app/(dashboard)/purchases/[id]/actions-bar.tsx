@@ -44,7 +44,7 @@ import {
 import type {
   PurchaseStatus,
   PurchaseOrderItemRow,
-  LotRow,
+  LotTrailEntry,
 } from '@/lib/purchases-types'
 import type { MoneyAccount } from '@/lib/sales'
 
@@ -52,13 +52,13 @@ type Props = {
   orderId: string
   status: PurchaseStatus
   items: PurchaseOrderItemRow[]
-  lotTrail: Map<string, LotRow[]>
+  lotTrail: Map<string, LotTrailEntry[]>
   moneyAccounts: MoneyAccount[]
 }
 
-function alreadyReceivedQty(lineId: string, lotTrail: Map<string, LotRow[]>): number {
+function alreadyReceivedQty(lineId: string, lotTrail: Map<string, LotTrailEntry[]>): number {
   const lots = lotTrail.get(lineId) ?? []
-  return lots.reduce((sum, l) => sum + (l.qty_received ?? 0), 0)
+  return lots.reduce((sum, l) => sum + (l.lot.qty_received ?? 0), 0)
 }
 
 function toLocalDatetimeInputValue(d: Date): string {

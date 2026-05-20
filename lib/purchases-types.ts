@@ -22,12 +22,16 @@ export type PurchaseStatus =
   | 'paid_supplier'
   | 'received'
   | 'complete'
+  | 'cancelled'
+  | 'lost'
 
 export const PURCHASE_STATUSES: readonly PurchaseStatus[] = [
   'pending',
   'paid_supplier',
   'received',
   'complete',
+  'cancelled',
+  'lost',
 ] as const
 
 // ---- row shapes --------------------------------------------

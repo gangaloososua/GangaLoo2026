@@ -1,4 +1,4 @@
-﻿import { notFound } from 'next/navigation'
+import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { ProductForm } from '../_form/product-form'
 import {
@@ -39,7 +39,7 @@ export default async function EditProductPage({
     .maybeSingle()
   if (error || !product) notFound()
 
-  const productTyped = product as {
+  const productTyped = product as unknown as {
     id: string
     sku: string
     name: string

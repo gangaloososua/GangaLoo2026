@@ -44,7 +44,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import type { CourierPickerItem } from '@/lib/purchases'
-import type { MoneyAccount } from '@/lib/money-accounts'
+import type { MoneyAccount } from '@/lib/sales'
 import type { PurchaseOrderPickerItem } from '@/lib/courier-payments'
 import {
   createCourierPayment,
