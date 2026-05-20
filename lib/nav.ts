@@ -28,7 +28,7 @@ const OWNER_ONLY: Role[] = ['owner', 'admin']
 export const navItems: NavItem[] = [
   { label: 'Dashboard',      href: '/',                          icon: LayoutDashboard, roles: ALL },
   { label: 'Sales',          href: '/sales',                     icon: ShoppingCart,    roles: ALL },
-  { label: 'Online Orders',  href: '/orders',                    icon: Globe,           roles: OWNER_ONLY },
+  { label: 'Online Orders',  href: '/online-orders',             icon: Globe,           roles: OWNER_ONLY },
   { label: 'Products',       href: '/products',                  icon: Package,         roles: ALL },
   { label: 'Inventory',      href: '/inventory',                 icon: Boxes,           roles: ALL },
   { label: 'Categories',     href: '/categories',                icon: Tags,            roles: ALL },
