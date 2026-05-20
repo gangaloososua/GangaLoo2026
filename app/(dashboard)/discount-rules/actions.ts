@@ -166,6 +166,98 @@ export async function createClubTierRule(
 }
 
 // ----------------------------------------------------------------------
+// createBulkRule  (Round 19)
+// ----------------------------------------------------------------------
+export type CreateBulkRuleInput = {
+  name: string
+  scopeKind: 'product' | 'category'
+  scopeProductId: string | null
+  scopeCategoryId: string | null
+  thresholdQty: number
+  deltaPercent: number
+  startsAt: string | null // ISO datetime
+  endsAt: string | null // ISO datetime
+  priority: number
+}
+export type CreateBulkRuleResult = Ok<{ ruleId: string }> | Err
+
+export async function createBulkRule(
+  input: CreateBulkRuleInput,
+): Promise<CreateBulkRuleResult> {
+  const caller = await requireRole(['owner', 'admin'] as const)
+  const name = input.name.trim()
+  if (!name) return { ok: false, error: 'Rule name is required' }
+
+  // Exactly one scope: product XOR category.
+  if (input.scopeKind === 'product') {
+    if (!input.scopeProductId) return { ok: false, error: 'Pick a product' }
+  } else if (input.scopeKind === 'category') {
+    if (!input.scopeCategoryId) return { ok: false, error: 'Pick a category' }
+  } else {
+    return { ok: false, error: 'Pick a product or a category' }
+  }
+
+  if (
+    !Number.isFinite(input.thresholdQty) ||
+    input.thresholdQty < 1 ||
+    !Number.isInteger(input.thresholdQty)
+  ) {
+    return {
+      ok: false,
+      error: 'Minimum quantity must be a whole number of 1 or more',
+    }
+  }
+  if (
+    !Number.isFinite(input.deltaPercent) ||
+    input.deltaPercent <= 0 ||
+    input.deltaPercent >= 100
+  ) {
+    return {
+      ok: false,
+      error: 'Discount percent must be greater than 0 and less than 100',
+    }
+  }
+  if (
+    input.startsAt &&
+    input.endsAt &&
+    new Date(input.startsAt) > new Date(input.endsAt)
+  ) {
+    return { ok: false, error: 'Start date must be on or before end date' }
+  }
+  if (
+    !Number.isFinite(input.priority) ||
+    input.priority < 0 ||
+    !Number.isInteger(input.priority)
+  ) {
+    return { ok: false, error: 'Priority must be a non-negative integer' }
+  }
+
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('discount_rules')
+    .insert({
+      kind: 'bulk',
+      name,
+      is_active: true,
+      starts_at: input.startsAt,
+      ends_at: input.endsAt,
+      scope_product_id:
+        input.scopeKind === 'product' ? input.scopeProductId : null,
+      scope_category_id:
+        input.scopeKind === 'category' ? input.scopeCategoryId : null,
+      threshold_qty: input.thresholdQty,
+      delta_percent: input.deltaPercent,
+      priority: input.priority,
+      created_by: caller.id,
+    })
+    .select('id')
+    .single()
+  if (error) return { ok: false, error: error.message }
+  revalidatePath('/discount-rules')
+  return { ok: true, ruleId: (data as { id: string }).id }
+}
+
+// ----------------------------------------------------------------------
 // setRuleActive
 // ----------------------------------------------------------------------
 

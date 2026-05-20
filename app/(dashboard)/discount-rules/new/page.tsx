@@ -26,6 +26,12 @@ const RULE_KINDS: Array<{
     blurb:
       'A discount that applies to every customer at a chosen loyalty tier.',
   },
+  {
+    href: '/discount-rules/new/bulk',
+    title: 'Bulk / quantity discount',
+    blurb:
+      'A discount that kicks in when a customer buys at or above a set quantity of a product or category.',
+  },
 ]
 
 export default async function NewDiscountRulePage() {

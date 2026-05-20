@@ -12,7 +12,8 @@
 // changes the cap or stacking, change here too. Spec §5 is the
 // shared design contract.
 //
-// Currently supports: customer_override (Round 16), club_tier (Round 17).
+// Currently supports: customer_override (Round 16), club_tier (Round 17),
+// bulk (Round 19).
 
 import type { DiscountRuleRow, DiscountRuleKind } from '@/lib/discount-rules'
 
@@ -24,7 +25,7 @@ const CAP_FACTOR = 0.70 // 30% off max → 70% retained
 const KIND_SORT_KEY: Record<DiscountRuleKind, number> = {
   club_tier: 0,
   customer_override: 1,
-  bulk: 2,                // reserved for Round 18
+  bulk: 2,                // Round 19
   promotion: 3,           // reserved for Round 19
   logistics_surcharge: 4, // reserved for Round 20
 }
@@ -39,6 +40,9 @@ export type AppliedDiscount = {
 
 export type ResolveLineDiscountInput = {
   productId: string
+  // Round 19: the line product's category, for bulk/category scope
+  // matching. Pass null if the product has no category.
+  categoryId: string | null
   qty: number
   unitPriceCents: number
   customerId: string | null
@@ -92,6 +96,15 @@ export function resolveLineDiscount(
         return (
           effectiveTier !== null && r.scopeClubTier === effectiveTier
         )
+      }
+      if (r.kind === 'bulk') {
+        if (r.thresholdQty == null || input.qty < r.thresholdQty) return false
+        const productMatch = r.scopeProductId === input.productId
+        const categoryMatch =
+          r.scopeCategoryId !== null &&
+          input.categoryId !== null &&
+          r.scopeCategoryId === input.categoryId
+        return productMatch || categoryMatch
       }
       // Other kinds: not yet supported here. The SQL function will
       // produce the canonical audit at confirm time.

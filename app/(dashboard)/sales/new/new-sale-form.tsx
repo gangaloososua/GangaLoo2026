@@ -91,6 +91,7 @@ const PAYMENT_METHOD_OPTIONS: Array<{
 type CartLine = {
   line_id: string
   product_id: string
+  primary_category_id: string | null
   sku: string
   name: string
   primary_image_url: string | null
@@ -211,6 +212,7 @@ export function NewSaleForm({
     // Round 16.4: resolve auto-discounts at add time
     const result = resolveLineDiscount({
       productId: p.id,
+      categoryId: p.primary_category_id,
       qty: 1,
       unitPriceCents: unit_price_cents,
       customerId: resolverCustomerId,
@@ -224,6 +226,7 @@ export function NewSaleForm({
       {
         line_id: makeId(),
         product_id: p.id,
+        primary_category_id: p.primary_category_id,
         sku: p.sku,
         name: p.name,
         primary_image_url: p.primary_image_url,
@@ -265,6 +268,7 @@ export function NewSaleForm({
         if (!merged.is_manual_discount) {
           const result = resolveLineDiscount({
             productId: merged.product_id,
+            categoryId: merged.primary_category_id,
             qty: merged.qty,
             unitPriceCents: merged.unit_price_cents,
             customerId: resolverCustomerId,
@@ -294,6 +298,7 @@ export function NewSaleForm({
         if (l.is_manual_discount) return l
         const result = resolveLineDiscount({
           productId: l.product_id,
+          categoryId: l.primary_category_id,
           qty: l.qty,
           unitPriceCents: l.unit_price_cents,
           customerId: resolverCustomerId,
