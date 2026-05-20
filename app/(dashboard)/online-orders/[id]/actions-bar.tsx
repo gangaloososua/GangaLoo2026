@@ -19,6 +19,7 @@
 
 import * as React from 'react'
 import { useTransition } from 'react'
+import { toast } from 'sonner'
 import {
   markOnlineOrderDispatched,
   markOnlineOrderDelivered,
@@ -79,7 +80,9 @@ export function OnlineOrderActionsBar({
       })
       if (!result.ok) {
         setError(result.error)
+        toast.error(result.error)
       } else {
+        toast.success('Order marked dispatched.')
         setOpenAction(null)
         setTrackingNumber('')
       }
@@ -90,7 +93,12 @@ export function OnlineOrderActionsBar({
     setError(null)
     startTransition(async () => {
       const result = await markOnlineOrderDelivered({ saleId })
-      if (!result.ok) setError(result.error)
+      if (!result.ok) {
+        setError(result.error)
+        toast.error(result.error)
+      } else {
+        toast.success('Order marked delivered.')
+      }
     })
   }
 
@@ -107,7 +115,9 @@ export function OnlineOrderActionsBar({
       })
       if (!result.ok) {
         setError(result.error)
+        toast.error(result.error)
       } else {
+        toast.success('Order cancelled.')
         setOpenAction(null)
         setCancelReason('')
       }
