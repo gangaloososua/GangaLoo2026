@@ -289,3 +289,28 @@ and introduce `mark_received_online` for the false branch.
 
 (Added as columns are verified during implementation. Populate as we go,
 same convention as Round 14c spec.)
+
+### 15.4 corrections (data layer)
+
+Verified during `lib/online-orders.ts` implementation (commit b404e9d).
+
+- **`sale_commissions.percent`** — column is `percent`, not
+  `commission_percent`. Spec section 9.1 used the longer name.
+- **`sale_commissions` is polymorphic** — single table with
+  `earner_id uuid` + `earner_role` (USER-DEFINED enum, values
+  include `seller` and `distributor`). No separate seller /
+  distributor columns or sibling tables. Amount in `amount_cents`.
+- **`sale_lot_consumption.unit_cost_dop`** — numeric DOP value,
+  NOT cents. The detail-page renderer (15.6) must render this
+  as a DOP amount directly; do not divide by 100.
+- **`sales.source_warehouse_id`** — NULLABLE. Spec 9.1 implied
+  required by listing it as a param to `create_online_order`.
+  Display layer treats it as optional; `fulfillment_warehouse_id`
+  is the trusted NOT-NULL column for warehouse identity.
+- **No `customers` table** — customers live in `public.profiles`
+  with `role='customer'`. `sales.customer_id` references
+  `profiles.id`. Use `profiles.full_name` (not `name`) for
+  display; `profiles.email` and `profiles.phone` for contact
+  info on the detail panel.
+- **`sales.delivery_notes`** — the order-level notes column.
+  No generic `notes` column on sales.
