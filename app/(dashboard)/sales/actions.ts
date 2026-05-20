@@ -1,4 +1,4 @@
-﻿'use server'
+'use server'
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
@@ -394,11 +394,23 @@ export type ConfirmPosPayment = {
   paid_at?: string | null // ISO; omit for now()
 }
 
+export type ConfirmPosDiscountApplication = {
+  rule_id: string
+  rule_kind: string
+  percent: number | null
+  amount_cents: number
+  cap_hit: boolean
+}
+
 export type ConfirmPosItem = {
   product_id: string
   qty: number
   unit_price_cents: number
   discount_cents: number
+  // 16.6: per-rule discount breakdown (auto-discount audit).
+  // Optional — when omitted, the RPC treats a non-zero discount_cents
+  // as a manual override (is_manual=true audit row).
+  discount_breakdown?: ConfirmPosDiscountApplication[]
 }
 
 export type ConfirmPosInput = {

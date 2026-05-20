@@ -455,6 +455,15 @@ export function NewOnlineOrderForm({
           qty: l.qty,
           unitPriceCents: l.unit_price_cents,
           discountCents: l.line_discount_cents,
+          // 16.6: send the resolver's breakdown so the RPC writes
+          // per-rule audit rows. Manual lines have empty breakdown.
+          discountBreakdown: l.discount_breakdown.map((b) => ({
+            rule_id: b.ruleId,
+            rule_kind: b.ruleKind,
+            percent: b.percent,
+            amount_cents: b.amountCents,
+            cap_hit: b.capHit,
+          })),
         })),
         payments: payments.map((p) => ({
           method: p.method,

@@ -27,11 +27,22 @@ type Err = { ok: false; error: string }
 // ----------------------------------------------------------------------
 // createOnlineOrder
 // ----------------------------------------------------------------------
+export type CreateOnlineOrderDiscountApplication = {
+  rule_id: string
+  rule_kind: string
+  percent: number | null
+  amount_cents: number
+  cap_hit: boolean
+}
+
 export type CreateOnlineOrderItemInput = {
   productId: string
   qty: number
   unitPriceCents: number
   discountCents: number
+  // 16.6: per-rule discount breakdown for audit persistence.
+  // Optional - omitted/empty means RPC treats discount_cents as manual.
+  discountBreakdown?: CreateOnlineOrderDiscountApplication[]
 }
 
 export type CreateOnlineOrderPaymentInput = {
@@ -119,6 +130,7 @@ export async function createOnlineOrder(
         qty: i.qty,
         unit_price_cents: i.unitPriceCents,
         discount_cents: i.discountCents,
+        discount_breakdown: i.discountBreakdown,
       })),
       payments: input.payments.map((p) => ({
         method: p.method,

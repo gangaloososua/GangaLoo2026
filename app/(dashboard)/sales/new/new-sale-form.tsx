@@ -403,6 +403,15 @@ export function NewSaleForm({
           qty: l.qty,
           unit_price_cents: l.unit_price_cents,
           discount_cents: l.line_discount_cents,
+          // 16.6: send the resolver's breakdown so the RPC writes
+          // per-rule audit rows. Manual lines have empty breakdown.
+          discount_breakdown: l.discount_breakdown.map((b) => ({
+            rule_id: b.ruleId,
+            rule_kind: b.ruleKind,
+            percent: b.percent,
+            amount_cents: b.amountCents,
+            cap_hit: b.capHit,
+          })),
         })),
         payments: payments.map((p) => ({
           method: p.method,
