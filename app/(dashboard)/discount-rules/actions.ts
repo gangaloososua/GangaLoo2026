@@ -91,6 +91,81 @@ export async function createCustomerOverrideRule(
 }
 
 // ----------------------------------------------------------------------
+// createClubTierRule  (Round 17)
+// ----------------------------------------------------------------------
+
+export type CreateClubTierRuleInput = {
+  name: string
+  clubTier: string // bronze | silver | gold | platinum (never 'none')
+  deltaPercent: number
+  startsAt: string | null // ISO datetime
+  endsAt: string | null // ISO datetime
+  priority: number
+}
+
+export type CreateClubTierRuleResult = Ok<{ ruleId: string }> | Err
+
+const ALLOWED_TIERS = ['bronze', 'silver', 'gold', 'platinum']
+
+export async function createClubTierRule(
+  input: CreateClubTierRuleInput,
+): Promise<CreateClubTierRuleResult> {
+  const caller = await requireRole(['owner', 'admin'] as const)
+
+  const name = input.name.trim()
+  if (!name) return { ok: false, error: 'Rule name is required' }
+  if (!ALLOWED_TIERS.includes(input.clubTier)) {
+    return { ok: false, error: 'Pick a valid club tier' }
+  }
+  if (
+    !Number.isFinite(input.deltaPercent) ||
+    input.deltaPercent <= 0 ||
+    input.deltaPercent >= 100
+  ) {
+    return {
+      ok: false,
+      error: 'Discount percent must be greater than 0 and less than 100',
+    }
+  }
+  if (
+    input.startsAt &&
+    input.endsAt &&
+    new Date(input.startsAt) > new Date(input.endsAt)
+  ) {
+    return { ok: false, error: 'Start date must be on or before end date' }
+  }
+  if (
+    !Number.isFinite(input.priority) ||
+    input.priority < 0 ||
+    !Number.isInteger(input.priority)
+  ) {
+    return { ok: false, error: 'Priority must be a non-negative integer' }
+  }
+
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('discount_rules')
+    .insert({
+      kind: 'club_tier',
+      name,
+      is_active: true,
+      starts_at: input.startsAt,
+      ends_at: input.endsAt,
+      scope_club_tier: input.clubTier,
+      delta_percent: input.deltaPercent,
+      priority: input.priority,
+      created_by: caller.id,
+    })
+    .select('id')
+    .single()
+
+  if (error) return { ok: false, error: error.message }
+
+  revalidatePath('/discount-rules')
+  return { ok: true, ruleId: (data as { id: string }).id }
+}
+
+// ----------------------------------------------------------------------
 // setRuleActive
 // ----------------------------------------------------------------------
 

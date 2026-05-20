@@ -1,16 +1,35 @@
 // Round 16.3 — Discount rules > New (server)
-
+// Round 17    — converted to a rule-kind picker
 import Link from 'next/link'
-import { ChevronLeft } from 'lucide-react'
+import { ChevronLeft, Receipt } from 'lucide-react'
 import { requireRole } from '@/lib/auth/guard'
-import { listCustomersForPicker } from '@/lib/sales'
-import { NewCustomerOverrideRuleForm } from './new-customer-override-form'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 
 export const dynamic = 'force-dynamic'
 
+// Rule kinds the builder UI supports. Rounds 18-21 add bulk,
+// promotion, and logistics_surcharge entries here.
+const RULE_KINDS: Array<{
+  href: string
+  title: string
+  blurb: string
+}> = [
+  {
+    href: '/discount-rules/new/customer-override',
+    title: 'Customer-specific override',
+    blurb:
+      'A discount tied to one named customer (e.g. a wholesale account).',
+  },
+  {
+    href: '/discount-rules/new/club-tier',
+    title: 'Club tier discount',
+    blurb:
+      'A discount that applies to every customer at a chosen loyalty tier.',
+  },
+]
+
 export default async function NewDiscountRulePage() {
   await requireRole(['owner', 'admin'] as const)
-  const customers = await listCustomersForPicker()
 
   return (
     <div className="space-y-4">
@@ -28,12 +47,28 @@ export default async function NewDiscountRulePage() {
           New discount rule
         </h1>
         <p className="text-sm text-muted-foreground">
-          v1 supports customer-specific overrides only. Other rule kinds
-          (club tier, bulk, promotion, logistics surcharge) come in
-          Rounds 17–20.
+          Pick the kind of rule to create. More kinds (bulk, promotion,
+          logistics surcharge) arrive in later rounds.
         </p>
       </div>
-      <NewCustomerOverrideRuleForm customers={customers} />
+
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        {RULE_KINDS.map((k) => (
+          <Link key={k.href} href={k.href} className="block">
+            <Card className="h-full transition hover:border-foreground hover:bg-muted/30">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Receipt className="h-4 w-4" />
+                  {k.title}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground">{k.blurb}</p>
+              </CardContent>
+            </Card>
+          </Link>
+        ))}
+      </div>
     </div>
   )
 }
