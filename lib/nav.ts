@@ -36,6 +36,7 @@ export const navItems: NavItem[] = [
   { label: 'Purchases',      href: '/purchases',                 icon: PackagePlus,     roles: OWNER_ONLY },
   { label: 'Courier Payments', href: '/courier-payments',       icon: Receipt,         roles: OWNER_ONLY },
   { label: 'Money Accounts', href: '/money-accounts',            icon: Wallet,          roles: OWNER_ONLY },
+  { label: 'Discount Rules', href: '/discount-rules',            icon: Receipt,         roles: OWNER_ONLY },
   { label: 'People',         href: '/people',                    icon: UsersRound,      roles: ALL },
   { label: 'Users',          href: '/users',                     icon: UserCog,         roles: OWNER_ONLY },
   { label: 'Customers',      href: '/people?role=customer',      icon: Users,           roles: ALL },
