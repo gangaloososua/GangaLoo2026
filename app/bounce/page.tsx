@@ -1,4 +1,4 @@
-﻿import { redirect } from 'next/navigation'
+import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { Button } from '@/components/ui/button'
 
@@ -28,6 +28,7 @@ export default function BouncePage() {
             Gangaloo store:
           </p>
           
+            <a
             href="https://gangaloo.club"
             className="block text-base font-medium text-primary underline underline-offset-4"
           >
