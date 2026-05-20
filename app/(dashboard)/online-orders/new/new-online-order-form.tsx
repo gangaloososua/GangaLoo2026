@@ -208,6 +208,11 @@ export function NewOnlineOrderForm({
 
   // Round 16.5: customer id usable by the resolver (NULL for no-customer).
   const resolverCustomerId = customerId === NO_CUSTOMER ? null : customerId
+  // Round 17: customer's club_tier for tier-based discount rules.
+  const resolverClubTier =
+    customerId === NO_CUSTOMER
+      ? null
+      : customers.find((c) => c.id === customerId)?.club_tier ?? null
 
   function onSourceWarehouseChange(id: string) {
     setSourceWarehouseId(id)
@@ -245,6 +250,7 @@ export function NewOnlineOrderForm({
       qty: 1,
       unitPriceCents: unit_price_cents,
       customerId: resolverCustomerId,
+      customerClubTier: resolverClubTier,
       sourceWarehouseId: sourceWarehouseId || null,
       rules: activeDiscountRules,
       at: new Date(),
@@ -298,6 +304,7 @@ export function NewOnlineOrderForm({
             qty: merged.qty,
             unitPriceCents: merged.unit_price_cents,
             customerId: resolverCustomerId,
+            customerClubTier: resolverClubTier,
             sourceWarehouseId: sourceWarehouseId || null,
             rules: activeDiscountRules,
             at: new Date(),
@@ -326,6 +333,7 @@ export function NewOnlineOrderForm({
           qty: l.qty,
           unitPriceCents: l.unit_price_cents,
           customerId: resolverCustomerId,
+          customerClubTier: resolverClubTier,
           sourceWarehouseId: sourceWarehouseId || null,
           rules: activeDiscountRules,
           at: new Date(),

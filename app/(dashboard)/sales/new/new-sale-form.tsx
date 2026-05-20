@@ -177,6 +177,11 @@ export function NewSaleForm({
 
   // Round 16.4: customer id usable by the resolver (NULL for walk-in).
   const resolverCustomerId = customerId === WALKIN ? null : customerId
+  // Round 17: customer's club_tier for tier-based discount rules.
+  const resolverClubTier =
+    customerId === WALKIN
+      ? null
+      : customers.find((c) => c.id === customerId)?.club_tier ?? null
 
   function onSourceWarehouseChange(id: string) {
     setSourceWarehouseId(id)
@@ -209,6 +214,7 @@ export function NewSaleForm({
       qty: 1,
       unitPriceCents: unit_price_cents,
       customerId: resolverCustomerId,
+      customerClubTier: resolverClubTier,
       sourceWarehouseId: sourceWarehouseId || null,
       rules: activeDiscountRules,
       at: new Date(),
@@ -262,6 +268,7 @@ export function NewSaleForm({
             qty: merged.qty,
             unitPriceCents: merged.unit_price_cents,
             customerId: resolverCustomerId,
+            customerClubTier: resolverClubTier,
             sourceWarehouseId: sourceWarehouseId || null,
             rules: activeDiscountRules,
             at: new Date(),
@@ -290,6 +297,7 @@ export function NewSaleForm({
           qty: l.qty,
           unitPriceCents: l.unit_price_cents,
           customerId: resolverCustomerId,
+          customerClubTier: resolverClubTier,
           sourceWarehouseId: sourceWarehouseId || null,
           rules: activeDiscountRules,
           at: new Date(),
