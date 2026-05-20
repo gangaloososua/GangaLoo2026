@@ -11,8 +11,10 @@
 //     at creation (paid on delivery). No auto-seeded first tender.
 //   - Submit calls createOnlineOrder (camelCase params).
 //   - Redirects to /online-orders/[id] on success.
+//
+// Round 16.5 — auto-discount cart integration (mirrors 16.4 POS form).
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { Plus, Trash2 } from 'lucide-react'
@@ -47,6 +49,12 @@ import type {
   ProductSearchResult,
   SellerOption,
 } from '@/lib/sales'
+// Round 16.5: auto-discount integration (mirrors 16.4 POS form)
+import type { DiscountRuleRow } from '@/lib/discount-rules'
+import {
+  resolveLineDiscount,
+  type AppliedDiscount,
+} from '@/lib/discount-rules-resolver'
 
 type LookupItem = { id: string; name: string }
 
@@ -56,6 +64,9 @@ type Props = {
   defaultSellerId: string | null
   warehouses: LookupItem[]
   moneyAccounts: MoneyAccount[]
+  // Round 16.5: pre-fetched active discount rules. Pure client-side
+  // resolution; SQL function is the authority at confirm time.
+  activeDiscountRules: DiscountRuleRow[]
 }
 
 // Sentinel for "no customer" in the customer Select. Radix forbids "".
@@ -100,7 +111,7 @@ const PAYMENT_METHOD_OPTIONS: Array<{
   { value: 'credit', label: 'Store credit' },
 ]
 
-// A cart line.
+// A cart line. Round 16.5 added is_manual_discount + discount_breakdown.
 type CartLine = {
   line_id: string
   product_id: string
@@ -112,6 +123,9 @@ type CartLine = {
   qty: number
   line_discount_cents: number
   qty_on_hand_at_add: number
+  // Round 16.5: discount auto/manual state
+  is_manual_discount: boolean
+  discount_breakdown: AppliedDiscount[]
 }
 
 // A payment tender.
@@ -167,6 +181,7 @@ export function NewOnlineOrderForm({
   defaultSellerId,
   warehouses,
   moneyAccounts,
+  activeDiscountRules,
 }: Props) {
   const [customerId, setCustomerId] = useState<string>(NO_CUSTOMER)
   const [sellerId, setSellerId] = useState<string>(defaultSellerId ?? '')
@@ -190,6 +205,9 @@ export function NewOnlineOrderForm({
   const [confirmOpen, setConfirmOpen] = useState(false)
 
   const router = useRouter()
+
+  // Round 16.5: customer id usable by the resolver (NULL for no-customer).
+  const resolverCustomerId = customerId === NO_CUSTOMER ? null : customerId
 
   function onSourceWarehouseChange(id: string) {
     setSourceWarehouseId(id)
@@ -221,6 +239,16 @@ export function NewOnlineOrderForm({
 
   function addProduct(p: ProductSearchResult) {
     const unit_price_cents = resolveDefaultPrice(p, customerHasClubTier)
+    // Round 16.5: resolve auto-discounts at add time
+    const result = resolveLineDiscount({
+      productId: p.id,
+      qty: 1,
+      unitPriceCents: unit_price_cents,
+      customerId: resolverCustomerId,
+      sourceWarehouseId: sourceWarehouseId || null,
+      rules: activeDiscountRules,
+      at: new Date(),
+    })
     setLines((prev) => [
       ...prev,
       {
@@ -232,21 +260,85 @@ export function NewOnlineOrderForm({
         commission_percent: p.commission_percent,
         unit_price_cents,
         qty: 1,
-        line_discount_cents: 0,
+        line_discount_cents: result.totalDiscountCents,
         qty_on_hand_at_add: p.qty_on_hand,
+        is_manual_discount: false,
+        discount_breakdown: result.applied,
       },
     ])
   }
 
+  // Round 16.5: updateLine recomputes the auto-discount on non-manual
+  // lines after qty/unit price changes. If the patch directly sets
+  // line_discount_cents (i.e., user typed into the discount input),
+  // the line flips to manual unless the user typed 0 (which restores
+  // auto).
   function updateLine(line_id: string, patch: Partial<CartLine>) {
     setLines((prev) =>
-      prev.map((l) => (l.line_id === line_id ? { ...l, ...patch } : l)),
+      prev.map((l) => {
+        if (l.line_id !== line_id) return l
+        const merged: CartLine = { ...l, ...patch }
+
+        const directDiscountEdit =
+          Object.prototype.hasOwnProperty.call(patch, 'line_discount_cents') &&
+          !Object.prototype.hasOwnProperty.call(patch, 'is_manual_discount')
+
+        if (directDiscountEdit) {
+          if (patch.line_discount_cents === 0) {
+            merged.is_manual_discount = false
+          } else {
+            merged.is_manual_discount = true
+            merged.discount_breakdown = []
+          }
+        }
+
+        if (!merged.is_manual_discount) {
+          const result = resolveLineDiscount({
+            productId: merged.product_id,
+            qty: merged.qty,
+            unitPriceCents: merged.unit_price_cents,
+            customerId: resolverCustomerId,
+            sourceWarehouseId: sourceWarehouseId || null,
+            rules: activeDiscountRules,
+            at: new Date(),
+          })
+          merged.line_discount_cents = result.totalDiscountCents
+          merged.discount_breakdown = result.applied
+        }
+
+        return merged
+      }),
     )
   }
 
   function removeLine(line_id: string) {
     setLines((prev) => prev.filter((l) => l.line_id !== line_id))
   }
+
+  // Round 16.5: customer change recomputes auto-discounts on all
+  // non-manual lines. Manual-discount lines are untouched.
+  useEffect(() => {
+    setLines((prev) =>
+      prev.map((l) => {
+        if (l.is_manual_discount) return l
+        const result = resolveLineDiscount({
+          productId: l.product_id,
+          qty: l.qty,
+          unitPriceCents: l.unit_price_cents,
+          customerId: resolverCustomerId,
+          sourceWarehouseId: sourceWarehouseId || null,
+          rules: activeDiscountRules,
+          at: new Date(),
+        })
+        return {
+          ...l,
+          line_discount_cents: result.totalDiscountCents,
+          discount_breakdown: result.applied,
+        }
+      }),
+    )
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customerId])
 
   // === totals ===
 
@@ -651,6 +743,24 @@ export function NewOnlineOrderForm({
                                 }
                                 className="w-24"
                               />
+                              {/* Round 16.5: auto-discount hint */}
+                              {!l.is_manual_discount &&
+                              l.discount_breakdown.length > 0 ? (
+                                <div className="mt-1 text-xs text-muted-foreground">
+                                  Auto:{' '}
+                                  {l.discount_breakdown
+                                    .map((b) => `${b.percent ?? 0}%`)
+                                    .join(' × ')}
+                                  {l.discount_breakdown[0].capHit
+                                    ? ' (capped at 30%)'
+                                    : ''}
+                                </div>
+                              ) : null}
+                              {l.is_manual_discount ? (
+                                <div className="mt-1 text-xs text-amber-700">
+                                  Manual (auto silenced)
+                                </div>
+                              ) : null}
                             </td>
                             <td className="py-2 pr-3 text-right font-medium">
                               {formatDOP(Math.max(0, lineTotal))}
