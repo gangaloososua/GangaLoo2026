@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
@@ -35,6 +35,12 @@ import type {
   ProductSearchResult,
   SellerOption,
 } from '@/lib/sales'
+// Round 16.4: auto-discount integration
+import type { DiscountRuleRow } from '@/lib/discount-rules'
+import {
+  resolveLineDiscount,
+  type AppliedDiscount,
+} from '@/lib/discount-rules-resolver'
 
 type LookupItem = { id: string; name: string }
 
@@ -44,9 +50,11 @@ type Props = {
   defaultSellerId: string | null
   warehouses: LookupItem[]
   moneyAccounts: MoneyAccount[]
+  // Round 16.4: pre-fetched active discount rules. Pure client-side
+  // resolution; SQL function is the authority at confirm time.
+  activeDiscountRules: DiscountRuleRow[]
 }
 
-// Sentinel for "walk-in" in the customer Select. Radix forbids "" as a value.
 const WALKIN = '__walkin__'
 
 const FULFILLMENT_OPTIONS: Array<{
@@ -59,9 +67,6 @@ const FULFILLMENT_OPTIONS: Array<{
   { value: 'delivery', label: 'Delivery', hint: 'Sent from this warehouse to the customer' },
 ]
 
-// Per-tender payment method options. Excludes 'mixed' — that's a sale-level
-// summary concept, not a tender row. Multi-tender sales are recorded as
-// multiple sale_payments rows with distinct methods.
 type PaymentMethod =
   | 'cash'
   | 'card'
@@ -82,7 +87,7 @@ const PAYMENT_METHOD_OPTIONS: Array<{
   { value: 'credit', label: 'Store credit' },
 ]
 
-// A cart line.
+// A cart line. Round 16.4 added is_manual_discount + discount_breakdown.
 type CartLine = {
   line_id: string
   product_id: string
@@ -94,9 +99,11 @@ type CartLine = {
   qty: number
   line_discount_cents: number
   qty_on_hand_at_add: number
+  // Round 16.4: discount auto/manual state
+  is_manual_discount: boolean
+  discount_breakdown: AppliedDiscount[]
 }
 
-// A payment tender.
 type CartPayment = {
   tender_id: string
   method: PaymentMethod
@@ -105,8 +112,6 @@ type CartPayment = {
   reference: string
 }
 
-// Pick the default unit price: warehouse override > club price (if customer
-// has a non-none tier) > base price.
 function resolveDefaultPrice(
   product: ProductSearchResult,
   customerHasClubTier: boolean
@@ -120,8 +125,6 @@ function resolveDefaultPrice(
   return product.base_price_cents
 }
 
-// Prefer an account whose kind matches the method (e.g. cash method → a
-// cash-kind account). Falls back to the first account.
 function pickDefaultAccountId(
   accounts: MoneyAccount[],
   method: PaymentMethod
@@ -153,6 +156,7 @@ export function NewSaleForm({
   defaultSellerId,
   warehouses,
   moneyAccounts,
+  activeDiscountRules,
 }: Props) {
   const [customerId, setCustomerId] = useState<string>(WALKIN)
   const [sellerId, setSellerId] = useState<string>(defaultSellerId ?? '')
@@ -170,6 +174,9 @@ export function NewSaleForm({
   const [confirmOpen, setConfirmOpen] = useState(false)
 
   const router = useRouter()
+
+  // Round 16.4: customer id usable by the resolver (NULL for walk-in).
+  const resolverCustomerId = customerId === WALKIN ? null : customerId
 
   function onSourceWarehouseChange(id: string) {
     setSourceWarehouseId(id)
@@ -196,6 +203,16 @@ export function NewSaleForm({
 
   function addProduct(p: ProductSearchResult) {
     const unit_price_cents = resolveDefaultPrice(p, customerHasClubTier)
+    // Round 16.4: resolve auto-discounts at add time
+    const result = resolveLineDiscount({
+      productId: p.id,
+      qty: 1,
+      unitPriceCents: unit_price_cents,
+      customerId: resolverCustomerId,
+      sourceWarehouseId: sourceWarehouseId || null,
+      rules: activeDiscountRules,
+      at: new Date(),
+    })
     setLines((prev) => [
       ...prev,
       {
@@ -207,21 +224,85 @@ export function NewSaleForm({
         commission_percent: p.commission_percent,
         unit_price_cents,
         qty: 1,
-        line_discount_cents: 0,
+        line_discount_cents: result.totalDiscountCents,
         qty_on_hand_at_add: p.qty_on_hand,
+        is_manual_discount: false,
+        discount_breakdown: result.applied,
       },
     ])
   }
 
+  // Round 16.4: updateLine recomputes the auto-discount on non-manual
+  // lines after qty/unit price changes. If the patch directly sets
+  // line_discount_cents (i.e., user typed into the discount input),
+  // the line flips to manual unless the user typed 0 (which restores
+  // auto).
   function updateLine(line_id: string, patch: Partial<CartLine>) {
     setLines((prev) =>
-      prev.map((l) => (l.line_id === line_id ? { ...l, ...patch } : l))
+      prev.map((l) => {
+        if (l.line_id !== line_id) return l
+        const merged: CartLine = { ...l, ...patch }
+
+        const directDiscountEdit =
+          Object.prototype.hasOwnProperty.call(patch, 'line_discount_cents') &&
+          !Object.prototype.hasOwnProperty.call(patch, 'is_manual_discount')
+
+        if (directDiscountEdit) {
+          if (patch.line_discount_cents === 0) {
+            merged.is_manual_discount = false
+          } else {
+            merged.is_manual_discount = true
+            merged.discount_breakdown = []
+          }
+        }
+
+        if (!merged.is_manual_discount) {
+          const result = resolveLineDiscount({
+            productId: merged.product_id,
+            qty: merged.qty,
+            unitPriceCents: merged.unit_price_cents,
+            customerId: resolverCustomerId,
+            sourceWarehouseId: sourceWarehouseId || null,
+            rules: activeDiscountRules,
+            at: new Date(),
+          })
+          merged.line_discount_cents = result.totalDiscountCents
+          merged.discount_breakdown = result.applied
+        }
+
+        return merged
+      })
     )
   }
 
   function removeLine(line_id: string) {
     setLines((prev) => prev.filter((l) => l.line_id !== line_id))
   }
+
+  // Round 16.4: customer change recomputes auto-discounts on all
+  // non-manual lines. Manual-discount lines are untouched.
+  useEffect(() => {
+    setLines((prev) =>
+      prev.map((l) => {
+        if (l.is_manual_discount) return l
+        const result = resolveLineDiscount({
+          productId: l.product_id,
+          qty: l.qty,
+          unitPriceCents: l.unit_price_cents,
+          customerId: resolverCustomerId,
+          sourceWarehouseId: sourceWarehouseId || null,
+          rules: activeDiscountRules,
+          at: new Date(),
+        })
+        return {
+          ...l,
+          line_discount_cents: result.totalDiscountCents,
+          discount_breakdown: result.applied,
+        }
+      })
+    )
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customerId])
 
   // === totals ===
 
@@ -257,7 +338,6 @@ export function NewSaleForm({
     setPayments((prev) =>
       prev.map((p) => {
         if (p.tender_id !== tender_id) return p
-        // When method changes, swap the default account to match the new kind.
         if (patch.method && patch.method !== p.method) {
           return {
             ...p,
@@ -286,7 +366,7 @@ export function NewSaleForm({
     () => payments.reduce((sum, p) => sum + p.amount_cents, 0),
     [payments]
   )
-  const outstanding = totals.grandTotal - paymentTotal // negative if overpaid
+  const outstanding = totals.grandTotal - paymentTotal
 
   // === confirm gate ===
 
@@ -607,6 +687,24 @@ export function NewSaleForm({
                                 }
                                 className="w-24"
                               />
+                              {/* Round 16.4: auto-discount hint */}
+                              {!l.is_manual_discount &&
+                              l.discount_breakdown.length > 0 ? (
+                                <div className="mt-1 text-xs text-muted-foreground">
+                                  Auto:{' '}
+                                  {l.discount_breakdown
+                                    .map((b) => `${b.percent ?? 0}%`)
+                                    .join(' × ')}
+                                  {l.discount_breakdown[0].capHit
+                                    ? ' (capped at 30%)'
+                                    : ''}
+                                </div>
+                              ) : null}
+                              {l.is_manual_discount ? (
+                                <div className="mt-1 text-xs text-amber-700">
+                                  Manual (auto silenced)
+                                </div>
+                              ) : null}
                             </td>
                             <td className="py-2 pr-3 text-right font-medium">
                               {formatDOP(Math.max(0, lineTotal))}

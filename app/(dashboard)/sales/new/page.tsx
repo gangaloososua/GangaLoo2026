@@ -1,4 +1,4 @@
-﻿import Link from 'next/link'
+import Link from 'next/link'
 import { ChevronLeft } from 'lucide-react'
 import {
   listCustomersForPicker,
@@ -7,17 +7,26 @@ import {
   listWarehousesForFilter,
   listMoneyAccounts,
 } from '@/lib/sales'
+import { listDiscountRules } from '@/lib/discount-rules'
 import { NewSaleForm } from './new-sale-form'
 
 export const dynamic = 'force-dynamic'
 
 export default async function NewSalePage() {
-  const [customers, sellers, currentSeller, warehouses, moneyAccounts] = await Promise.all([
+  const [
+    customers,
+    sellers,
+    currentSeller,
+    warehouses,
+    moneyAccounts,
+    activeDiscountRules,
+  ] = await Promise.all([
     listCustomersForPicker(),
     listSellers(),
     getCurrentSeller(),
     listWarehousesForFilter(),
     listMoneyAccounts(),
+    listDiscountRules({ activeOnly: true }),
   ])
 
   return (
@@ -31,20 +40,19 @@ export default async function NewSalePage() {
           Back to sales
         </Link>
       </div>
-
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">New POS sale</h1>
         <p className="text-sm text-muted-foreground">
           Set the meta, then add products, take payment, and confirm.
         </p>
       </div>
-
       <NewSaleForm
         customers={customers}
         sellers={sellers}
         defaultSellerId={currentSeller?.id ?? null}
         warehouses={warehouses}
         moneyAccounts={moneyAccounts}
+        activeDiscountRules={activeDiscountRules}
       />
     </div>
   )
