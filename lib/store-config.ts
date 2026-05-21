@@ -1,15 +1,19 @@
-﻿import { createClient } from '@/lib/supabase/server'
+import { createClient } from '@/lib/supabase/server'
 import type {
   ConfigValueType,
   StoreConfigRow,
   StoreInfo,
+  DeliveryFees,
+  WarehousePickupFee,
 } from './store-config-types'
-import { STORE_INFO_DEFAULTS } from './store-config-types'
+import { STORE_INFO_DEFAULTS, DELIVERY_FEES_KEY, DELIVERY_FEES_DEFAULTS } from './store-config-types'
 
 // Re-export for server-side caller convenience. Client components
 // must import directly from './store-config-types'.
 export type { ConfigValueType, StoreConfigRow, StoreInfo }
+export type { DeliveryFees, WarehousePickupFee }
 export { STORE_INFO_DEFAULTS }
+export { DELIVERY_FEES_KEY, DELIVERY_FEES_DEFAULTS }
 
 function detectType(value: unknown): ConfigValueType | null {
   if (typeof value === 'string') return 'string'
@@ -65,5 +69,48 @@ export async function fetchStoreInfo(): Promise<StoreInfo> {
     address: pickString('store_address', STORE_INFO_DEFAULTS.address),
     phone: pickString('store_phone', STORE_INFO_DEFAULTS.phone),
     rnc: pickString('store_rnc', STORE_INFO_DEFAULTS.rnc),
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Delivery & pickup fees
+// ---------------------------------------------------------------------------
+// Reads the single 'delivery_fees' store_config row (a JSON blob) and
+// returns a typed DeliveryFees. Missing key or any malformed field falls
+// back to DELIVERY_FEES_DEFAULTS so the order flow never crashes on bad
+// data — worst case it charges no fee until the owner saves real numbers.
+export async function fetchDeliveryFees(): Promise<DeliveryFees> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('store_config')
+    .select('value')
+    .eq('key', DELIVERY_FEES_KEY)
+    .maybeSingle()
+  if (error) throw error
+  const v = (data?.value ?? null) as Partial<DeliveryFees> | null
+  if (!v || typeof v !== 'object') return DELIVERY_FEES_DEFAULTS
+  const num = (x: unknown): number =>
+    typeof x === 'number' && Number.isFinite(x) && x >= 0 ? Math.round(x) : 0
+  const cities = Array.isArray(v.localCities)
+    ? v.localCities.filter((c): c is string => typeof c === 'string')
+    : []
+  const pickups = Array.isArray(v.warehousePickupFees)
+    ? v.warehousePickupFees.filter(
+        (p): p is WarehousePickupFee =>
+          !!p &&
+          typeof p === 'object' &&
+          typeof (p as WarehousePickupFee).fromWarehouseId === 'string' &&
+          typeof (p as WarehousePickupFee).toWarehouseId === 'string',
+      ).map((p) => ({
+        fromWarehouseId: p.fromWarehouseId,
+        toWarehouseId: p.toWarehouseId,
+        feeCents: num(p.feeCents),
+      }))
+    : []
+  return {
+    localDeliveryCents: num(v.localDeliveryCents),
+    nationalDeliveryCents: num(v.nationalDeliveryCents),
+    localCities: cities,
+    warehousePickupFees: pickups,
   }
 }

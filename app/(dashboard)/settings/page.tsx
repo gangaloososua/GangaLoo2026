@@ -1,6 +1,6 @@
-﻿import Link from 'next/link'
+import Link from 'next/link'
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { ArrowRight, Calendar, Receipt, SlidersHorizontal } from 'lucide-react'
+import { ArrowRight, Calendar, Receipt, SlidersHorizontal, Truck } from 'lucide-react'
 import { requireOwner } from '@/lib/auth/guard'
 export default async function SettingsHubPage() {
   await requireOwner()
@@ -51,6 +51,20 @@ export default async function SettingsHubPage() {
               <CardTitle className="mt-2">Store Config</CardTitle>
               <CardDescription>
                 Discounts, fees, shipping, loyalty tiers, and other tunables.
+              </CardDescription>
+            </CardHeader>
+          </Card>
+        </Link>
+        <Link href="/settings/delivery-fees" className="block">
+          <Card className="transition-colors hover:bg-accent/50">
+            <CardHeader>
+              <div className="flex items-start justify-between">
+                <Truck className="h-5 w-5 text-muted-foreground" />
+                <ArrowRight className="h-4 w-4 text-muted-foreground" />
+              </div>
+              <CardTitle className="mt-2">Delivery &amp; Pickup Fees</CardTitle>
+              <CardDescription>
+                Delivery fees by city and pickup fees between warehouses.
               </CardDescription>
             </CardHeader>
           </Card>
