@@ -16,6 +16,7 @@ import {
   listMoneyAccounts,
 } from '@/lib/sales'
 import { listDiscountRules } from '@/lib/discount-rules'
+import { fetchDeliveryFees } from '@/lib/store-config'
 import { NewOnlineOrderForm } from './new-online-order-form'
 
 export const dynamic = 'force-dynamic'
@@ -23,7 +24,7 @@ export const dynamic = 'force-dynamic'
 export default async function NewOnlineOrderPage() {
   await requireRole(['owner', 'admin'] as const)
 
-  const [customers, sellers, currentSeller, warehouses, moneyAccounts, activeDiscountRules] =
+  const [customers, sellers, currentSeller, warehouses, moneyAccounts, activeDiscountRules, deliveryFees] =
     await Promise.all([
       listCustomersForPicker(),
       listSellers(),
@@ -31,6 +32,7 @@ export default async function NewOnlineOrderPage() {
       listWarehousesForFilter(),
       listMoneyAccounts(),
       listDiscountRules({ activeOnly: true }),
+      fetchDeliveryFees(),
     ])
 
   return (
@@ -59,6 +61,7 @@ export default async function NewOnlineOrderPage() {
         warehouses={warehouses}
         moneyAccounts={moneyAccounts}
         activeDiscountRules={activeDiscountRules}
+        deliveryFees={deliveryFees}
       />
     </div>
   )

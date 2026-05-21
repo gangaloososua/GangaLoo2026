@@ -51,6 +51,7 @@ import type {
 } from '@/lib/sales'
 // Round 16.5: auto-discount integration (mirrors 16.4 POS form)
 import type { DiscountRuleRow } from '@/lib/discount-rules'
+import type { DeliveryFees } from '@/lib/store-config-types'
 import {
   resolveLineDiscount,
   type AppliedDiscount,
@@ -67,6 +68,7 @@ type Props = {
   // Round 16.5: pre-fetched active discount rules. Pure client-side
   // resolution; SQL function is the authority at confirm time.
   activeDiscountRules: DiscountRuleRow[]
+  deliveryFees: DeliveryFees
 }
 
 // Sentinel for "no customer" in the customer Select. Radix forbids "".
@@ -183,6 +185,7 @@ export function NewOnlineOrderForm({
   warehouses,
   moneyAccounts,
   activeDiscountRules,
+  deliveryFees,
 }: Props) {
   const [customerId, setCustomerId] = useState<string>(NO_CUSTOMER)
   const [sellerId, setSellerId] = useState<string>(defaultSellerId ?? '')
@@ -197,8 +200,10 @@ export function NewOnlineOrderForm({
   const [lines, setLines] = useState<CartLine[]>([])
   const [saleDiscountCents, setSaleDiscountCents] = useState<number>(0)
   const [shippingCents, setShippingCents] = useState<number>(0)
+  const [shippingManuallyEdited, setShippingManuallyEdited] = useState(false)
   const [shippingAddress, setShippingAddress] = useState<string>('')
   const [shippingCity, setShippingCity] = useState<string>('')
+  const [cityOther, setCityOther] = useState<boolean>(false)
   const [deliveryNotes, setDeliveryNotes] = useState<string>('')
 
   const [payments, setPayments] = useState<CartPayment[]>([])
@@ -448,6 +453,58 @@ export function NewOnlineOrderForm({
     !!fulfillmentWarehouseId &&
     sourceWarehouseId !== fulfillmentWarehouseId
 
+  // Round 21b: normalize a city for matching — lowercase, trim, strip
+  // accents and inner spaces so "Sosua", "sosúa", "SOSUA " all match.
+  function normalizeCity(s: string): string {
+    return s
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/\s+/g, '')
+      .trim()
+  }
+
+  // The fee the saved settings suggest for the current order. Delivery
+  // uses the local fee when the city is on the local list, else national.
+  // Cross-warehouse pickup uses the matching from -> to pair fee. Anything
+  // else (in-store-style, same-warehouse pickup) suggests nothing.
+  const suggestedShippingCents = useMemo(() => {
+    if (isDelivery) {
+      const city = normalizeCity(shippingCity)
+      const isLocal =
+        city.length > 0 &&
+        deliveryFees.localCities.some((c) => normalizeCity(c) === city)
+      return isLocal
+        ? deliveryFees.localDeliveryCents
+        : deliveryFees.nationalDeliveryCents
+    }
+    if (interWarehousePickup) {
+      const pair = deliveryFees.warehousePickupFees.find(
+        (p) =>
+          p.fromWarehouseId === sourceWarehouseId &&
+          p.toWarehouseId === fulfillmentWarehouseId,
+      )
+      return pair?.feeCents ?? 0
+    }
+    return 0
+  }, [
+    isDelivery,
+    interWarehousePickup,
+    shippingCity,
+    sourceWarehouseId,
+    fulfillmentWarehouseId,
+    deliveryFees,
+  ])
+
+  // Round 21b: auto-fill the shipping fee from settings until the seller
+  // types their own. manuallyEdited flips on first manual keystroke and
+  // protects their number ("manual wins"); the "Use suggested" link resets
+  // it. Re-runs whenever the suggestion changes (method/warehouse/city).
+  useEffect(() => {
+    if (!shippingManuallyEdited) {
+      setShippingCents(suggestedShippingCents)
+    }
+  }, [suggestedShippingCents, shippingManuallyEdited])
   async function handleConfirm() {
     if (!confirmReady) return
     setSubmitting(true)
@@ -835,11 +892,23 @@ export function NewOnlineOrderForm({
                         min={0}
                         step={1}
                         value={centsToDopString(shippingCents)}
-                        onChange={(e) =>
+                        onChange={(e) => {
+                          setShippingManuallyEdited(true)
                           setShippingCents(dopStringToCents(e.target.value))
-                        }
+                        }}
                         className="w-32"
                       />
+                      {shippingManuallyEdited &&
+                      suggestedShippingCents > 0 &&
+                      shippingCents !== suggestedShippingCents ? (
+                        <button
+                          type="button"
+                          onClick={() => setShippingManuallyEdited(false)}
+                          className="mt-1 text-xs text-blue-600 hover:underline"
+                        >
+                          Use suggested ({formatDOP(suggestedShippingCents)})
+                        </button>
+                      ) : null}
                     </div>
                   </div>
                   <div className="space-y-1 text-sm sm:text-right">
@@ -913,12 +982,48 @@ export function NewOnlineOrderForm({
               </div>
               <div className="space-y-1">
                 <Label className="text-xs">City</Label>
-                <Input
-                  type="text"
-                  value={shippingCity}
-                  onChange={(e) => setShippingCity(e.target.value)}
-                  placeholder="e.g. Sosúa"
-                />
+                {isDelivery ? (
+                  <>
+                    <select
+                      value={cityOther ? '__other_city__' : shippingCity}
+                      onChange={(e) => {
+                        const v = e.target.value
+                        if (v === '__other_city__') {
+                          setCityOther(true)
+                          setShippingCity('')
+                        } else {
+                          setCityOther(false)
+                          setShippingCity(v)
+                        }
+                      }}
+                      className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    >
+                      <option value="">Select city...</option>
+                      {deliveryFees.localCities.map((c) => (
+                        <option key={c} value={c}>
+                          {c}
+                        </option>
+                      ))}
+                      <option value="__other_city__">Other (type a city)...</option>
+                    </select>
+                    {cityOther ? (
+                      <Input
+                        type="text"
+                        value={shippingCity}
+                        onChange={(e) => setShippingCity(e.target.value)}
+                        placeholder="Type the city"
+                        className="mt-2"
+                      />
+                    ) : null}
+                  </>
+                ) : (
+                  <Input
+                    type="text"
+                    value={shippingCity}
+                    onChange={(e) => setShippingCity(e.target.value)}
+                    placeholder="City (optional)"
+                  />
+                )}
               </div>
               <div className="space-y-1 sm:col-span-2">
                 <Label className="text-xs">Delivery notes</Label>
