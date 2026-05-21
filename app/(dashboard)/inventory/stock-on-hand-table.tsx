@@ -168,6 +168,22 @@ export function StockOnHandTable({
             />
             Show out of stock
           </label>
+          {enableHistoryLink ? (
+            <Link
+              href={
+                '/inventory/count-sheet?out=' +
+                (showOut ? '1' : '0') +
+                (warehouseId ? '&warehouse=' + warehouseId : '') +
+                (categoryId && categoryId !== '__uncategorized__'
+                  ? '&category=' + categoryId
+                  : '')
+              }
+              target="_blank"
+              className="inline-flex h-9 items-center rounded-md border px-3 text-sm hover:bg-accent"
+            >
+              Print count sheet
+            </Link>
+          ) : null}
         </div>
       ) : null}
 

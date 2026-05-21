@@ -440,3 +440,126 @@ export async function fetchStockByCategory(): Promise<StockByGroupRow[]> {
   }
   return Array.from(byTop.values()).sort((a, b) => b.valueDop - a.valueDop)
 }
+
+// ---------------------------------------------------------------------------
+// Count sheet (print): stock grouped Parent -> Subcategory -> product. Unlike
+// the on-screen views (which roll up to the top-level parent), this keeps the
+// product's PRIMARY category as its subcategory and also resolves its parent,
+// so the print page can nest subcategories under parents.
+// ---------------------------------------------------------------------------
+
+export type CountSheetRow = {
+  productId: string
+  productName: string
+  warehouseName: string
+  qtyOnHand: number
+  parentId: string
+  parentName: string
+  subId: string
+  subName: string
+}
+
+export async function fetchStockCountSheet(opts: {
+  warehouseId?: string
+  includeOut?: boolean
+  categoryId?: string
+}): Promise<CountSheetRow[]> {
+  const supabase = await createClient()
+
+  // Category tree.
+  const { data: cats, error: catErr } = await supabase
+    .from('categories')
+    .select('id, name, parent_id')
+  if (catErr) throw catErr
+  const catName = new Map<string, string>()
+  const parentOf = new Map<string, string | null>()
+  for (const c of (cats ?? []) as Array<{ id: string; name: string; parent_id: string | null }>) {
+    catName.set(c.id, c.name)
+    parentOf.set(c.id, c.parent_id)
+  }
+
+  // Product -> primary category (the subcategory it lives in).
+  const { data: pcs, error: pcErr } = await supabase
+    .from('product_categories')
+    .select('product_id, category_id')
+    .eq('is_primary', true)
+  if (pcErr) throw pcErr
+  const primaryCatOf = new Map<string, string>()
+  for (const pc of (pcs ?? []) as Array<{ product_id: string; category_id: string }>) {
+    primaryCatOf.set(pc.product_id, pc.category_id)
+  }
+
+  // Optional category filter: parent + its subcategories -> matching
+  // products by primary category, then constrain the lot query to them.
+  let categoryProductIds: string[] | null = null
+  if (opts.categoryId) {
+    const { data: childRows, error: childErr } = await supabase
+      .from('categories')
+      .select('id')
+      .eq('parent_id', opts.categoryId)
+    if (childErr) throw childErr
+    const catIds = [
+      opts.categoryId,
+      ...(childRows ?? []).map((c) => (c as { id: string }).id),
+    ]
+    const { data: pcRows, error: pcErr2 } = await supabase
+      .from('product_categories')
+      .select('product_id')
+      .in('category_id', catIds)
+      .eq('is_primary', true)
+    if (pcErr2) throw pcErr2
+    categoryProductIds = (pcRows ?? []).map((r) => (r as { product_id: string }).product_id)
+    if (categoryProductIds.length === 0) return []
+  }
+
+  let lotQuery = supabase
+    .from('inventory_lots')
+    .select('product_id, warehouse_id, qty_remaining, products(name), warehouses(name)')
+  if (opts.warehouseId) lotQuery = lotQuery.eq('warehouse_id', opts.warehouseId)
+  if (categoryProductIds) lotQuery = lotQuery.in('product_id', categoryProductIds)
+  const { data, error } = await lotQuery
+  if (error) throw error
+
+  const byKey = new Map<string, CountSheetRow>()
+  for (const lot of (data ?? []) as unknown as Array<{
+    product_id: string
+    warehouse_id: string
+    qty_remaining: number
+    products: { name: string } | null
+    warehouses: { name: string } | null
+  }>) {
+    const key = lot.product_id + '|' + lot.warehouse_id
+    const qty = Number(lot.qty_remaining) || 0
+    const existing = byKey.get(key)
+    if (existing) {
+      existing.qtyOnHand += qty
+    } else {
+      const sub = primaryCatOf.get(lot.product_id) ?? null
+      const parent = sub ? parentOf.get(sub) ?? null : null
+      // If the primary category is itself top-level (no parent), treat it as
+      // its own parent so it still groups cleanly.
+      const parentId = parent ?? sub ?? '__uncategorized__'
+      const subId = sub ?? '__uncategorized__'
+      byKey.set(key, {
+        productId: lot.product_id,
+        productName: lot.products?.name ?? '(unknown product)',
+        warehouseName: lot.warehouses?.name ?? '(unknown warehouse)',
+        qtyOnHand: qty,
+        parentId,
+        parentName: parentId === '__uncategorized__' ? '(uncategorized)' : catName.get(parentId) ?? '(unknown)',
+        subId,
+        subName: subId === '__uncategorized__' ? '(uncategorized)' : catName.get(subId) ?? '(unknown)',
+      })
+    }
+  }
+
+  let result = Array.from(byKey.values())
+  if (!opts.includeOut) result = result.filter((r) => r.qtyOnHand > 0)
+  return result.sort(
+    (a, b) =>
+      a.parentName.localeCompare(b.parentName) ||
+      a.subName.localeCompare(b.subName) ||
+      a.productName.localeCompare(b.productName) ||
+      a.warehouseName.localeCompare(b.warehouseName),
+  )
+}
