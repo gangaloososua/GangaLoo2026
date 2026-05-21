@@ -10,6 +10,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import type { StockOnHandRow } from '@/lib/inventory'
 
@@ -18,8 +19,6 @@ type CategoryOption = { id: string; name: string }
 
 type Props = {
   rows: StockOnHandRow[]
-  // Optional: when provided, the warehouse + category filter dropdowns show.
-  // Sellers get them too; only costs are withheld (this view never shows cost).
   warehouses?: WarehouseOption[]
   categories?: CategoryOption[]
   // When true, product names link to that product's history (owners only).
@@ -40,6 +39,8 @@ type Group = {
   subtotal: number
 }
 
+const DEFAULT_LOW = 5
+
 export function StockOnHandTable({
   rows,
   warehouses,
@@ -48,11 +49,16 @@ export function StockOnHandTable({
 }: Props) {
   const [warehouseId, setWarehouseId] = useState('')
   const [categoryId, setCategoryId] = useState('')
+  const [lowThreshold, setLowThreshold] = useState(DEFAULT_LOW)
+  // Show out-of-stock rows? Default off so the view stays tidy; the user can
+  // flip it on to see what ran out.
+  const [showOut, setShowOut] = useState(false)
 
   const showFilters = !!warehouses && warehouses.length > 0
 
   const filtered = useMemo(() => {
     return rows.filter((r) => {
+      if (!showOut && r.qtyOnHand <= 0) return false
       if (warehouseId && r.warehouseId !== warehouseId) return false
       if (categoryId) {
         if (categoryId === '__uncategorized__') {
@@ -63,10 +69,8 @@ export function StockOnHandTable({
       }
       return true
     })
-  }, [rows, warehouseId, categoryId])
+  }, [rows, warehouseId, categoryId, showOut])
 
-  // Group filtered rows by top-level category, preserving the loader's sort
-  // (already category -> product -> warehouse).
   const groups = useMemo(() => {
     const byCat = new Map<string, Group>()
     const order: string[] = []
@@ -74,12 +78,7 @@ export function StockOnHandTable({
       const key = r.categoryId ?? '__uncategorized__'
       let g = byCat.get(key)
       if (!g) {
-        g = {
-          categoryId: key,
-          categoryName: r.categoryName,
-          rows: [],
-          subtotal: 0,
-        }
+        g = { categoryId: key, categoryName: r.categoryName, rows: [], subtotal: 0 }
         byCat.set(key, g)
         order.push(key)
       }
@@ -89,12 +88,35 @@ export function StockOnHandTable({
     return order.map((k) => byCat.get(k) as Group)
   }, [filtered])
 
-  const grandTotal = filtered.reduce((s, r) => s + r.qtyOnHand, 0)
+  // Summary counts across the filtered set.
+  const counts = useMemo(() => {
+    let inStock = 0
+    let low = 0
+    let out = 0
+    for (const r of filtered) {
+      if (r.qtyOnHand <= 0) out += 1
+      else if (r.qtyOnHand <= lowThreshold) low += 1
+      else inStock += 1
+    }
+    return { inStock, low, out }
+  }, [filtered, lowThreshold])
+
+  function qtyClass(qty: number): string {
+    if (qty <= 0) return 'text-rose-600 font-semibold'
+    if (qty <= lowThreshold) return 'text-amber-600 font-semibold'
+    return ''
+  }
+
+  function qtyLabel(qty: number): string {
+    if (qty <= 0) return 'Out'
+    if (qty <= lowThreshold) return 'Low'
+    return ''
+  }
 
   return (
     <div className="space-y-4">
       {showFilters ? (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 lg:items-end">
           <div className="space-y-1">
             <Label className="text-xs">Warehouse</Label>
             <select
@@ -128,18 +150,37 @@ export function StockOnHandTable({
               </select>
             </div>
           ) : null}
+          <div className="space-y-1">
+            <Label className="text-xs">Low below</Label>
+            <Input
+              type="number"
+              min={1}
+              value={lowThreshold}
+              onChange={(e) => setLowThreshold(Math.max(0, Number(e.target.value) || 0))}
+              className="w-24"
+            />
+          </div>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={showOut}
+              onChange={(e) => setShowOut(e.target.checked)}
+            />
+            Show out of stock
+          </label>
         </div>
       ) : null}
 
       {filtered.length === 0 ? (
         <p className="text-sm text-muted-foreground">
-          Nothing in stock for this filter.
+          Nothing matches this filter.
         </p>
       ) : (
         <>
           <p className="text-sm text-muted-foreground">
-            {fmtInt(grandTotal)} units in stock across {groups.length}{' '}
-            {groups.length === 1 ? 'category' : 'categories'}.
+            <span className="text-foreground">{fmtInt(counts.inStock)}</span> in
+            stock · <span className="text-amber-600">{fmtInt(counts.low)}</span>{' '}
+            low · <span className="text-rose-600">{fmtInt(counts.out)}</span> out
           </p>
           <div className="space-y-6">
             {groups.map((g) => (
@@ -176,7 +217,21 @@ export function StockOnHandTable({
                           </TableCell>
                           <TableCell>{r.warehouseName}</TableCell>
                           <TableCell className="text-right tabular-nums">
-                            {fmtInt(r.qtyOnHand)}
+                            <span className={qtyClass(r.qtyOnHand)}>
+                              {fmtInt(r.qtyOnHand)}
+                            </span>
+                            {qtyLabel(r.qtyOnHand) ? (
+                              <span
+                                className={
+                                  'ml-2 text-xs ' +
+                                  (r.qtyOnHand <= 0
+                                    ? 'text-rose-600'
+                                    : 'text-amber-600')
+                                }
+                              >
+                                {qtyLabel(r.qtyOnHand)}
+                              </span>
+                            ) : null}
                           </TableCell>
                         </TableRow>
                       ))}

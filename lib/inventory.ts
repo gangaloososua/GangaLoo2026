@@ -53,7 +53,6 @@ export async function fetchStockOnHand(
   let lotQuery = supabase
     .from('inventory_lots')
     .select('product_id, warehouse_id, qty_remaining, products(name), warehouses(name)')
-    .gt('qty_remaining', 0)
   if (warehouseId) lotQuery = lotQuery.eq('warehouse_id', warehouseId)
   const { data, error } = await lotQuery
   if (error) throw error
@@ -87,7 +86,7 @@ export async function fetchStockOnHand(
     }
   }
   return Array.from(byKey.values())
-    .filter((r) => r.qtyOnHand > 0)
+    .filter((r) => r.qtyOnHand >= 0)
     .sort(
       (a, b) =>
         a.categoryName.localeCompare(b.categoryName) ||
