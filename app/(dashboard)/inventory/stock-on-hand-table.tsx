@@ -1,6 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
+import Link from 'next/link'
 import {
   Table,
   TableBody,
@@ -21,6 +22,8 @@ type Props = {
   // Sellers get them too; only costs are withheld (this view never shows cost).
   warehouses?: WarehouseOption[]
   categories?: CategoryOption[]
+  // When true, product names link to that product's history (owners only).
+  enableHistoryLink?: boolean
 }
 
 const selectClass =
@@ -37,7 +40,12 @@ type Group = {
   subtotal: number
 }
 
-export function StockOnHandTable({ rows, warehouses, categories }: Props) {
+export function StockOnHandTable({
+  rows,
+  warehouses,
+  categories,
+  enableHistoryLink = false,
+}: Props) {
   const [warehouseId, setWarehouseId] = useState('')
   const [categoryId, setCategoryId] = useState('')
 
@@ -155,7 +163,16 @@ export function StockOnHandTable({ rows, warehouses, categories }: Props) {
                       {g.rows.map((r) => (
                         <TableRow key={r.productId + '|' + r.warehouseId}>
                           <TableCell className="font-medium">
-                            {r.productName}
+                            {enableHistoryLink ? (
+                              <Link
+                                href={'/inventory?product=' + r.productId}
+                                className="text-blue-600 hover:underline"
+                              >
+                                {r.productName}
+                              </Link>
+                            ) : (
+                              r.productName
+                            )}
                           </TableCell>
                           <TableCell>{r.warehouseName}</TableCell>
                           <TableCell className="text-right tabular-nums">

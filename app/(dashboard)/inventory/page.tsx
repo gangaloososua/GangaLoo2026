@@ -102,7 +102,7 @@ export default async function InventoryPage({
         </p>
       </div>
 
-      <Tabs defaultValue={defaultTab}>
+      <Tabs key={defaultTab} defaultValue={defaultTab}>
         <TabsList>
           <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
           <TabsTrigger value="stock">Stock on hand</TabsTrigger>
@@ -122,6 +122,7 @@ export default async function InventoryPage({
             rows={stock}
             warehouses={warehouses}
             categories={categories.filter((c) => c.parentId === null)}
+            enableHistoryLink
           />
         </TabsContent>
 
