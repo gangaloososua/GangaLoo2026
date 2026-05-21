@@ -1,0 +1,344 @@
+'use client'
+import * as React from 'react'
+import { useRouter } from 'next/navigation'
+import { ChevronDown, ChevronRight } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
+import { formatDOP, formatDate } from '@/lib/format'
+import type { CommissionOwedRow, CommissionDetailRow } from '@/lib/commissions'
+import { recordCommissionPayout } from './actions'
+
+type AccountOption = { id: string; name: string; currency: string }
+
+type Props = {
+  rows: CommissionOwedRow[]
+  detailByEarner: Record<string, CommissionDetailRow[]>
+  accounts: AccountOption[]
+}
+
+function RoleBadge({ role }: { role: 'seller' | 'distributor' }) {
+  return (
+    <span className="rounded-full bg-muted px-2 py-0.5 text-xs capitalize text-muted-foreground">
+      {role}
+    </span>
+  )
+}
+
+function StateTag({ state }: { state: 'ready' | 'awaiting' }) {
+  const ready = state === 'ready'
+  return (
+    <span
+      className={
+        'rounded-full px-2 py-0.5 text-xs ' +
+        (ready
+          ? 'bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300'
+          : 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300')
+      }
+    >
+      {ready ? 'Ready' : 'Awaiting'}
+    </span>
+  )
+}
+
+export function CommissionsOwedTable({ rows, detailByEarner, accounts }: Props) {
+  const router = useRouter()
+  const [expanded, setExpanded] = React.useState<string | null>(null)
+  const [payFor, setPayFor] = React.useState<CommissionOwedRow | null>(null)
+
+  if (rows.length === 0) {
+    return (
+      <Card>
+        <CardContent className="py-8 text-center text-sm text-muted-foreground">
+          Nobody is owed any commission right now.
+        </CardContent>
+      </Card>
+    )
+  }
+
+  return (
+    <>
+      <Card>
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-8" />
+                <TableHead>Person</TableHead>
+                <TableHead className="text-right">Ready to pay</TableHead>
+                <TableHead className="text-right">Awaiting collection</TableHead>
+                <TableHead className="text-right">Total</TableHead>
+                <TableHead className="text-right">Action</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {rows.map((r) => {
+                const isOpen = expanded === r.earnerId
+                const detail = detailByEarner[r.earnerId] ?? []
+                return (
+                  <React.Fragment key={r.earnerId}>
+                    <TableRow>
+                      <TableCell>
+                        <button
+                          type="button"
+                          aria-label={isOpen ? 'Collapse' : 'Expand'}
+                          onClick={() => setExpanded(isOpen ? null : r.earnerId)}
+                          className="text-muted-foreground hover:text-foreground"
+                        >
+                          {isOpen ? (
+                            <ChevronDown className="h-4 w-4" />
+                          ) : (
+                            <ChevronRight className="h-4 w-4" />
+                          )}
+                        </button>
+                      </TableCell>
+                      <TableCell>
+                        <span className="mr-2 font-medium">{r.earnerName}</span>
+                        <RoleBadge role={r.earnerRole} />
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums text-green-700 dark:text-green-400">
+                        {r.readyToPayCents > 0 ? formatDOP(r.readyToPayCents) : '—'}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums text-amber-700 dark:text-amber-400">
+                        {r.awaitingCents > 0 ? formatDOP(r.awaitingCents) : '—'}
+                      </TableCell>
+                      <TableCell className="text-right font-medium tabular-nums">
+                        {formatDOP(r.totalPendingCents)}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={detail.length === 0}
+                          onClick={() => setPayFor(r)}
+                        >
+                          Record payment
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                    {isOpen && (
+                      <TableRow>
+                        <TableCell colSpan={6} className="bg-muted/30 p-0">
+                          <div className="p-3">
+                            <Table>
+                              <TableHeader>
+                                <TableRow>
+                                  <TableHead>Invoice</TableHead>
+                                  <TableHead>Date</TableHead>
+                                  <TableHead>Product</TableHead>
+                                  <TableHead className="text-right">Amount</TableHead>
+                                  <TableHead>Status</TableHead>
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                {detail.map((d) => (
+                                  <TableRow key={d.commissionId}>
+                                    <TableCell>{d.invoiceNumber ?? '—'}</TableCell>
+                                    <TableCell className="whitespace-nowrap">{formatDate(d.soldAt)}</TableCell>
+                                    <TableCell>{d.productName}</TableCell>
+                                    <TableCell className="text-right tabular-nums">{formatDOP(d.amountCents)}</TableCell>
+                                    <TableCell><StateTag state={d.paidState} /></TableCell>
+                                  </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </React.Fragment>
+                )
+              })}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+
+      {payFor && (
+        <PaymentDialog
+          earner={payFor}
+          lines={detailByEarner[payFor.earnerId] ?? []}
+          accounts={accounts}
+          onClose={() => setPayFor(null)}
+          onPaid={() => {
+            setPayFor(null)
+            setExpanded(null)
+            router.refresh()
+          }}
+        />
+      )}
+    </>
+  )
+}
+
+function PaymentDialog({
+  earner,
+  lines,
+  accounts,
+  onClose,
+  onPaid,
+}: {
+  earner: CommissionOwedRow
+  lines: CommissionDetailRow[]
+  accounts: AccountOption[]
+  onClose: () => void
+  onPaid: () => void
+}) {
+  // Ready lines pre-ticked; awaiting lines start unticked.
+  const [checked, setChecked] = React.useState<Record<string, boolean>>(() =>
+    Object.fromEntries(lines.map((l) => [l.commissionId, l.paidState === 'ready'])),
+  )
+  const [accountId, setAccountId] = React.useState<string>('')
+  const [note, setNote] = React.useState('')
+  const [busy, setBusy] = React.useState(false)
+  const [error, setError] = React.useState<string | null>(null)
+
+  const selectedIds = lines.filter((l) => checked[l.commissionId]).map((l) => l.commissionId)
+  const selectedTotal = lines
+    .filter((l) => checked[l.commissionId])
+    .reduce((sum, l) => sum + l.amountCents, 0)
+
+  function toggle(id: string) {
+    setChecked((c) => ({ ...c, [id]: !c[id] }))
+  }
+
+  async function confirm() {
+    setError(null)
+    if (selectedIds.length === 0) {
+      setError('Tick at least one commission to pay.')
+      return
+    }
+    if (!accountId) {
+      setError('Pick the account the money came from.')
+      return
+    }
+    setBusy(true)
+    const res = await recordCommissionPayout({
+      earnerId: earner.earnerId,
+      moneyAccountId: accountId,
+      commissionIds: selectedIds,
+      periodStart: null,
+      periodEnd: null,
+      notes: note.trim() ? note.trim() : null,
+    })
+    setBusy(false)
+    if ('error' in res) {
+      setError(res.error)
+      return
+    }
+    onPaid()
+  }
+
+  return (
+    <Dialog open onOpenChange={(o) => { if (!o) onClose() }}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Record payment — {earner.earnerName}</DialogTitle>
+          <DialogDescription>
+            Tick the commissions this payment covers, then choose the account it came from.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="max-h-72 overflow-y-auto rounded-md border">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-8" />
+                <TableHead>Invoice</TableHead>
+                <TableHead>Date</TableHead>
+                <TableHead>Product</TableHead>
+                <TableHead className="text-right">Amount</TableHead>
+                <TableHead>Status</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {lines.map((l) => (
+                <TableRow key={l.commissionId}>
+                  <TableCell>
+                    <Checkbox
+                      checked={!!checked[l.commissionId]}
+                      onCheckedChange={() => toggle(l.commissionId)}
+                    />
+                  </TableCell>
+                  <TableCell>{l.invoiceNumber ?? '—'}</TableCell>
+                  <TableCell className="whitespace-nowrap">{formatDate(l.soldAt)}</TableCell>
+                  <TableCell>{l.productName}</TableCell>
+                  <TableCell className="text-right tabular-nums">{formatDOP(l.amountCents)}</TableCell>
+                  <TableCell><StateTag state={l.paidState} /></TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+
+        <div className="flex items-center justify-between text-sm">
+          <span className="text-muted-foreground">{selectedIds.length} selected</span>
+          <span className="font-medium tabular-nums">Total: {formatDOP(selectedTotal)}</span>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="space-y-1">
+            <Label>Paid from account</Label>
+            <Select value={accountId} onValueChange={setAccountId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Choose account" />
+              </SelectTrigger>
+              <SelectContent>
+                {accounts.map((a) => (
+                  <SelectItem key={a.id} value={a.id}>
+                    {a.name} ({a.currency})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="payout-note">Note (optional)</Label>
+            <Input
+              id="payout-note"
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder="e.g. cash handed over"
+            />
+          </div>
+        </div>
+
+        {error && <p className="text-sm text-destructive">{error}</p>}
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={busy}>
+            Cancel
+          </Button>
+          <Button onClick={confirm} disabled={busy}>
+            {busy ? 'Recording…' : `Record ${formatDOP(selectedTotal)}`}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
