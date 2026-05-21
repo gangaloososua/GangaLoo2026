@@ -100,6 +100,7 @@ export type StockMovementFilters = {
   warehouseId?: string
   productId?: string
   kind?: StockMovementKind
+  categoryId?: string
   fromDate?: string
   toDate?: string
 }
@@ -118,8 +119,32 @@ export async function fetchStockMovements(
     .order('occurred_at', { ascending: false })
     .limit(MOVEMENT_LIMIT)
 
+  // Category filter: resolve to product ids whose PRIMARY category matches,
+  // then constrain movements to them. Empty category -> no rows (not all).
+  let categoryProductIds: string[] | null = null
+  if (filters.categoryId) {
+    const { data: childRows, error: childErr } = await supabase
+      .from('categories')
+      .select('id')
+      .eq('parent_id', filters.categoryId)
+    if (childErr) throw childErr
+    const catIds = [
+      filters.categoryId,
+      ...(childRows ?? []).map((c) => (c as { id: string }).id),
+    ]
+    const { data: pcRows, error: pcErr } = await supabase
+      .from('product_categories')
+      .select('product_id')
+      .in('category_id', catIds)
+      .eq('is_primary', true)
+    if (pcErr) throw pcErr
+    categoryProductIds = (pcRows ?? []).map((r) => (r as { product_id: string }).product_id)
+    if (categoryProductIds.length === 0) return []
+  }
+
   if (filters.warehouseId) query = query.eq('warehouse_id', filters.warehouseId)
   if (filters.productId) query = query.eq('product_id', filters.productId)
+  if (categoryProductIds) query = query.in('product_id', categoryProductIds)
   if (filters.kind) query = query.eq('kind', filters.kind)
   if (filters.fromDate) query = query.gte('occurred_at', filters.fromDate)
   if (filters.toDate) query = query.lte('occurred_at', filters.toDate)
@@ -151,5 +176,58 @@ export async function fetchStockMovements(
     unitCostDop: m.unit_cost_dop === null ? null : Number(m.unit_cost_dop),
     adjustmentReason: m.adjustment_reason,
     createdByName: m.profiles?.full_name ?? null,
+  }))
+}
+
+// ---------------------------------------------------------------------------
+// Filter support: categories (for the dropdown) + product type-to-search.
+// ---------------------------------------------------------------------------
+
+export type CategoryOption = {
+  id: string
+  name: string
+  parentId: string | null
+}
+
+// All active categories (both top-level and sub). The UI groups them by
+// parent for the dropdown. Two-level tree only (verified: no deeper nesting).
+export async function listCategoriesForFilter(): Promise<CategoryOption[]> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('categories')
+    .select('id, name, parent_id')
+    .eq('is_active', true)
+    .order('display_order', { ascending: true })
+    .order('name', { ascending: true })
+  if (error) throw error
+  return ((data ?? []) as Array<{ id: string; name: string; parent_id: string | null }>).map(
+    (c) => ({ id: c.id, name: c.name, parentId: c.parent_id }),
+  )
+}
+
+export type InventoryProductOption = { id: string; name: string; sku: string | null }
+
+// Lightweight global product search for the ledger filter: id + name + sku
+// only, active products, matched by name or SKU. Warehouse-agnostic and
+// price-agnostic (unlike searchProductsForSale).
+export async function searchInventoryProducts(
+  query: string,
+  limit = 20,
+): Promise<InventoryProductOption[]> {
+  const q = query.replace(/[,'"()*%]/g, ' ').replace(/\s+/g, ' ').trim()
+  if (!q) return []
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('products')
+    .select('id, name, sku')
+    .eq('is_active', true)
+    .or('name.ilike.%' + q + '%,sku.ilike.%' + q + '%')
+    .order('name', { ascending: true })
+    .limit(limit)
+  if (error) throw error
+  return ((data ?? []) as Array<{ id: string; name: string; sku: string | null }>).map((p) => ({
+    id: p.id,
+    name: p.name,
+    sku: p.sku,
   }))
 }

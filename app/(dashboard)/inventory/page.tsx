@@ -3,6 +3,7 @@ import { isOwnerEquivalent } from '@/lib/auth/roles'
 import {
   fetchStockOnHand,
   fetchStockMovements,
+  listCategoriesForFilter,
   type StockMovementFilters,
 } from '@/lib/inventory'
 import { listWarehousesForFilter } from '@/lib/sales'
@@ -14,6 +15,8 @@ export const dynamic = 'force-dynamic'
 type SearchParams = {
   warehouse?: string
   kind?: string
+  category?: string
+  product?: string
   from?: string
   to?: string
 }
@@ -47,12 +50,15 @@ export default async function InventoryPage({
   const filters: StockMovementFilters = {
     warehouseId: sp.warehouse || undefined,
     kind: (sp.kind as StockMovementFilters['kind']) || undefined,
+    categoryId: sp.category || undefined,
+    productId: sp.product || undefined,
     fromDate: sp.from || undefined,
     toDate: sp.to || undefined,
   }
-  const [movements, warehouses] = await Promise.all([
+  const [movements, warehouses, categories] = await Promise.all([
     fetchStockMovements(filters),
     listWarehousesForFilter(),
+    listCategoriesForFilter(),
   ])
 
   return (
@@ -67,9 +73,12 @@ export default async function InventoryPage({
       <MovementsLedger
         rows={movements}
         warehouses={warehouses}
+        categories={categories}
         current={{
           warehouse: sp.warehouse ?? '',
           kind: sp.kind ?? '',
+          category: sp.category ?? '',
+          product: sp.product ?? '',
           from: sp.from ?? '',
           to: sp.to ?? '',
         }}
