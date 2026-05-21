@@ -6,6 +6,7 @@ import {
   type CommissionDetailRow,
 } from '@/lib/commissions'
 import { listAccounts } from '@/lib/money-accounts'
+import { listAccountCategories } from '@/lib/transactions'
 import { CommissionsOwedTable } from './commissions-owed-table'
 import { PayoutHistoryTable } from './payout-history-table'
 
@@ -14,10 +15,11 @@ export const dynamic = 'force-dynamic'
 export default async function CommissionsPage() {
   await requireRole(['owner', 'admin'] as const)
 
-  const [owed, payouts, accounts] = await Promise.all([
+  const [owed, payouts, accounts, categories] = await Promise.all([
     fetchCommissionsOwed(),
     fetchPayoutHistory(),
     listAccounts(),
+    listAccountCategories(),
   ])
 
   // Pre-load the detail lines for each earner so the expand + pay dialog
@@ -38,6 +40,9 @@ export default async function CommissionsPage() {
     currency: a.currency,
   }))
 
+  // A payout is always an expense, so only expense categories are offered.
+  const expenseCategories = categories.filter((c) => c.type === 'expense')
+
   return (
     <div className="space-y-6">
       <div>
@@ -53,6 +58,7 @@ export default async function CommissionsPage() {
           rows={owed}
           detailByEarner={detailByEarner}
           accounts={accountOptions}
+          categories={expenseCategories}
         />
       </section>
 

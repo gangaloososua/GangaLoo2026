@@ -10,7 +10,9 @@ import { Label } from '@/components/ui/label'
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
@@ -32,6 +34,7 @@ import {
 } from '@/components/ui/table'
 import { formatDOP, formatDate } from '@/lib/format'
 import type { CommissionOwedRow, CommissionDetailRow } from '@/lib/commissions'
+import type { AccountCategoryOption } from '@/lib/transactions'
 import { recordCommissionPayout } from './actions'
 
 type AccountOption = { id: string; name: string; currency: string }
@@ -40,6 +43,7 @@ type Props = {
   rows: CommissionOwedRow[]
   detailByEarner: Record<string, CommissionDetailRow[]>
   accounts: AccountOption[]
+  categories: AccountCategoryOption[]
 }
 
 function RoleBadge({ role }: { role: 'seller' | 'distributor' }) {
@@ -66,7 +70,32 @@ function StateTag({ state }: { state: 'ready' | 'awaiting' }) {
   )
 }
 
-export function CommissionsOwedTable({ rows, detailByEarner, accounts }: Props) {
+// Group expense categories: parent-with-children -> heading + items; childless
+// top-levels collected under an "Expense (general)" heading. Parents that have
+// children are headings only (not selectable).
+type CatBlock = { key: string; heading: string; items: AccountCategoryOption[] }
+function buildExpenseBlocks(categories: AccountCategoryOption[]): CatBlock[] {
+  const childrenOf = new Map<string, AccountCategoryOption[]>()
+  for (const c of categories) {
+    if (c.parentId) {
+      const list = childrenOf.get(c.parentId) ?? []
+      list.push(c)
+      childrenOf.set(c.parentId, list)
+    }
+  }
+  const tops = categories.filter((c) => c.parentId === null)
+  const blocks: CatBlock[] = []
+  const standalone: AccountCategoryOption[] = []
+  for (const top of tops) {
+    const kids = childrenOf.get(top.id)
+    if (kids && kids.length > 0) blocks.push({ key: top.id, heading: top.name, items: kids })
+    else standalone.push(top)
+  }
+  if (standalone.length > 0) blocks.push({ key: 'general', heading: 'Other expense', items: standalone })
+  return blocks
+}
+
+export function CommissionsOwedTable({ rows, detailByEarner, accounts, categories }: Props) {
   const router = useRouter()
   const [expanded, setExpanded] = React.useState<string | null>(null)
   const [payFor, setPayFor] = React.useState<CommissionOwedRow | null>(null)
@@ -184,6 +213,7 @@ export function CommissionsOwedTable({ rows, detailByEarner, accounts }: Props) 
           earner={payFor}
           lines={detailByEarner[payFor.earnerId] ?? []}
           accounts={accounts}
+          categories={categories}
           onClose={() => setPayFor(null)}
           onPaid={() => {
             setPayFor(null)
@@ -200,23 +230,27 @@ function PaymentDialog({
   earner,
   lines,
   accounts,
+  categories,
   onClose,
   onPaid,
 }: {
   earner: CommissionOwedRow
   lines: CommissionDetailRow[]
   accounts: AccountOption[]
+  categories: AccountCategoryOption[]
   onClose: () => void
   onPaid: () => void
 }) {
-  // Ready lines pre-ticked; awaiting lines start unticked.
   const [checked, setChecked] = React.useState<Record<string, boolean>>(() =>
     Object.fromEntries(lines.map((l) => [l.commissionId, l.paidState === 'ready'])),
   )
   const [accountId, setAccountId] = React.useState<string>('')
+  const [categoryId, setCategoryId] = React.useState<string>('')
   const [note, setNote] = React.useState('')
   const [busy, setBusy] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
+
+  const catBlocks = React.useMemo(() => buildExpenseBlocks(categories), [categories])
 
   const selectedIds = lines.filter((l) => checked[l.commissionId]).map((l) => l.commissionId)
   const selectedTotal = lines
@@ -237,10 +271,15 @@ function PaymentDialog({
       setError('Pick the account the money came from.')
       return
     }
+    if (!categoryId) {
+      setError('Pick a commission expense category.')
+      return
+    }
     setBusy(true)
     const res = await recordCommissionPayout({
       earnerId: earner.earnerId,
       moneyAccountId: accountId,
+      categoryId,
       commissionIds: selectedIds,
       periodStart: null,
       periodEnd: null,
@@ -260,7 +299,8 @@ function PaymentDialog({
         <DialogHeader>
           <DialogTitle>Record payment — {earner.earnerName}</DialogTitle>
           <DialogDescription>
-            Tick the commissions this payment covers, then choose the account it came from.
+            Tick the commissions this payment covers, choose the account it came from,
+            and the expense category to record it under.
           </DialogDescription>
         </DialogHeader>
 
@@ -287,7 +327,7 @@ function PaymentDialog({
                   </TableCell>
                   <TableCell>{l.invoiceNumber ?? '—'}</TableCell>
                   <TableCell className="whitespace-nowrap">{formatDate(l.soldAt)}</TableCell>
-                  <TableCell className="max-w-[14rem] truncate">{l.productName}</TableCell>
+                  <TableCell>{l.productName}</TableCell>
                   <TableCell className="text-right tabular-nums">{formatDOP(l.amountCents)}</TableCell>
                   <TableCell><StateTag state={l.paidState} /></TableCell>
                 </TableRow>
@@ -301,7 +341,7 @@ function PaymentDialog({
           <span className="font-medium tabular-nums">Total: {formatDOP(selectedTotal)}</span>
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-3 sm:grid-cols-3">
           <div className="space-y-1">
             <Label>Paid from account</Label>
             <Select value={accountId} onValueChange={setAccountId}>
@@ -313,6 +353,24 @@ function PaymentDialog({
                   <SelectItem key={a.id} value={a.id}>
                     {a.name} ({a.currency})
                   </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1">
+            <Label>Expense category</Label>
+            <Select value={categoryId} onValueChange={setCategoryId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Choose category" />
+              </SelectTrigger>
+              <SelectContent className="max-h-72">
+                {catBlocks.map((b) => (
+                  <SelectGroup key={b.key}>
+                    <SelectLabel>{b.heading}</SelectLabel>
+                    {b.items.map((c) => (
+                      <SelectItem key={c.id} value={c.id} className="pl-6">{c.name}</SelectItem>
+                    ))}
+                  </SelectGroup>
                 ))}
               </SelectContent>
             </Select>

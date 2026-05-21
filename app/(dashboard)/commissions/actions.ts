@@ -6,6 +6,7 @@ export type PayoutInput = {
   earnerId: string
   moneyAccountId: string
   commissionIds: string[]
+  categoryId: string
   periodStart: string | null
   periodEnd: string | null
   notes: string | null
@@ -25,6 +26,7 @@ export async function recordCommissionPayout(
   if (!input.moneyAccountId) return { error: 'Pick the account the money came from.' }
   if (!Array.isArray(input.commissionIds) || input.commissionIds.length === 0)
     return { error: 'Tick at least one commission to pay.' }
+  if (!input.categoryId) return { error: 'Pick a commission expense category.' }
 
   const supabase = await createClient()
   const { error } = await supabase.rpc('record_commission_payout', {
@@ -32,6 +34,7 @@ export async function recordCommissionPayout(
       earner_id: input.earnerId,
       money_account_id: input.moneyAccountId,
       commission_ids: input.commissionIds,
+      category_id: input.categoryId,
       period_start: input.periodStart && input.periodStart.trim() ? input.periodStart.trim() : null,
       period_end: input.periodEnd && input.periodEnd.trim() ? input.periodEnd.trim() : null,
       notes: input.notes && input.notes.trim() ? input.notes.trim() : null,
