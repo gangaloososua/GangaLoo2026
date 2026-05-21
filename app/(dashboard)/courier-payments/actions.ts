@@ -1,4 +1,4 @@
-﻿'use server'
+'use server'
 // Round 14c.3 - courier payments server actions
 //
 // Thin TypeScript wrapper around the create_courier_payment RPC
@@ -30,6 +30,7 @@ export type CreateCourierPaymentInput = {
   paidAt: string // ISO timestamp
   amountDopTotal: number
   moneyAccountId: string
+  categoryId: string
   description: string | null
   reference: string | null
   allocations: Array<{
@@ -50,6 +51,7 @@ export async function createCourierPayment(
     return { ok: false, error: 'Amount must be a positive number' }
   }
   if (!input.moneyAccountId) return { ok: false, error: 'Payment account is required' }
+  if (!input.categoryId) return { ok: false, error: 'A courier expense category is required' }
   if (!Array.isArray(input.allocations) || input.allocations.length === 0) {
     return { ok: false, error: 'At least one allocation is required' }
   }
@@ -76,6 +78,7 @@ export async function createCourierPayment(
     p_paid_at: input.paidAt,
     p_amount_dop_total: input.amountDopTotal,
     p_money_account_id: input.moneyAccountId,
+    p_category_id: input.categoryId,
     p_description: input.description,
     p_reference: input.reference,
     p_allocations: input.allocations.map((a) => ({

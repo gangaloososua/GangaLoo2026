@@ -4,6 +4,7 @@ import { requireOwner } from '@/lib/auth/guard'
 import { listCouriersForPicker } from '@/lib/purchases'
 import { listMoneyAccounts } from '@/lib/sales'
 import { listPurchaseOrdersForPicker } from '@/lib/courier-payments'
+ import { listAccountCategories } from '@/lib/transactions'
 import { NewCourierPaymentForm } from './new-courier-payment-form'
 
 export const dynamic = 'force-dynamic'
@@ -20,11 +21,13 @@ export default async function NewCourierPaymentPage({
   await requireOwner()
   const sp = await searchParams
   const prefillPoId = sp.prefill_po?.trim() || null
-  const [couriers, moneyAccounts, purchaseOrders] = await Promise.all([
+  const [couriers, moneyAccounts, purchaseOrders, categories] = await Promise.all([
     listCouriersForPicker(),
     listMoneyAccounts(),
     listPurchaseOrdersForPicker(),
+    listAccountCategories(),
   ])
+  const expenseCategories = categories.filter((c) => c.type === 'expense')
 
   return (
     <div className="space-y-4">
@@ -51,6 +54,7 @@ export default async function NewCourierPaymentPage({
         moneyAccounts={moneyAccounts}
         purchaseOrders={purchaseOrders}
         prefillPurchaseOrderId={prefillPoId}
+        categories={expenseCategories}
       />
     </div>
   )

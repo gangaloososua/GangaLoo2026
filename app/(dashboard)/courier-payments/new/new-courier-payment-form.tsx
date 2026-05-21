@@ -18,7 +18,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
@@ -46,6 +48,7 @@ import {
 import type { CourierPickerItem } from '@/lib/purchases'
 import type { MoneyAccount } from '@/lib/sales'
 import type { PurchaseOrderPickerItem } from '@/lib/courier-payments'
+import type { AccountCategoryOption } from '@/lib/transactions'
 import {
   createCourierPayment,
   type CreateCourierPaymentInput,
@@ -56,6 +59,7 @@ type Props = {
   moneyAccounts: MoneyAccount[]
   purchaseOrders: PurchaseOrderPickerItem[]
   prefillPurchaseOrderId?: string | null
+  categories: AccountCategoryOption[]
 }
 
 type DraftAllocation = {
@@ -113,11 +117,37 @@ function poLabel(po: PurchaseOrderPickerItem): string {
     .join(' · ')
 }
 
+// Group expense categories: parent-with-children -> heading + items; childless
+// top-levels collected under "Other expense". Parents with children are
+// headings only (not selectable).
+type CatBlock = { key: string; heading: string; items: AccountCategoryOption[] }
+function buildExpenseBlocks(categories: AccountCategoryOption[]): CatBlock[] {
+  const childrenOf = new Map<string, AccountCategoryOption[]>()
+  for (const c of categories) {
+    if (c.parentId) {
+      const list = childrenOf.get(c.parentId) ?? []
+      list.push(c)
+      childrenOf.set(c.parentId, list)
+    }
+  }
+  const tops = categories.filter((c) => c.parentId === null)
+  const blocks: CatBlock[] = []
+  const standalone: AccountCategoryOption[] = []
+  for (const top of tops) {
+    const kids = childrenOf.get(top.id)
+    if (kids && kids.length > 0) blocks.push({ key: top.id, heading: top.name, items: kids })
+    else standalone.push(top)
+  }
+  if (standalone.length > 0) blocks.push({ key: 'general', heading: 'Other expense', items: standalone })
+  return blocks
+}
+
 export function NewCourierPaymentForm({
   couriers,
   moneyAccounts,
   purchaseOrders,
   prefillPurchaseOrderId,
+  categories,
 }: Props) {
   const router = useRouter()
 
@@ -128,8 +158,11 @@ export function NewCourierPaymentForm({
   )
   const [amountDopRaw, setAmountDopRaw] = useState<string>('')
   const [moneyAccountId, setMoneyAccountId] = useState<string>('')
+  const [categoryId, setCategoryId] = useState<string>('')
   const [reference, setReference] = useState<string>('')
   const [description, setDescription] = useState<string>('')
+
+  const catBlocks = useMemo(() => buildExpenseBlocks(categories), [categories])
 
   // ---- Courier combobox ----
   const [courierPickerOpen, setCourierPickerOpen] = useState(false)
@@ -200,6 +233,7 @@ export function NewCourierPaymentForm({
     paidAt.length > 0 &&
     amountDopTotal > 0 &&
     moneyAccountId.length > 0 &&
+    categoryId.length > 0 &&
     allocations.length > 0 &&
     allocations.every(
       (a) => a.purchaseOrderId.length > 0 && Number(a.amountDopRaw) > 0,
@@ -223,6 +257,7 @@ export function NewCourierPaymentForm({
       paidAt: paidAtIso,
       amountDopTotal,
       moneyAccountId,
+      categoryId,
       description: description.trim() || null,
       reference: reference.trim() || null,
       allocations: allocations.map((a) => ({
@@ -354,6 +389,28 @@ export function NewCourierPaymentForm({
                   <SelectItem key={a.id} value={a.id}>
                     {a.name}
                   </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Expense category */}
+          <div className="space-y-1.5">
+            <Label htmlFor="category">Expense category</Label>
+            <Select value={categoryId} onValueChange={(v) => setCategoryId(v)}>
+              <SelectTrigger id="category">
+                <SelectValue placeholder="Pick a category..." />
+              </SelectTrigger>
+              <SelectContent className="max-h-72">
+                {catBlocks.map((b) => (
+                  <SelectGroup key={b.key}>
+                    <SelectLabel>{b.heading}</SelectLabel>
+                    {b.items.map((c) => (
+                      <SelectItem key={c.id} value={c.id} className="pl-6">
+                        {c.name}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
                 ))}
               </SelectContent>
             </Select>
