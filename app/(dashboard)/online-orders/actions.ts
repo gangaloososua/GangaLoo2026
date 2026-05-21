@@ -191,7 +191,7 @@ export async function markOnlineOrderDispatched(
 
   revalidatePath('/online-orders')
   revalidatePath(`/online-orders/${input.saleId}`)
-  return { ok: true } as const
+  return { ok: true }
 }
 
 // ----------------------------------------------------------------------
@@ -216,7 +216,7 @@ export async function markOnlineOrderDelivered(
 
   revalidatePath('/online-orders')
   revalidatePath(`/online-orders/${input.saleId}`)
-  return { ok: true } as const
+  return { ok: true }
 }
 
 // ----------------------------------------------------------------------
@@ -248,5 +248,5 @@ export async function cancelOnlineOrder(
 
   revalidatePath('/online-orders')
   revalidatePath(`/online-orders/${input.saleId}`)
-  return { ok: true } as const
+  return { ok: true }
 }

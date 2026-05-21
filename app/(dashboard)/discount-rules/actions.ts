@@ -284,7 +284,7 @@ export async function setRuleActive(
   if (error) return { ok: false, error: error.message }
 
   revalidatePath('/discount-rules')
-  return { ok: true } as const
+  return { ok: true }
 }
 
 // ----------------------------------------------------------------------
@@ -328,5 +328,5 @@ export async function deleteRule(
   }
 
   revalidatePath('/discount-rules')
-  return { ok: true } as const
+  return { ok: true }
 }
