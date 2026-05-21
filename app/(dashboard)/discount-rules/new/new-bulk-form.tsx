@@ -1,10 +1,13 @@
 'use client'
 
 // Round 19 — New bulk rule form
+// Round 20.1 — product-scope selector swapped for the searchable
+//              ProductPicker (category filter + type-to-search). The
+//              product-vs-category SCOPE toggle is unchanged.
 //
 // Mirrors new-club-tier-form.tsx. Differences:
 //   * scope selector: PRODUCT or CATEGORY (radio toggle), feeding the
-//     matching dropdown.
+//     matching control.
 //   * a "minimum quantity" (threshold) field.
 // A bulk rule fires when the line qty >= threshold AND the line's
 // product (or its PRIMARY category) matches the chosen scope.
@@ -23,9 +26,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { ProductPicker } from './product-picker'
 import { createBulkRule } from '../actions'
 
-type ProductOpt = { id: string; name: string; sku: string }
+type ProductOpt = {
+  id: string
+  name: string
+  sku: string
+  primaryCategoryId: string | null
+}
 type CategoryOpt = { id: string; name: string }
 
 type Props = {
@@ -164,18 +173,12 @@ export function NewBulkRuleForm({ products, categories }: Props) {
               <Label className="text-xs">
                 Product <span className="text-rose-600">*</span>
               </Label>
-              <Select value={productId} onValueChange={setProductId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Pick a product…" />
-                </SelectTrigger>
-                <SelectContent>
-                  {products.map((p) => (
-                    <SelectItem key={p.id} value={p.id}>
-                      {p.name} ({p.sku})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <ProductPicker
+                products={products}
+                categories={categories}
+                value={productId}
+                onChange={setProductId}
+              />
             </div>
           ) : (
             <div className="space-y-1 sm:col-span-2">
