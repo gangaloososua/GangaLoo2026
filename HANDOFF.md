@@ -22,349 +22,312 @@ prefers those for choices. Avoid jargon without explanation - the
 user is the business owner, not the dev. When they say "i do not
 understand", explain in plain language and re-offer.
 
-NEVER use the "use the option that picks for me" pattern when the
-choice is technical and the user has explicitly said they don't
-understand. Explain first, then ask. The exception is when they
-say "choose for me, take the most accurate" - then pick and
-justify briefly. When using ask_user_input_v0 for a genuinely
-technical choice, consider adding an "explain first" option.
+NEVER use the "pick for me" pattern when the choice is technical and
+the user has said they don't understand. Explain first, then ask.
+Exception: when they say "choose for me, most accurate/correct" -
+then pick and justify briefly. When using ask_user_input_v0 for a
+technical choice, ADD an "explain first" option (used heavily and
+well this session - the user took it several times).
+
+DESIGN-FIRST: this session repeatedly turned up schema facts that
+changed the plan (products have NO category column; product<->
+category is many-to-many via product_categories with an is_primary
+flag and up to 3 cats/product). ALWAYS verify schema with a
+read-only query before assuming a column/shape exists. The type
+checker (live + guarded) catches when an assumption was wrong.
 
 DO NOT TRUST `BEGIN/ROLLBACK` in Supabase SQL editor when
-state-changing RPCs are involved (esp. with temp tables).
-Supabase SQL editor WRAPS EVERY "RUN" IN A TRANSACTION; if you
-paste two statements and the second raises an exception, the
-first rolls back too. When smoke-testing state-changing RPCs,
-only put ONE state-changing statement per Run. Verification
-SELECTs in the same paste are fine. Negative-test cases must
-be in their OWN Run, separate from any preceding state-changers.
+state-changing RPCs are involved (esp. temp tables). The editor
+WRAPS EVERY "RUN" IN A TRANSACTION; if you paste two statements and
+the second raises, the first rolls back too. Smoke state-changing
+RPCs ONE state-changer per Run. Verification SELECTs in the same
+paste are fine. Negative tests get their OWN Run.
 
 NOTE: Sequences DO NOT rollback (non-transactional by design).
+NOTE: The editor only DISPLAYS the LAST result set when a Run has
+multiple SELECTs. Run SELECTs one at a time, or UNION them into one
+(used this session for resolver smokes - shows all rows).
 
-NOTE: The Supabase SQL editor only DISPLAYS the LAST result set
-when a Run contains multiple SELECTs. To see each result, run
-SELECTs one at a time (or combine into a single SELECT).
+== CRITICAL: TYPE-CHECKING - CLEAN + GUARDED (since Round 18) ==
 
-== CRITICAL: TYPE-CHECKING - NOW CLEAN *AND* GUARDED ==
+History: app/bounce/page.tsx had a malformed <a> tag (PARSE error)
+from Round 11. TypeScript SUPPRESSES ALL type errors project-wide
+when any file has unrecoverable syntax errors. So every "tsc clean"
+from Round 11-17 only meant "no NEW syntax errors" - real checking
+was OFF ~6 rounds. Round 18 fixed bounce, fixed 26 latent errors,
+installed a guard. Baseline is now a CONFIRMED-LIVE zero.
 
-History: app/bounce/page.tsx had a malformed <a> tag (a PARSE
-error) from Round 11. TypeScript SUPPRESSES ALL semantic/type
-errors project-wide when any file has unrecoverable syntax errors.
-So every "tsc clean" from Round 11 to 17 only ever meant "no NEW
-syntax errors" - real type-checking was OFF for ~6 rounds. The
-bounce fix (commit f6ef24c) restored it and surfaced 26 latent
-type errors.
+THE COMMIT GUARD (Round 18.5):
+  - package.json script: "typecheck": "tsc --noEmit". Run with
+    `npm run typecheck`.
+  - .git/hooks/pre-commit runs typecheck before EVERY commit and
+    BLOCKS on any error. Working all session (passed on the 3
+    Round-19 commits).
+  - ESCAPE HATCH: `git commit --no-verify` for deliberate WIP.
+  - Hook is a /bin/sh script with LF endings (Git runs hooks under
+    Git Bash). Lives in .git/hooks/ which is LOCAL, NOT in the repo.
+    Fresh clone won't have it; re-create if needed.
 
-ROUND 18 (this session) FIXED ALL 26 and installed a guard.
-tsc now reports a CONFIRMED-LIVE zero (verified with a deliberate
-probe line that DID produce an error - tsc is genuinely checking,
-not silently passing).
-
-NEW WORKFLOW - THE COMMIT GUARD (installed Round 18.5):
-  - package.json now has a script: "typecheck": "tsc --noEmit".
-    Run it any time with `npm run typecheck`.
-  - .git/hooks/pre-commit runs `npm run typecheck` before EVERY
-    commit and BLOCKS the commit (exit 1) on any type error.
-    Tested in BOTH directions this session: blocks broken, allows
-    clean.
-  - ESCAPE HATCH: `git commit --no-verify` bypasses the hook for
-    deliberate work-in-progress commits.
-  - The hook is a /bin/sh script written with LF line endings
-    (Git runs hooks under Git Bash, NOT PowerShell; CRLF would
-    break it with a `\r` error). If you ever rewrite it from
-    PowerShell, force LF via
-    [System.IO.File]::WriteAllText(path, ($lines -join "`n")+"`n",
-      [System.Text.UTF8Encoding]::new($false)).
-  - The hook lives in .git/hooks/ which is LOCAL to this machine,
-    NOT tracked in the repo. A fresh clone elsewhere won't have it;
-    re-create it there if needed.
-
-LESSON (still true): "tsc clean" is only trustworthy if tsc is
-actually type-checking. If a deliberately-broken probe line
-(`const __probe__: number = 'x'`) does NOT produce an error, tsc
-is not checking that file - hunt for a syntax error elsewhere
-poisoning the run. The guard makes a masked state much harder to
-reach silently, but the probe is still the definitive check.
-
-== LOOSE END FROM ROUND 18 (low priority) ==
-
-The 5 action functions whose result type became `Ok<object>`
-(setRuleActive, deleteRule in discount-rules/actions.ts;
-markDispatched, markDelivered, cancel in online-orders/actions.ts)
-still carry a `return { ok: true } as const`. The `as const` was an
-EARLIER attempt that looked like it worked but did NOT fix the type
-error (the real fix was Ok<Record<string,never>> -> Ok<object> on
-the result-type aliases). The `as const` is now harmless dead
-weight. A future tidy-up can drop those 5 `as const`s. Not urgent;
-tree is clean and committed.
+LESSON: "tsc clean" is trustworthy only if tsc is actually checking.
+SANITY PROBE: add `const __probe__: number = 'x'` to a file, re-run;
+if no error, tsc isn't checking that file - hunt a syntax error.
+ALWAYS remove the probe after. _tsc_*.txt is gitignored.
 
 == STATE AS OF END OF LAST SESSION ==
 
-Modules complete and committed: Auth, Dashboard shell, Categories,
-Warehouses, People, Products, Settings (hub + Exchange Rates +
-Store Config + Receipt), Sales/POS, Users, RBAC, Money Accounts,
-Purchases READ (14a), Purchases WRITE (14b), Courier Payments (14c),
-ONLINE ORDERS (Round 15 FULL), SALE-DISCOUNT ENGINE Round 16 FULL
-(customer_override), SALE-DISCOUNT ENGINE Round 17 FULL (club_tier),
-TSC CLEANUP + GUARD (Round 18 FULL).
+Modules complete + committed: Auth, Dashboard shell, Categories,
+Warehouses, People, Products, Settings (hub + Exchange Rates + Store
+Config + Receipt), Sales/POS, Users, RBAC, Money Accounts, Purchases
+READ (14a), Purchases WRITE (14b), Courier Payments (14c), ONLINE
+ORDERS (15 FULL), discount engine 16 (customer_override), 17
+(club_tier), 18 (TSC cleanup + guard), 19 (bulk) FULL + cleanup.
 
-Round 18 (tsc cleanup + guard) COMPLETE - sub-rounds 18.1-18.5.
-tsc baseline is now 0 errors, confirmed live, guarded at commit.
-Last commit 470bbdf on origin/master.
+Discount engine: 3 of 5 kinds DONE (customer_override, club_tier,
+bulk). Remaining: promotion (Round 20), logistics_surcharge (21).
 
-Commits this session (Round 18):
-  470bbdf  Round 18: tsc cleanup (26 -> 0) + pre-commit typecheck guard
+Commits this session, newest last:
+  470bbdf  Round 18: tsc cleanup (26->0) + pre-commit typecheck guard
+  90d19df  Round 19: bulk (quantity) discount kind
+  b8e138b  Round 19 cleanup: drop dead 'as const' from 5 ok-result actions
+Last commit on origin/master: b8e138b.
 
-Round 18 detail (all in commit 470bbdf):
-  18.1  PurchaseStatus union was STALE - added 'cancelled' and
-        'lost' (lib/purchases-types.ts). They were real statuses:
-        markCancelled/markLost actions exist and call mark_cancelled
-        / mark_lost RPCs, wired to UI buttons. NOT dead branches.
-        This also auto-cleared the purchases/[id]/page.tsx status
-        comparison errors (88/94/215).
-  18.1  actions-bar.tsx imported nonexistent 'LotRow' - repointed to
-        'LotTrailEntry' (the real return element of
-        getLotTrailForOrder: Map<string, LotTrailEntry[]>) AND fixed
-        a real field bug: l.qty_received -> l.lot.qty_received
-        (qty_received is nested under .lot in LotTrailEntry).
-  18.2  5 action result-type mismatches. Cause: Ok<T> = {ok:true} & T;
-        with T = Record<string,never> the intersection demands
-        "has ok:true AND has zero properties" - impossible to satisfy.
-        Fix: changed those 5 result-type aliases from
-        Ok<Record<string, never>> to Ok<object> (so {ok:true} & object
-        accepts {ok:true}). Payload-carrying results like Ok<{ruleId}>
-        were never affected. (Did NOT touch the shared Ok<> helper -
-        it's duplicated in both files and serves the working results.)
-  18.2  6th TS2322 was a DIFFERENT bug: courier-payments/new/page.tsx
-        passed a lib/sales MoneyAccount[] to a form expecting a
-        lib/money-accounts MoneyAccount[] (two same-named types).
-        The form only reads a.id/a.name, so fix was repointing the
-        FORM's import (new-courier-payment-form.tsx) to the lighter
-        lib/sales MoneyAccount.
-  18.3  9 GenericStringError / ParserError casts (the known Supabase
-        dynamic-query typing quirk - runtime-harmless, shipped many
-        rounds). Routed through `unknown`:
-          lib/purchases.ts (2x as unknown as RawPurchaseOrder[])
-          lib/discount-rules.ts (1x as unknown as RawRule[])
-          lib/online-orders.ts (5x: RawSaleListRow[], RawSaleDetailRow,
-            RawSaleItem[], RawSalePayment[], RawCommission[])
-          lib/money-accounts.ts (2 sites, 6 errors: spreads of rows
-            inferred as GenericStringError; typed the source via
-            `as unknown as MoneyAccount` before spreading - site 2
-            introduces a `const row` for clarity)
-          app/(dashboard)/products/[id]/page.tsx (1x ParserError -
-            caused by a CONDITIONAL select string, so the typed client
-            can't statically parse it; `as unknown as {...}` is the
-            honest fix - the select SQL itself is valid)
-  18.4  Confirmed tsc = 0, raw output empty, probe-verified live.
-  18.5  Installed npm typecheck script + blocking pre-commit hook;
-        tested both directions; committed; pushed.
+ROUND 19 DETAIL (bulk discount; commit 90d19df):
+  Concept: "buy N or more of a product OR (primary) category, get X%
+  off." Stacks multiplicatively, 30% cap, kind sort position 2.
+  Data layer was already bulk-ready: discount_rules has threshold_qty
+  + delta_percent; DiscountRuleRow exposes thresholdQty;
+  discount_rules_shape_check already accepts bulk. NO schema migration.
+  SQL (db/migrations/round-19-bulk-01-resolver.sql, DEPLOYED):
+    * NEW param p_category_id uuid DEFAULT NULL (7th arg).
+    * REMOVED walk-in early-return: bulk needs no customer. WHERE
+      clause decides per kind (override/club_tier don't match when
+      customer/tier null).
+    * bulk match: threshold_qty IS NOT NULL AND p_qty >= threshold_qty
+      AND (scope_product_id = p_product_id OR (both category sides
+      non-null AND scope_category_id = p_category_id)).
+    * sort CASE: club_tier 0, customer_override 1, bulk 2.
+    * Smoke-tested: product scope fires at qty>=threshold, [] below;
+      category scope fires only when p_category_id passed; walk-in
+      fires. Math verified (-208000, -90000).
+  TS resolver (lib/discount-rules-resolver.ts): added categoryId to
+    ResolveLineDiscountInput; bulk branch mirrors SQL; KIND_SORT_KEY
+    already had bulk: 2.
+  CATEGORY PLUMBING (the big thread):
+    * products has NO category col. product<->category is M:N via
+      public.product_categories (product_id, category_id, is_visible,
+      is_primary, display_order). Up to 3 cats/product.
+    * DESIGN (user): category-scoped bulk matches the PRIMARY category
+      only (is_primary=true).
+    * lib/sales.ts searchProductsForSale: added 3rd parallel batch
+      query to product_categories (is_primary=true) -> categoryMap;
+      added primary_category_id: string | null to ProductSearchResult.
+    * BOTH order forms: added primary_category_id to CartLine, set on
+      line creation, passed categoryId to all 3 resolveLineDiscount
+      calls. The online form has a 2nd `productId: l.product_id` in
+      the SUBMIT payload (items.map ~L462) that must NOT get
+      categoryId - only the 3 resolver calls do. (Exactly-once anchor
+      guard caught this.)
+  ADMIN UI (rule-kind pattern):
+    * discount-rules/new/page.tsx: 3rd RULE_KINDS entry.
+    * .../new/bulk/page.tsx: NEW subroute, FETCHES products +
+      categories, passes to form.
+    * .../new/new-bulk-form.tsx: NEW. Product/category toggle +
+      min-qty + percent/priority/dates. Mirrors new-club-tier-form.
+    * actions.ts: NEW createBulkRule (Ok<{ruleId}>|Err). Validates
+      name, exactly-one scope (product XOR category), thresholdQty
+      int>=1, percent 0<p<100, dates, priority. Inserts kind:'bulk'.
+    * User browser-smoke-tested: 3 kinds shown, form loads + submits.
+  CLEANUP (b8e138b): removed dead `return { ok: true } as const` from
+    the 5 ok-result actions. Was Round 18's ineffective first attempt;
+    real fix was Ok<object>. tsc stayed clean (proves Ok<object>
+    holds). No loose ends remain.
+  TEST DATA: all Round-19 test rules DELETED end of session. Zero
+    bulk rules remain.
 
 == SALE-DISCOUNT ENGINE DESIGN DECISIONS (LOCKED) ==
 
-CRITICAL - drives all rule-kind rounds (16-21).
+  Scope: ALL 5 kinds, one per round.
+  Stacking: MULTIPLICATIVE. Cap: 30% effective max/line (running
+    factor floored 0.70). bulk obeys via the same kind-agnostic loop.
+  Stack order (audit-row order): KIND first, then priority DESC, then
+    created_at ASC. Kind order: club_tier(0), customer_override(1),
+    bulk(2). Future kinds slot into KIND_SORT_KEY (TS) + SQL sort CASE.
+  Manual override: PER-LINE. MANUAL WINS when seller types a discount;
+    typing 0 restores auto.
+  Audit: PER APPLIED RULE in sale_discount_applications; plus per-line
+    manual and per-sale-level order discount.
+  Engine: SHARED POS + online. Application: AT CART-ADD (live preview).
+  Club-tier: MODEL A - 'none' = not enrolled, no discount. Resolver
+    guards v_customer_tier <> 'none'.
+  Bulk: no customer required (fires for walk-ins); category match uses
+    PRIMARY category only.
 
-  Scope: ALL 5 rule kinds (customer_override, club_tier, bulk,
-    promotion, logistics_surcharge), one kind per round.
-  Stacking: MULTIPLICATIVE (compound; never exceeds 100%).
-  Cap: 30% effective max per line (running factor floored at 0.70).
-  Stack order (audit-row order): by KIND first, then priority DESC,
-    then created_at ASC. Current kind order: club_tier (0),
-    customer_override (1). Future kinds slot into KIND_SORT_KEY
-    (TS) and the SQL CASE WHEN. (club_tier stacks before
-    customer_override.)
-  Manual override: PER-LINE (silences auto only on that line).
-    MANUAL WINS when seller types in the discount field; typing 0
-    restores auto.
-  Audit: PER APPLIED RULE in sale_discount_applications. Also
-    per-line manual override (is_manual=true) and per-sale-level
-    order discount (sale_id, is_manual=true).
-  Engine: SHARED POS + online (same rules feed both forms).
-  Application: AT CART-ADD (live preview).
-  Club-tier model: MODEL A - 'none' tier = not yet enrolled, gets
-    NO tier discount. Admin builder blocks 'none'; the resolver
-    guards it independently (v_customer_tier <> 'none').
-
-== DUAL RESOLVERS - KEEP IN LOCK-STEP (CRITICAL FOR 19-21) ==
+== DUAL RESOLVERS - KEEP IN LOCK-STEP (CRITICAL 20-21) ==
 
   SQL: public.resolve_line_discounts
-    Latest: db/migrations/round-17-club-tier-01-resolver.sql
-    (prior: 16.2 customer_override only). STABLE SECURITY DEFINER.
-    Handles customer_override + club_tier. NOTE: the create-sale
-    RPCs do NOT call this function - they trust the cart's
-    breakdown for audit contents (16.6 design). This function is
-    available for reports / future server-side preview.
+    Latest: db/migrations/round-19-bulk-01-resolver.sql (DEPLOYED).
+    7 params: p_product_id, p_qty, p_unit_price_cents, p_customer_id,
+    p_source_warehouse_id, p_at DEFAULT now(), p_category_id DEFAULT
+    NULL. STABLE SECURITY DEFINER, NO auth gate -> smoke directly, no
+    JWT. Handles customer_override + club_tier + bulk. The create-sale
+    RPCs do NOT call it (trust the cart's breakdown, 16.6); it's for
+    reports / server-side preview.
   TS: lib/discount-rules-resolver.ts
-    Cart-time live preview, called from both forms. MIRRORS the SQL
-    algorithm exactly. Header carries a LOCK-STEP warning.
-  When Rounds 19-21 add a new rule kind, BOTH FILES change together,
-  PLUS the KIND_SORT_KEY map (TS) and the SQL ORDER BY CASE must
-  stay aligned. The TS resolver's input now includes customerId,
-  customerClubTier (string | null); future kinds may need more
-  input fields (bulk needs qty - already passed; promotion needs
-  category/date - date already passed, category via product lookup;
-  logistics_surcharge is order-level, a DIFFERENT code path).
+    Cart-time preview, both forms. MIRRORS SQL exactly. Input:
+    productId, categoryId (Round 19, PRIMARY category), qty,
+    unitPriceCents, customerId, customerClubTier, sourceWarehouseId,
+    rules, at.
+  Rounds 20-21: BOTH FILES change together, PLUS KIND_SORT_KEY (TS)
+  and SQL sort CASE stay aligned.
 
-== HOW A NEW RULE KIND GETS ADDED (PATTERN FROM 16 + 17) ==
+== HOW A NEW RULE KIND GETS ADDED (PATTERN, REFINED THROUGH 19) ==
 
-Round 17 was the template. For each remaining kind (bulk, promotion,
-logistics_surcharge):
+  1. Schema: shape_check covers all 5 kinds (verify
+     pg_get_constraintdef). Likely NO migration. Check which existing
+     columns the kind needs (bulk reused threshold_qty; promotion
+     likely reuses scope_category_id + starts_at/ends_at - all exist).
+  2. SQL resolver: CREATE OR REPLACE, add WHERE branch + sort CASE
+     position. Deliver as a download, user saves to db/migrations/
+     then pastes into Supabase. Smoke directly (no JWT).
+  3. TS resolver: mirror branch + KIND_SORT_KEY entry. Add new input
+     field if needed.
+  4. Forms: if the kind needs a new per-line input, add to
+     ResolveLineDiscountInput, CartLine type, line creation, the 3
+     resolver calls in BOTH forms. WATCH the online form's 4th
+     `productId:` (submit payload ~L462) - do NOT add resolver-only
+     fields there. categoryId is ALREADY plumbed - promotion reuses
+     it for category scope free.
+  5. Admin UI: RULE_KINDS entry + /new/<kind>/page.tsx (fetch lists
+     the form needs) + new-<kind>-form.tsx + create<Kind>Rule action
+     (mirror createBulkRule).
+  6. tsc (guarded), browser smoke, commit, push, delete test rules.
 
-  1. Schema: CHECK the discount_rules_shape_check already covers it
-     (it covers ALL 5 kinds as of 16.1 - verify with
-     pg_get_constraintdef). Likely NO schema migration needed.
-  2. SQL resolver: CREATE OR REPLACE resolve_line_discounts, add the
-     new kind's candidate-matching branch + its KIND sort position.
-  3. TS resolver: mirror the branch + KIND_SORT_KEY entry. Add any
-     new input field the kind needs.
-  4. Forms: pass any new input field to the 3 resolveLineDiscount
-     calls in BOTH new-sale-form.tsx and new-online-order-form.tsx.
-     (bulk needs nothing new - qty already passed. promotion needs
-     the product's category - may need a lookup. logistics_surcharge
-     is order-level - likely a separate resolver, not per-line.)
-  5. Admin UI: add a RULE_KINDS entry in
-     app/(dashboard)/discount-rules/new/page.tsx + a subroute
-     /discount-rules/new/<kind>/page.tsx + a new-<kind>-form.tsx
-     + a create<Kind>Rule action.
-  6. tsc (now meaningful AND guarded), browser smoke, commit, push.
-     The pre-commit hook will run tsc for you - if it blocks, the
-     error is almost certainly yours (baseline is 0 now).
+ROUND 20 (promotion) - DECIDE FIRST: roadmap says "time-bound +
+category scope," but starts_at/ends_at already exist and the resolver
+already applies the time window to ALL kinds. So promotion may be
+close to "category/product scope, within a date window, X% off" =
+bulk-minus-threshold. ASK THE USER what makes promotion distinct
+(store-wide? no threshold? everyone incl walk-in?) before designing.
+categoryId plumbing is DONE, so category-scoped promotion needs no
+new form work - just resolver branch + admin UI.
 
-NOTE: logistics_surcharge is the odd one - it's an ORDER-LEVEL
-surcharge (delta_cents, positive), not a per-line percent discount.
-It will NOT fit the per-line resolver cleanly. Design first when you
-reach it (Round 21).
+ROUND 21 (logistics_surcharge) - the odd one. ORDER-LEVEL surcharge
+(delta_cents, POSITIVE), not a per-line percent. Won't fit the
+per-line resolver cleanly. DESIGN FIRST.
 
 == ROADMAP ==
 
-16 - Sale-discount engine: customer_override (DONE)
-17 - Sale-discount engine: club_tier (DONE)
-18 - TSC cleanup (26 -> 0) + commit guard (DONE)
-19 - Sale-discount engine: bulk (qty threshold)  <-- NEXT
-20 - Sale-discount engine: promotion (time-bound + category scope)
-21 - Sale-discount engine: logistics_surcharge (order-level; design
-     first - different code path from per-line discounts)
-22 - Inventory / stock-movements UI [damage/theft write-off note
-     from the original plan]
-23 - Cashback / commissions reports
-24 - Accounting / transactions module [data-source caveat - design
-     first; PURCHASES + COURIER PAYMENTS don't post to
-     public.transactions; join-vs-extend unresolved]
-25 - Real-numbers dashboard [same data-source caveat as 24]
-26 - Spanish UI (i18n) - en-GB used throughout to avoid hydration
-     mismatches; flip each call site to es-DO. datetime-local inputs
-     inherit browser locale (Perkins's browser is German); set
-     Spanish explicitly. Sellers Delia, Estafany, Fabienne have
-     logins; Sophia ran a test sale. If sellers go live before the
-     discount engine finishes, jump i18n ahead.
+16 customer_override (DONE)  17 club_tier (DONE)
+18 TSC cleanup + guard (DONE) 19 bulk (DONE)
+20 promotion (time-bound + category scope)   <-- NEXT
+21 logistics_surcharge (order-level; design first)
+22 Inventory / stock-movements UI [damage/theft write-off note]
+23 Cashback / commissions reports
+24 Accounting / transactions module [data-source caveat - design
+   first; PURCHASES + COURIER PAYMENTS don't post to
+   public.transactions; join-vs-extend unresolved]
+25 Real-numbers dashboard [same caveat as 24]
+26 Spanish UI (i18n) - en-GB used throughout to avoid hydration
+   mismatches; flip each call site to es-DO. datetime-local inputs
+   inherit browser locale (Perkins's browser is German); set Spanish
+   explicitly. Sellers Delia, Estafany, Fabienne have logins; Sophia
+   ran a test sale. If sellers go live before the engine finishes,
+   jump i18n ahead.
 
 == IMMEDIATE NEXT STEP ==
 
-Round 19 - bulk discount kind (qty threshold). Use the rule-kind
-pattern above. The type net is now QUIET (baseline 0) and GUARDED,
-so "is this error mine?" is easy to answer each step.
+Round 20 - promotion. FIRST read the SQL resolver
+(db/migrations/round-19-bulk-01-resolver.sql) and
+lib/discount-rules-resolver.ts side by side. THEN ask the user what
+makes promotion distinct (the date window already applies to all
+kinds, so nail the real difference first). Then rule-kind pattern.
+categoryId is already plumbed through both forms.
 
-  19.0 Verify discount_rules_shape_check covers 'bulk' already
-       (pg_get_constraintdef - it should, per 16.1). Confirm which
-       columns the bulk kind requires (likely a qty threshold +
-       delta_percent). Read the SQL resolver
-       (round-17-club-tier-01-resolver.sql) and lib/discount-rules-
-       resolver.ts side by side FIRST to see exactly where the new
-       branch + KIND_SORT_KEY slot in.
-  19.1 SQL resolver: add bulk branch + KIND position. CREATE OR
-       REPLACE. Smoke it (no JWT needed - no auth gate; see below).
-  19.2 TS resolver: mirror the branch + KIND_SORT_KEY entry. qty is
-       already passed to the resolver, so likely no new form input.
-  19.3 Admin UI: RULE_KINDS entry + /new/bulk/page.tsx +
-       new-bulk-form.tsx + createBulkRule action.
-  19.4 tsc (guard runs it), browser smoke, commit, push.
+== TYPESCRIPT VERIFICATION ==
 
-== TYPESCRIPT VERIFICATION PATTERN ==
-
-Baseline is now 0. Capture FULL output + total count, not a
-filtered view (a filtered view is what hid the masked state).
-
+Quick: `npm run typecheck` (exits non-zero on error; hook runs it).
+Full breakdown:
   npx tsc --noEmit 2>&1 | Out-String | Set-Content -LiteralPath "_tsc_full.txt" -Encoding utf8
-  Write-Host "=== total error count ==="
   (Select-String -LiteralPath "_tsc_full.txt" -Pattern "error TS").Count
-  Write-Host "=== by error code ==="
   Select-String -LiteralPath "_tsc_full.txt" -Pattern "error (TS\d+)" | ForEach-Object { $_.Matches[0].Groups[1].Value } | Group-Object | Sort-Object Count -Descending | Format-Table Count, Name -AutoSize
 
-If your change adds errors, the total rises above 0 and your files
-appear. Quicker: just `npm run typecheck` (same thing, exits non-zero
-on any error). The pre-commit hook runs this automatically.
+Adding a required field to a shared input type (like categoryId on
+ResolveLineDiscountInput) makes tsc point at EVERY call site - the
+intended way to find all spots to update. Expect it, work through them.
 
-SANITY PROBE (if you suspect tsc isn't really checking a file): add
-`const __probe__: number = 'x'` to it and re-run. If no error
-appears, tsc is not checking that file - hunt for a syntax error
-poisoning the run. ALWAYS remove the probe after.
+== POWERSHELL GOTCHAS (EXPANDED THIS SESSION) ==
 
-_tsc_*.txt is gitignored. Scratch files won't be committed.
+LINE ENDINGS - THE BIG ONE. Files here can be MIXED: lib/sales.ts
+this session was ~536 LF + ~5 CRLF lines. A multi-line str_replace
+anchor spanning an LF/CRLF boundary matches as NEITHER pure-LF nor
+pure-CRLF. RULES:
+  * Prefer SINGLE-LINE anchors (no embedded newline = ending can't
+    bite). Rescued every stuck edit this session.
+  * Insert after a line: replace "<line>`n" with
+    "<line>`n<content>`n" using $n = "`n".
+  * Detect: $crlf = ([regex]::Matches($raw,"`r`n")).Count ;
+    $lf = ([regex]::Matches($raw,"(?<!`r)`n")).Count.
+  * If a multi-line anchor returns False, try the other ending or
+    break into single-line anchors. Dump region with "|$_|" markers
+    to reveal whitespace/blank lines (a stray line between brace and
+    first field broke a CartLine anchor this session).
 
-== POWERSHELL GOTCHAS ==
+EXACTLY-ONCE GUARD. When an anchor might appear >1 (e.g.
+`productId: l.product_id,` is in BOTH a resolver call and a submit
+payload), require count -eq 1 before writing; if 2, LOOK at both
+before deciding. Caught a near-bug (categoryId nearly went into the
+submit payload).
 
-LINE ENDINGS matter for str_replace probes. Files Claude wrote via
-create_file (downloaded + Move-Item'd) are LF. Files written by
-PowerShell round-trips, or originally Windows-checked-in, are CRLF.
-PowerShell here-string `r`n is CRLF. RULE: when patching a file
-Claude generated this/last session, probe with `n. When patching an
-older file, probe with `r`n. If a probe returns False, TRY THE OTHER
-before abandoning. When in doubt, match on a single line WITHOUT
-surrounding newlines. For multi-line probes that might be either,
-probe LF first then fall back to CRLF in the same script (done this
-session for the money-accounts spread fix).
+DO NOT USE -f FORMAT OPERATOR to build code strings. `||`, `{`, `}`
+make -f throw "input string wrong format" (German: "Die
+Eingabezeichenfolge hat das falsche Format"). Use + concatenation
+with a $n/$c newline variable.
 
-ALL-OR-NOTHING MULTI-EDIT: probe N exact strings, print found?/True
-for each, only write if ALL present. Used repeatedly this session;
-very safe. For single-string edits, probe Contains() first, abort
-if not found.
+ALL-OR-NOTHING MULTI-EDIT (used constantly, very safe): array of
+@{old;new}, probe every old (print found?/count), write only if ALL
+present/exactly-once, then loop Replace.
 
-ONE-LINER str_replace via .NET (preserves LF, no BOM):
+ONE-LINER str_replace via .NET (preserves endings, no BOM):
   $abs = (Resolve-Path -LiteralPath "path").ProviderPath
   $raw = [System.IO.File]::ReadAllText($abs)
-  $old = "exact string"; $new = "replacement"
   Write-Host "found? $($raw.Contains($old))"
   if ($raw.Contains($old)) {
     [System.IO.File]::WriteAllText($abs, $raw.Replace($old,$new),
-      [System.Text.UTF8Encoding]::new($false))
-    Write-Host "wrote"
-  } else { Write-Host "ABORT" }
+      [System.Text.UTF8Encoding]::new($false)); "wrote"
+  } else { "ABORT" }
 
-COUNT occurrences before replace (e.g. when you expect exactly N):
-  ([regex]::Matches($raw, [regex]::Escape($old))).Count
+COUNT before replace: ([regex]::Matches($raw,
+[regex]::Escape($old))).Count
 
 SQL into Supabase via clipboard:
   Get-Content -LiteralPath "path.sql" -Raw | Set-Clipboard
-Then CLEAR the editor first, paste, Run (paste appends).
+CLEAR the editor first, paste, Run (paste appends).
 
-MULTI-FILE move + mkdir (semicolon-chained single line):
-  $dl = "$env:USERPROFILE\Downloads"; New-Item -ItemType Directory -Force -Path "app\(dashboard)\x\sub" | Out-Null; Move-Item -LiteralPath "$dl\a.tsx" -Destination "app\(dashboard)\x\sub\page.tsx" -Force; Write-Host "done"
+MULTI-FILE move + mkdir (one line):
+  $dl = "$env:USERPROFILE\Downloads"; New-Item -ItemType Directory -Force -Path "app\(dashboard)\x\sub" | Out-Null; Move-Item -LiteralPath "$dl\a.tsx" -Destination "app\(dashboard)\x\sub\page.tsx" -Force; "done"
 
-KNOWN: prompt stuck at >> after a pasted block. Ctrl+C to escape
-(NOT Enter). If still stuck, close + reopen the window.
+PASTE A SNIPPET INTO AN EXISTING FILE: read snippet, strip its
+preamble via IndexOf a marker, normalize endings to target file's,
+Replace a divider/anchor with code+divider. Done this session to
+insert createBulkRule before the setRuleActive divider.
 
-KNOWN: Set-Location does NOT update process cwd for
-[System.IO.Path]::GetFullPath. Use Resolve-Path -LiteralPath then
-.ProviderPath (used everywhere this session, works reliably).
-
-KNOWN: PS 5.1 Get-Content -Raw normalizes to CRLF. For round-trip
-writes use [System.IO.File]::ReadAllText + WriteAllText.
-
-KNOWN: -LiteralPath needed for bracketed paths like
-app\(dashboard)\...; in git add, quote the (dashboard) segment:
-  git add app/"(dashboard)"/discount-rules/actions.ts
-(git add -A also works and is simpler when staging everything.)
-
-KNOWN: git warns "LF will be replaced by CRLF" when staging files
-Claude wrote with LF. HARMLESS - just line-ending normalization on
-checkout. Not an error.
+KNOWN: prompt stuck at >> after a pasted block. Ctrl+C (NOT Enter).
+KNOWN: Set-Location does NOT update cwd for
+[System.IO.Path]::GetFullPath. Use Resolve-Path -LiteralPath +
+.ProviderPath.
+KNOWN: PS 5.1 Get-Content -Raw normalizes to CRLF. Use
+ReadAllText/WriteAllText for round-trips.
+KNOWN: -LiteralPath needed for bracketed (dashboard) paths. git
+add -A is simplest.
+KNOWN: git "LF will be replaced by CRLF" warning is harmless.
 
 == INFRA RECAP ==
 
-Two PowerShell windows: Window 1 runs `npm run dev` (leave running);
-Window 2 for git/file writes/tsc.
+Two PowerShell windows: Window 1 `npm run dev` (leave running);
+Window 2 for git/file writes/tsc/clipboard.
 
 SUPABASE_SERVICE_ROLE_KEY in .env.local, never committed. Only
-lib/supabase/admin.ts uses it (has import 'server-only'). ssr client
+lib/supabase/admin.ts uses it (import 'server-only'). ssr client
 (lib/supabase/server.ts) respects RLS.
 
 Auth guards (lib/auth/guard.ts):
@@ -372,126 +335,113 @@ Auth guards (lib/auth/guard.ts):
   requireRole(allowed) -> role allowlist
   requireOwner()       -> OWNER_ROLES sugar
 Discount rules use requireRole(['owner','admin'] as const).
+requireRole returns a caller with .id (created_by on inserts).
 
 == JWT IMPERSONATION FOR RPC SMOKES ==
 
-SQL editor has auth.uid() = NULL by default, so SECURITY DEFINER
-RPCs with RBAC gates reject. To smoke one:
+SQL editor has auth.uid()=NULL by default; SECURITY DEFINER RPCs with
+RBAC gates reject. To smoke one:
   SET LOCAL request.jwt.claims =
     '{"sub":"<auth_user_id>","role":"authenticated"}';
   SELECT public.your_rpc(...);
 User's auth_user_id: 3f135a05-76fb-4859-9009-3a0b606815c1
 User's profile id:    17b11149-5480-4716-8a55-5f7905c94543
-SET LOCAL is per-transaction; JWT and SELECT in the same Run.
-
-NOTE: resolve_line_discounts is STABLE SECURITY DEFINER but has NO
-auth gate (it reads rules + a tier; no writes), so it can be smoked
-directly with no JWT.
+SET LOCAL is per-transaction; JWT + SELECT in the same Run.
+NOTE: resolve_line_discounts has NO auth gate -> no JWT needed.
 
 == TEST DATA STILL IN DB ==
 
-Sales fixtures (left intentionally per project convention):
-  ONL-0001 Delivered, fully traced. Source/fulfillment=Montellano.
+Sales fixtures (left intentionally):
+  ONL-0001 Delivered, fully traced (Montellano).
   ONL-0003 Cancelled unpaid pickup. Stock returned.
   ONL-0004 Cancelled paid delivery. Compensating payment row.
-  ONL-0005 Round 15.7 Henriles delivery lifecycle (pre-discount).
-  FAC-2891 16.6 POS audit: sale-level manual (10000) + line manual
-    fallback (5000). KEEP.
-  FAC-2892 16.6 POS audit: line auto attributed to TEST-16.4 (10%,
-    5000). KEEP.
-  ONL-0006 16.6 online audit, later CANCELLED via UI; audit row
-    survived (cancelled, attribution intact). KEEP.
+  ONL-0005 15.7 Henriles delivery lifecycle (pre-discount).
+  FAC-2891 16.6 POS audit: sale-level manual + line manual fallback.
+  FAC-2892 16.6 POS audit: line auto attributed to TEST-16.4.
+  ONL-0006 16.6 online audit, later CANCELLED via UI; audit survived.
 
 Discount rule fixtures:
-  SMOKE-16.1 (774bbe2c-...) customer_override 10% on OPERATOR
-    profile (Perkins). Won't fire in carts. Safe to delete.
-  TEST-16.4 POS smoke 10% (17a1cd31-...) customer_override on
-    Henriles. KEEP.
-  TEST-17 bronze 5% (8ca9e1b5-...) club_tier on bronze. KEEP or
-    delete - bronze no longer matches Henriles (she's silver now).
-  'Silver tier 7%' club_tier on silver, created via the 17.4 admin
-    UI. KEEP - matches Henriles.
+  SMOKE-16.1 customer_override 10% on OPERATOR (Perkins). Won't fire
+    in carts. Safe to delete.
+  TEST-16.4 POS smoke 10% customer_override on Henriles. KEEP.
+  TEST-17 bronze 5% club_tier. Henriles is silver now. KEEP/delete.
+  'Silver tier 7%' club_tier on silver (17.4 UI). KEEP - matches her.
+  (All Round-19 bulk test rules DELETED end of session.)
 
-Customer state:
-  Henriles Bonhomme (profile cf125be7-...) is currently
-    club_tier='silver'. She stacks 'Silver tier 7%' + TEST-16.4 10%
-    = ~16.3% in any cart. For a clean baseline customer, reset her
-    to 'none' or use a different customer for non-discount tests.
+Customer state: Henriles Bonhomme (profile cf125be7-...) is
+  club_tier='silver'. Stacks 'Silver tier 7%' + TEST-16.4 10% =
+  ~16.3% in carts. For a clean baseline, reset her to 'none' or use a
+  different customer.
 
 == KEY VERIFIED FACTS ==
 
-- profiles.club_tier is the tier column (USER-DEFINED enum
-  public.club_tier: none, bronze, silver, gold, platinum).
-- discount_rules_shape_check already covers ALL 5 kinds (verified
-  via pg_get_constraintdef). club_tier branch requires
-  scope_club_tier + delta_percent. No schema migration was needed
-  for Round 17.
-- PurchaseStatus union (lib/purchases-types.ts) is now: pending,
-  paid_supplier, received, complete, cancelled, lost (Round 18 added
-  the last two). PURCHASE_STATUSES array matches.
-- getLotTrailForOrder returns Map<string, LotTrailEntry[]>;
-  LotTrailEntry has nested .lot (qty_received etc.) + .consumption[].
+- profiles.club_tier enum public.club_tier: none, bronze, silver,
+  gold, platinum.
+- discount_rules_shape_check covers ALL 5 kinds. Columns: scope_
+  product_id, scope_category_id, scope_warehouse_id, scope_club_tier,
+  scope_customer_id, scope_source_warehouse_id,
+  scope_fulfillment_warehouse_id, threshold_qty, delta_percent
+  (numeric 0.01-99.99), delta_cents (int >0, surcharges only),
+  priority, starts_at, ends_at, is_active, name (NOT NULL - every
+  rule needs a name), created_by.
+- products has NO category column. product<->category M:N via
+  public.product_categories (product_id, category_id, is_visible,
+  is_primary, display_order); up to 3 cats/product. Category-scoped
+  kinds match the PRIMARY category (is_primary=true).
+- ProductSearchResult (lib/sales.ts) includes primary_category_id:
+  string | null, filled by a batched product_categories lookup.
+- resolve_line_discounts: 7 params, no auth gate, bulk fires for
+  walk-ins (NULL customer).
 - Ok<T> = {ok:true} & T (duplicated in discount-rules/actions.ts and
-  online-orders/actions.ts). For a no-payload success, the result
-  type must be Ok<object>, NOT Ok<Record<string,never>>.
+  online-orders/actions.ts). No-payload success result type must be
+  Ok<object>, NOT Ok<Record<string,never>>.
 - TWO MoneyAccount types: lib/sales (minimal {id,name,kind}) and
-  lib/money-accounts (rich). Components reading only id/name/kind
-  should import from lib/sales.
-- Supabase dynamic-query typing quirk: a .select() built from a
-  variable/conditional string defeats the typed client (infers
-  GenericStringError or ParserError). Fix: `as unknown as <RowType>`.
-  Runtime-harmless.
-- The TS resolver's amountCents is NEGATIVE (cents off); the RPC
-  stores audit amount_cents POSITIVE (abs() in the 16.6 migration).
-- POS action (sales/actions.ts) takes snake_case input, forwards as
-  p_payload directly. Online action (online-orders/actions.ts) takes
-  camelCase, translates field-by-field. Forms serialize the
-  resolver's camelCase breakdown to snake_case before/at the action.
-- The discount-rules /new route is a kind picker with subroutes
-  (customer-override/, club-tier/). new-customer-override-form.tsx
-  was NOT moved - subroutes import it via ../new-customer-override-form.
-- public.sales is source of truth for both POS and online.
-- tracking_status is TEXT, not enum.
-- NO trigger on sale_payments. paid_cents updated by RPC manually.
-- sale_payments_amount_cents_check allows negative (15.2.3).
+  lib/money-accounts (rich). Read-only-id/name/kind imports use
+  lib/sales.
+- Supabase dynamic-query typing quirk: .select() from a variable/
+  conditional string -> GenericStringError or ParserError. Fix:
+  `as unknown as <RowType>`. Runtime-harmless.
+- TS resolver amountCents NEGATIVE; RPC stores audit amount_cents
+  POSITIVE (abs() in 16.6).
+- POS action takes snake_case, forwards as p_payload. Online action
+  takes camelCase, translates field-by-field.
+- discount-rules /new is a kind picker with subroutes
+  (customer-override/, club-tier/, bulk/). Forms one level up
+  (new-<kind>-form.tsx), imported via ../new-<kind>-form.
+- Online form has a 2nd `productId: l.product_id` in its SUBMIT
+  payload (items.map ~L462) - NOT a resolver call. Don't add
+  resolver-only fields there.
+- public.sales source of truth for both. tracking_status TEXT. NO
+  trigger on sale_payments (paid_cents set by RPC).
+  sale_payments_amount_cents_check allows negative.
 - warehouses.distributor_id + distributor_commission_percent.
-- profiles.commission_percent_override exists; NO
-  discount_percent_override (per-customer discount goes via
-  discount_rules customer_override kind).
-- sale_discount_applications XOR constraints: sda_target_check
-  (sale_id XOR sale_item_id), sda_source_check (is_manual XOR
-  discount_rule_id). Insert ONE side only.
-- discount_rules.delta_percent numeric (0.01-99.99). delta_cents
-  integer (>0, surcharges only).
+  profiles.commission_percent_override exists; NO
+  discount_percent_override.
+- sale_discount_applications XOR: sda_target_check (sale_id XOR
+  sale_item_id), sda_source_check (is_manual XOR discount_rule_id).
 - "Discount Rules" nav uses Receipt icon.
 
 == SEARCH ==
 
-conversation_search queries for next session:
-  "Round 18 tsc cleanup 26 to zero guard"
-  "pre-commit hook typecheck npm script"
-  "PurchaseStatus stale cancelled lost markLost"
-  "LotRow LotTrailEntry actions-bar import fix"
-  "Ok object Record never action result type"
-  "GenericStringError unknown cast online-orders purchases"
-  "MoneyAccount two types lib sales money-accounts"
-  "Round 17 club_tier resolver KIND_SORT_KEY"
-  "dual resolver SQL TS lock-step"
-  "rule kind pattern bulk promotion logistics"
-  "discount-rules new kind picker subroute"
+conversation_search queries:
+  "Round 19 bulk discount quantity threshold"
+  "primary category product_categories is_primary"
+  "ProductSearchResult primary_category_id sales.ts"
+  "resolve_line_discounts p_category_id walk-in bulk"
+  "createBulkRule new-bulk-form scope toggle"
+  "mixed line endings single-line anchor"
+  "exactly-once anchor guard submit payload"
+  "Round 18 tsc cleanup guard pre-commit"
+  "Ok object Record never action result"
+  "dual resolver SQL TS lock-step KIND_SORT_KEY"
+  "rule kind pattern promotion logistics"
 
 == PICK UP AT ==
 
-Round 19.0 - bulk discount kind. FIRST read the SQL resolver
-(db/migrations/round-17-club-tier-01-resolver.sql) and
-lib/discount-rules-resolver.ts side by side to see exactly where the
-bulk branch + KIND_SORT_KEY entry slot in. Confirm
-discount_rules_shape_check covers 'bulk' (pg_get_constraintdef) and
-which columns it needs. Then follow the rule-kind pattern (SQL
-resolver -> TS resolver -> admin UI -> tsc/smoke/commit).
+Round 20 - promotion. Read both resolvers side by side, THEN ask the
+user what makes promotion distinct from a date-bounded bulk/override
+(the date window already applies to all kinds). categoryId already
+plumbed. Then rule-kind pattern: SQL -> TS -> (forms only if new
+input) -> admin UI -> tsc/smoke/commit/push -> delete test rules.
 
-The commit guard now runs tsc automatically; baseline is 0. Use
-`npm run typecheck` for a quick check, or the full verification
-pattern above when you want the by-code breakdown.
-
-Last commit pushed: 470bbdf.
+Guard runs tsc automatically; baseline 0. Last pushed: b8e138b.
