@@ -14,6 +14,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { StockOnHandTable } from './stock-on-hand-table'
 import { MovementsLedger } from './movements-ledger'
 import { InventoryDashboard } from './inventory-dashboard'
+import { AdjustmentForm } from './adjustment-form'
 
 export const dynamic = 'force-dynamic'
 
@@ -107,6 +108,7 @@ export default async function InventoryPage({
           <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
           <TabsTrigger value="stock">Stock on hand</TabsTrigger>
           <TabsTrigger value="history">History</TabsTrigger>
+          <TabsTrigger value="adjust">Adjust stock</TabsTrigger>
         </TabsList>
 
         <TabsContent value="dashboard" className="pt-4">
@@ -140,6 +142,9 @@ export default async function InventoryPage({
               to: sp.to ?? '',
             }}
           />
+        </TabsContent>
+        <TabsContent value="adjust" className="pt-4">
+          <AdjustmentForm warehouses={warehouses} />
         </TabsContent>
       </Tabs>
     </div>
