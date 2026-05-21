@@ -1,14 +1,13 @@
 // Round 16.3 — Discount rules > New (server)
 // Round 17    — converted to a rule-kind picker
+// Round 20    — promotion entry added
 import Link from 'next/link'
 import { ChevronLeft, Receipt } from 'lucide-react'
 import { requireRole } from '@/lib/auth/guard'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-
 export const dynamic = 'force-dynamic'
-
-// Rule kinds the builder UI supports. Rounds 18-21 add bulk,
-// promotion, and logistics_surcharge entries here.
+// Rule kinds the builder UI supports. Round 21 adds the
+// logistics_surcharge entry here.
 const RULE_KINDS: Array<{
   href: string
   title: string
@@ -32,11 +31,15 @@ const RULE_KINDS: Array<{
     blurb:
       'A discount that kicks in when a customer buys at or above a set quantity of a product or category.',
   },
+  {
+    href: '/discount-rules/new/promotion',
+    title: 'Promotion (daily / weekly deal)',
+    blurb:
+      'A limited-time % off a single product, for everyone including walk-ins, with no minimum quantity.',
+  },
 ]
-
 export default async function NewDiscountRulePage() {
   await requireRole(['owner', 'admin'] as const)
-
   return (
     <div className="space-y-4">
       <div>
@@ -53,11 +56,10 @@ export default async function NewDiscountRulePage() {
           New discount rule
         </h1>
         <p className="text-sm text-muted-foreground">
-          Pick the kind of rule to create. More kinds (bulk, promotion,
-          logistics surcharge) arrive in later rounds.
+          Pick the kind of rule to create. The logistics surcharge kind
+          arrives in a later round.
         </p>
       </div>
-
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         {RULE_KINDS.map((k) => (
           <Link key={k.href} href={k.href} className="block">

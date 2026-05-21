@@ -330,3 +330,72 @@ export async function deleteRule(
   revalidatePath('/discount-rules')
   return { ok: true }
 }
+
+// ----------------------------------------------------------------------
+// createPromotionRule  (Round 20)
+//
+// A promotion is a time-bound % off a single product, for EVERYONE
+// (incl. walk-ins), with NO minimum quantity. Product-scoped only.
+// ----------------------------------------------------------------------
+export type CreatePromotionRuleInput = {
+  name: string
+  scopeProductId: string
+  deltaPercent: number
+  startsAt: string | null // ISO datetime
+  endsAt: string | null // ISO datetime
+  priority: number
+}
+export type CreatePromotionRuleResult = Ok<{ ruleId: string }> | Err
+
+export async function createPromotionRule(
+  input: CreatePromotionRuleInput,
+): Promise<CreatePromotionRuleResult> {
+  const caller = await requireRole(['owner', 'admin'] as const)
+  const name = input.name.trim()
+  if (!name) return { ok: false, error: 'Rule name is required' }
+  if (!input.scopeProductId) return { ok: false, error: 'Pick a product' }
+  if (
+    !Number.isFinite(input.deltaPercent) ||
+    input.deltaPercent <= 0 ||
+    input.deltaPercent >= 100
+  ) {
+    return {
+      ok: false,
+      error: 'Discount percent must be greater than 0 and less than 100',
+    }
+  }
+  if (
+    input.startsAt &&
+    input.endsAt &&
+    new Date(input.startsAt) > new Date(input.endsAt)
+  ) {
+    return { ok: false, error: 'Start date must be on or before end date' }
+  }
+  if (
+    !Number.isFinite(input.priority) ||
+    input.priority < 0 ||
+    !Number.isInteger(input.priority)
+  ) {
+    return { ok: false, error: 'Priority must be a non-negative integer' }
+  }
+
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('discount_rules')
+    .insert({
+      kind: 'promotion',
+      name,
+      is_active: true,
+      starts_at: input.startsAt,
+      ends_at: input.endsAt,
+      scope_product_id: input.scopeProductId,
+      delta_percent: input.deltaPercent,
+      priority: input.priority,
+      created_by: caller.id,
+    })
+    .select('id')
+    .single()
+  if (error) return { ok: false, error: error.message }
+  revalidatePath('/discount-rules')
+  return { ok: true, ruleId: (data as { id: string }).id }
+}

@@ -1,9 +1,11 @@
 // Round 16.4 — TS resolver for line discounts
 // Round 17  — club_tier support added
+// Round 19  — bulk support added (product/category scope, walk-in capable)
+// Round 20  — promotion support added; stale walk-in early return removed
 //
 // Mirrors the SQL function `public.resolve_line_discounts`
-// (see db/migrations/round-17-club-tier-01-resolver.sql for the
-// current version; 16.2/16.6 were the prior versions).
+// (see db/migrations/round-20-promotion-01-resolver.sql for the
+// current version).
 // Used for cart-time live preview in both POS and online-order forms;
 // SQL function is the authority at create-sale time.
 //
@@ -13,7 +15,7 @@
 // shared design contract.
 //
 // Currently supports: customer_override (Round 16), club_tier (Round 17),
-// bulk (Round 19).
+// bulk (Round 19), promotion (Round 20).
 
 import type { DiscountRuleRow, DiscountRuleKind } from '@/lib/discount-rules'
 
@@ -26,8 +28,8 @@ const KIND_SORT_KEY: Record<DiscountRuleKind, number> = {
   club_tier: 0,
   customer_override: 1,
   bulk: 2,                // Round 19
-  promotion: 3,           // reserved for Round 19
-  logistics_surcharge: 4, // reserved for Round 20
+  promotion: 3,           // Round 20
+  logistics_surcharge: 4, // reserved for Round 21
 }
 
 export type AppliedDiscount = {
@@ -64,11 +66,11 @@ export type ResolveLineDiscountResult = {
 export function resolveLineDiscount(
   input: ResolveLineDiscountInput,
 ): ResolveLineDiscountResult {
-  // Walk-in (no customer) can't match any currently-supported rule.
-  // Matches the SQL guard on p_customer_id IS NULL.
-  if (input.customerId == null) {
-    return { totalDiscountCents: 0, applied: [] }
-  }
+  // No walk-in early return. Since Round 19 (bulk) and Round 20
+  // (promotion) can fire without a customer, we let each kind's filter
+  // decide. customer_override and club_tier still won't match a walk-in
+  // (their guards below require a customer / a tier). Mirrors the SQL,
+  // which dropped its p_customer_id IS NULL early return in Round 19.
 
   const atMs = input.at.getTime()
 
@@ -90,7 +92,9 @@ export function resolveLineDiscount(
       if (r.endsAt && new Date(r.endsAt).getTime() < atMs) return false
 
       if (r.kind === 'customer_override') {
-        return r.scopeCustomerId === input.customerId
+        return (
+          input.customerId !== null && r.scopeCustomerId === input.customerId
+        )
       }
       if (r.kind === 'club_tier') {
         return (
@@ -105,6 +109,12 @@ export function resolveLineDiscount(
           input.categoryId !== null &&
           r.scopeCategoryId === input.categoryId
         return productMatch || categoryMatch
+      }
+      // Round 20: promotion — time-bound product deal. No customer, no
+      // tier, no threshold → fires for everyone incl. walk-ins. The
+      // date-window filter above already bounds it (daily/weekly).
+      if (r.kind === 'promotion') {
+        return r.scopeProductId === input.productId
       }
       // Other kinds: not yet supported here. The SQL function will
       // produce the canonical audit at confirm time.
