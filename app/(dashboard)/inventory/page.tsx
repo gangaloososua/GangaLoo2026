@@ -36,7 +36,11 @@ export default async function InventoryPage({
 
   if (!isOwner) {
     // Sellers / distributors: current stock on hand only, no costs, no history.
-    const stock = await fetchStockOnHand()
+    const [stock, sellerWarehouses, sellerCategories] = await Promise.all([
+      fetchStockOnHand(),
+      listWarehousesForFilter(),
+      listCategoriesForFilter(),
+    ])
     return (
       <div className="space-y-4">
         <div>
@@ -45,7 +49,11 @@ export default async function InventoryPage({
             Current stock on hand across all warehouses.
           </p>
         </div>
-        <StockOnHandTable rows={stock} />
+        <StockOnHandTable
+          rows={stock}
+          warehouses={sellerWarehouses}
+          categories={sellerCategories.filter((c) => c.parentId === null)}
+        />
       </div>
     )
   }
@@ -110,7 +118,11 @@ export default async function InventoryPage({
         </TabsContent>
 
         <TabsContent value="stock" className="pt-4">
-          <StockOnHandTable rows={stock} />
+          <StockOnHandTable
+            rows={stock}
+            warehouses={warehouses}
+            categories={categories.filter((c) => c.parentId === null)}
+          />
         </TabsContent>
 
         <TabsContent value="history" className="pt-4">

@@ -13,28 +13,52 @@ export type StockOnHandRow = {
   productName: string
   warehouseId: string
   warehouseName: string
+  categoryId: string | null
+  categoryName: string
   qtyOnHand: number
 }
 
-// Sum qty_remaining grouped by (product, warehouse). Rows that net to
-// zero or below are dropped — only things actually in stock are shown.
-export async function fetchStockOnHand(): Promise<StockOnHandRow[]> {
+// Sum qty_remaining grouped by (product, warehouse), attaching each
+// product's PRIMARY category rolled up to its top-level parent. Optional
+// warehouseId narrows to one warehouse. Zero/negative rows are dropped.
+export async function fetchStockOnHand(
+  warehouseId?: string,
+): Promise<StockOnHandRow[]> {
   const supabase = await createClient()
-  const { data, error } = await supabase
+
+  // Category tree -> top-level id+name per category id.
+  const { data: cats, error: catErr } = await supabase
+    .from('categories')
+    .select('id, name, parent_id')
+  if (catErr) throw catErr
+  const catName = new Map<string, string>()
+  const parentOf = new Map<string, string | null>()
+  for (const c of (cats ?? []) as Array<{ id: string; name: string; parent_id: string | null }>) {
+    catName.set(c.id, c.name)
+    parentOf.set(c.id, c.parent_id)
+  }
+  const topLevel = (id: string): string => parentOf.get(id) ?? id
+
+  // Each product's primary category.
+  const { data: pcs, error: pcErr } = await supabase
+    .from('product_categories')
+    .select('product_id, category_id')
+    .eq('is_primary', true)
+  if (pcErr) throw pcErr
+  const primaryCatOf = new Map<string, string>()
+  for (const pc of (pcs ?? []) as Array<{ product_id: string; category_id: string }>) {
+    primaryCatOf.set(pc.product_id, pc.category_id)
+  }
+
+  let lotQuery = supabase
     .from('inventory_lots')
-    .select(
-      'product_id, warehouse_id, qty_remaining, products(name), warehouses(name)',
-    )
+    .select('product_id, warehouse_id, qty_remaining, products(name), warehouses(name)')
     .gt('qty_remaining', 0)
+  if (warehouseId) lotQuery = lotQuery.eq('warehouse_id', warehouseId)
+  const { data, error } = await lotQuery
   if (error) throw error
 
-  type Acc = {
-    productId: string
-    productName: string
-    warehouseId: string
-    warehouseName: string
-    qtyOnHand: number
-  }
+  type Acc = StockOnHandRow
   const byKey = new Map<string, Acc>()
   for (const lot of (data ?? []) as unknown as Array<{
     product_id: string
@@ -44,25 +68,29 @@ export async function fetchStockOnHand(): Promise<StockOnHandRow[]> {
     warehouses: { name: string } | null
   }>) {
     const key = lot.product_id + '|' + lot.warehouse_id
-    const existing = byKey.get(key)
     const qty = Number(lot.qty_remaining) || 0
+    const existing = byKey.get(key)
     if (existing) {
       existing.qtyOnHand += qty
     } else {
+      const primary = primaryCatOf.get(lot.product_id)
+      const topId = primary ? topLevel(primary) : null
       byKey.set(key, {
         productId: lot.product_id,
         productName: lot.products?.name ?? '(unknown product)',
         warehouseId: lot.warehouse_id,
         warehouseName: lot.warehouses?.name ?? '(unknown warehouse)',
+        categoryId: topId,
+        categoryName: topId ? catName.get(topId) ?? '(unknown)' : '(uncategorized)',
         qtyOnHand: qty,
       })
     }
   }
-
   return Array.from(byKey.values())
     .filter((r) => r.qtyOnHand > 0)
     .sort(
       (a, b) =>
+        a.categoryName.localeCompare(b.categoryName) ||
         a.productName.localeCompare(b.productName) ||
         a.warehouseName.localeCompare(b.warehouseName),
     )
