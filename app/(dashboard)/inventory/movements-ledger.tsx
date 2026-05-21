@@ -166,6 +166,48 @@ export function MovementsLedger({
     setShowHits(false)
   }
 
+  function exportCsv() {
+    const headers = [
+      'Date',
+      'Product',
+      'Warehouse',
+      'Type',
+      'Qty',
+      'Unit cost (DOP)',
+      'Reason',
+      'By',
+    ]
+    const esc = (v: string | number | null): string => {
+      const s = v === null || v === undefined ? '' : String(v)
+      return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s
+    }
+    const lines = [headers.join(',')]
+    for (const m of rows) {
+      lines.push(
+        [
+          esc(m.occurredAt),
+          esc(m.productName),
+          esc(m.warehouseName),
+          esc(KIND_LABELS[m.kind] ?? m.kind),
+          esc(m.qtyDelta),
+          esc(m.unitCostDop === null ? '' : m.unitCostDop),
+          esc(m.adjustmentReason),
+          esc(m.createdByName),
+        ].join(','),
+      )
+    }
+    const csv = lines.join('\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'stock-movements-' + new Date().toISOString().slice(0, 10) + '.csv'
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
+
   function applyFilters() {
     const params = new URLSearchParams()
     if (warehouse) params.set('warehouse', warehouse)
@@ -325,6 +367,9 @@ export function MovementsLedger({
 
         <div className="flex gap-2 sm:col-span-2 lg:col-span-3">
           <Button type="submit">Apply</Button>
+          <Button type="button" variant="outline" onClick={exportCsv} disabled={rows.length === 0}>
+            Export CSV
+          </Button>
           {hasFilters ? (
             <Button type="button" variant="outline" onClick={clearAll}>
               Clear
