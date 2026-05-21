@@ -1,11 +1,12 @@
 'use client'
 
 // Round 20 — New promotion rule form
+// Round 20.1 — product picker swapped for the searchable ProductPicker
+//              (category filter + type-to-search).
 //
-// Mirrors new-bulk-form.tsx, simplified: a promotion is a time-bound
-// % off a single product, for EVERYONE (incl. walk-ins), with NO
-// minimum quantity. A "daily deal" is a promotion whose date window
-// covers one day; a "weekly deal" covers a week.
+// A promotion is a time-bound % off a single product, for EVERYONE
+// (incl. walk-ins), with NO minimum quantity. A "daily deal" is a
+// promotion whose date window covers one day; a "weekly deal" a week.
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
@@ -15,18 +16,15 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
+  ProductPicker,
+  type PickerProduct,
+  type PickerCategory,
+} from './product-picker'
 import { createPromotionRule } from '../actions'
 
-type ProductOpt = { id: string; name: string; sku: string }
-
 type Props = {
-  products: ProductOpt[]
+  products: PickerProduct[]
+  categories: PickerCategory[]
 }
 
 function toIsoOrNull(dateStr: string, endOfDay: boolean): string | null {
@@ -35,7 +33,7 @@ function toIsoOrNull(dateStr: string, endOfDay: boolean): string | null {
   return `${dateStr}${suffix}`
 }
 
-export function NewPromotionRuleForm({ products }: Props) {
+export function NewPromotionRuleForm({ products, categories }: Props) {
   const router = useRouter()
 
   const [name, setName] = useState('')
@@ -114,23 +112,17 @@ export function NewPromotionRuleForm({ products }: Props) {
             />
           </div>
 
-          {/* Product picker (promotion is always product-scoped) */}
+          {/* Searchable product picker (category filter + search) */}
           <div className="space-y-1 sm:col-span-2">
             <Label className="text-xs">
               Product <span className="text-rose-600">*</span>
             </Label>
-            <Select value={productId} onValueChange={setProductId}>
-              <SelectTrigger>
-                <SelectValue placeholder="Pick a product…" />
-              </SelectTrigger>
-              <SelectContent>
-                {products.map((p) => (
-                  <SelectItem key={p.id} value={p.id}>
-                    {p.name} ({p.sku})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <ProductPicker
+              products={products}
+              categories={categories}
+              value={productId}
+              onChange={setProductId}
+            />
             <p className="text-xs text-muted-foreground">
               The deal price applies to everyone, including walk-ins, with no
               minimum quantity.
