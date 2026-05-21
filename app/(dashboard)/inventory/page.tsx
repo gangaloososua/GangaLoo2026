@@ -3,12 +3,17 @@ import { isOwnerEquivalent } from '@/lib/auth/roles'
 import {
   fetchStockOnHand,
   fetchStockMovements,
+  fetchInventoryDashboardStats,
+  fetchStockByWarehouse,
+  fetchStockByCategory,
   listCategoriesForFilter,
   type StockMovementFilters,
 } from '@/lib/inventory'
 import { listWarehousesForFilter } from '@/lib/sales'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { StockOnHandTable } from './stock-on-hand-table'
 import { MovementsLedger } from './movements-ledger'
+import { InventoryDashboard } from './inventory-dashboard'
 
 export const dynamic = 'force-dynamic'
 
@@ -30,7 +35,7 @@ export default async function InventoryPage({
   const isOwner = isOwnerEquivalent(caller.role)
 
   if (!isOwner) {
-    // Sellers / distributors: current stock on hand, no costs, no history.
+    // Sellers / distributors: current stock on hand only, no costs, no history.
     const stock = await fetchStockOnHand()
     return (
       <div className="space-y-4">
@@ -45,7 +50,7 @@ export default async function InventoryPage({
     )
   }
 
-  // Owners / admins: the full movement ledger with filters.
+  // Owners / admins: dashboard + stock + full movement ledger, in tabs.
   const sp = await searchParams
   const filters: StockMovementFilters = {
     warehouseId: sp.warehouse || undefined,
@@ -55,34 +60,75 @@ export default async function InventoryPage({
     fromDate: sp.from || undefined,
     toDate: sp.to || undefined,
   }
-  const [movements, warehouses, categories] = await Promise.all([
+
+  const [
+    stats,
+    byWarehouse,
+    byCategory,
+    stock,
+    movements,
+    warehouses,
+    categories,
+  ] = await Promise.all([
+    fetchInventoryDashboardStats(),
+    fetchStockByWarehouse(),
+    fetchStockByCategory(),
+    fetchStockOnHand(),
     fetchStockMovements(filters),
     listWarehousesForFilter(),
     listCategoriesForFilter(),
   ])
+
+  // If any history filter is active, open the History tab by default so the
+  // user sees the result of the filter they just applied.
+  const hasHistoryFilter =
+    !!sp.warehouse || !!sp.kind || !!sp.category || !!sp.product || !!sp.from || !!sp.to
+  const defaultTab = hasHistoryFilter ? 'history' : 'dashboard'
 
   return (
     <div className="space-y-4">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Inventory</h1>
         <p className="text-sm text-muted-foreground">
-          Movement history across all warehouses. Showing the most recent 500
-          movements; use the filters to narrow down.
+          Stock levels, value, and movement history across all warehouses.
         </p>
       </div>
-      <MovementsLedger
-        rows={movements}
-        warehouses={warehouses}
-        categories={categories}
-        current={{
-          warehouse: sp.warehouse ?? '',
-          kind: sp.kind ?? '',
-          category: sp.category ?? '',
-          product: sp.product ?? '',
-          from: sp.from ?? '',
-          to: sp.to ?? '',
-        }}
-      />
+
+      <Tabs defaultValue={defaultTab}>
+        <TabsList>
+          <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
+          <TabsTrigger value="stock">Stock on hand</TabsTrigger>
+          <TabsTrigger value="history">History</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="dashboard" className="pt-4">
+          <InventoryDashboard
+            stats={stats}
+            byWarehouse={byWarehouse}
+            byCategory={byCategory}
+          />
+        </TabsContent>
+
+        <TabsContent value="stock" className="pt-4">
+          <StockOnHandTable rows={stock} />
+        </TabsContent>
+
+        <TabsContent value="history" className="pt-4">
+          <MovementsLedger
+            rows={movements}
+            warehouses={warehouses}
+            categories={categories}
+            current={{
+              warehouse: sp.warehouse ?? '',
+              kind: sp.kind ?? '',
+              category: sp.category ?? '',
+              product: sp.product ?? '',
+              from: sp.from ?? '',
+              to: sp.to ?? '',
+            }}
+          />
+        </TabsContent>
+      </Tabs>
     </div>
   )
 }

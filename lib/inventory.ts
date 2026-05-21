@@ -231,3 +231,185 @@ export async function searchInventoryProducts(
     sku: p.sku,
   }))
 }
+
+// ---------------------------------------------------------------------------
+// Dashboard headline stats (owner/admin). On-hand from inventory_lots,
+// incoming from open purchase orders (pending + paid_supplier only, so
+// already-received stock is not double-counted).
+// ---------------------------------------------------------------------------
+
+export type InventoryDashboardStats = {
+  totalUnitsOnHand: number
+  totalValueDop: number
+  distinctProducts: number
+  incomingUnits: number
+  incomingValueDop: number
+}
+
+const INCOMING_STATUSES = ['pending', 'paid_supplier'] as const
+
+export async function fetchInventoryDashboardStats(): Promise<InventoryDashboardStats> {
+  const supabase = await createClient()
+
+  // On-hand: sum qty_remaining and qty_remaining * unit_cost_dop.
+  const { data: lots, error: lotsErr } = await supabase
+    .from('inventory_lots')
+    .select('product_id, qty_remaining, unit_cost_dop')
+    .gt('qty_remaining', 0)
+  if (lotsErr) throw lotsErr
+
+  let totalUnitsOnHand = 0
+  let totalValueDop = 0
+  const products = new Set<string>()
+  for (const lot of (lots ?? []) as Array<{
+    product_id: string
+    qty_remaining: number
+    unit_cost_dop: number
+  }>) {
+    const qty = Number(lot.qty_remaining) || 0
+    const cost = Number(lot.unit_cost_dop) || 0
+    totalUnitsOnHand += qty
+    totalValueDop += qty * cost
+    products.add(lot.product_id)
+  }
+
+  // Incoming: open POs only, then sum their item qty and landed value.
+  const { data: openPos, error: poErr } = await supabase
+    .from('purchase_orders')
+    .select('id')
+    .in('status', INCOMING_STATUSES as unknown as string[])
+  if (poErr) throw poErr
+  const openPoIds = (openPos ?? []).map((p) => (p as { id: string }).id)
+
+  let incomingUnits = 0
+  let incomingValueDop = 0
+  if (openPoIds.length > 0) {
+    const { data: items, error: itemsErr } = await supabase
+      .from('purchase_order_items')
+      .select('qty, dop_unit_landed_cost, purchase_order_id')
+      .in('purchase_order_id', openPoIds)
+    if (itemsErr) throw itemsErr
+    for (const it of (items ?? []) as Array<{
+      qty: number
+      dop_unit_landed_cost: number | null
+    }>) {
+      const qty = Number(it.qty) || 0
+      const cost = Number(it.dop_unit_landed_cost) || 0
+      incomingUnits += qty
+      incomingValueDop += qty * cost
+    }
+  }
+
+  return {
+    totalUnitsOnHand,
+    totalValueDop,
+    distinctProducts: products.size,
+    incomingUnits,
+    incomingValueDop,
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Dashboard breakdowns (owner/admin): qty + value grouped by warehouse and
+// by top-level (parent) category.
+// ---------------------------------------------------------------------------
+
+export type StockByGroupRow = {
+  groupId: string
+  groupName: string
+  units: number
+  valueDop: number
+}
+
+export async function fetchStockByWarehouse(): Promise<StockByGroupRow[]> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('inventory_lots')
+    .select('warehouse_id, qty_remaining, unit_cost_dop, warehouses(name)')
+    .gt('qty_remaining', 0)
+  if (error) throw error
+
+  const byId = new Map<string, StockByGroupRow>()
+  for (const lot of (data ?? []) as unknown as Array<{
+    warehouse_id: string
+    qty_remaining: number
+    unit_cost_dop: number
+    warehouses: { name: string } | null
+  }>) {
+    const qty = Number(lot.qty_remaining) || 0
+    const val = qty * (Number(lot.unit_cost_dop) || 0)
+    const existing = byId.get(lot.warehouse_id)
+    if (existing) {
+      existing.units += qty
+      existing.valueDop += val
+    } else {
+      byId.set(lot.warehouse_id, {
+        groupId: lot.warehouse_id,
+        groupName: lot.warehouses?.name ?? '(unknown warehouse)',
+        units: qty,
+        valueDop: val,
+      })
+    }
+  }
+  return Array.from(byId.values()).sort((a, b) => b.valueDop - a.valueDop)
+}
+
+export async function fetchStockByCategory(): Promise<StockByGroupRow[]> {
+  const supabase = await createClient()
+
+  // 1) Category tree: map every category id to its top-level parent id+name.
+  const { data: cats, error: catErr } = await supabase
+    .from('categories')
+    .select('id, name, parent_id')
+  if (catErr) throw catErr
+  const catName = new Map<string, string>()
+  const parentOf = new Map<string, string | null>()
+  for (const c of (cats ?? []) as Array<{ id: string; name: string; parent_id: string | null }>) {
+    catName.set(c.id, c.name)
+    parentOf.set(c.id, c.parent_id)
+  }
+  function topLevel(id: string): string {
+    const p = parentOf.get(id)
+    return p ? p : id
+  }
+
+  // 2) Each product's PRIMARY category.
+  const { data: pcs, error: pcErr } = await supabase
+    .from('product_categories')
+    .select('product_id, category_id')
+    .eq('is_primary', true)
+  if (pcErr) throw pcErr
+  const primaryCatOf = new Map<string, string>()
+  for (const pc of (pcs ?? []) as Array<{ product_id: string; category_id: string }>) {
+    primaryCatOf.set(pc.product_id, pc.category_id)
+  }
+
+  // 3) Lots -> roll each product's stock up to its top-level category.
+  const { data: lots, error: lotsErr } = await supabase
+    .from('inventory_lots')
+    .select('product_id, qty_remaining, unit_cost_dop')
+    .gt('qty_remaining', 0)
+  if (lotsErr) throw lotsErr
+
+  const byTop = new Map<string, StockByGroupRow>()
+  const UNCAT = '__uncategorized__'
+  for (const lot of (lots ?? []) as Array<{
+    product_id: string
+    qty_remaining: number
+    unit_cost_dop: number
+  }>) {
+    const qty = Number(lot.qty_remaining) || 0
+    const val = qty * (Number(lot.unit_cost_dop) || 0)
+    const primary = primaryCatOf.get(lot.product_id)
+    const topId = primary ? topLevel(primary) : UNCAT
+    const name = topId === UNCAT ? '(uncategorized)' : catName.get(topId) ?? '(unknown)'
+    const existing = byTop.get(topId)
+    if (existing) {
+      existing.units += qty
+      existing.valueDop += val
+    } else {
+      byTop.set(topId, { groupId: topId, groupName: name, units: qty, valueDop: val })
+    }
+  }
+  return Array.from(byTop.values()).sort((a, b) => b.valueDop - a.valueDop)
+}
