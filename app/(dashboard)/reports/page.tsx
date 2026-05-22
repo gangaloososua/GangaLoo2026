@@ -40,9 +40,9 @@ const REPORTS: ReportCard[] = [
   {
     label: 'Sales analysis',
     description: 'Sales by seller, product, category and customer.',
-    href: '#',
+    href: '/reports/sales',
     icon: Users,
-    ready: false,
+    ready: true,
   },
   {
     label: 'Receivables aging',
