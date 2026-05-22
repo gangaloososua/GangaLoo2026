@@ -44,7 +44,7 @@ export const navItems: NavItem[] = [
   { label: 'Money Accounts',   href: '/money-accounts',       icon: Wallet,          roles: OWNER_ONLY },
   { label: 'Commissions',      href: '/commissions',          icon: HandCoins,       roles: OWNER_ONLY },
   { label: 'Accounting',       href: '/accounting',           icon: BookOpen,        roles: OWNER_ONLY },
-  { label: 'Reports',          href: '/reports/pnl',          icon: LineChart,       roles: OWNER_ONLY },
+  { label: 'Reports',          href: '/reports',               icon: LineChart,       roles: OWNER_ONLY },
   { label: 'Discount Rules',   href: '/discount-rules',       icon: Receipt,         roles: OWNER_ONLY },
   { label: 'People',           href: '/people',               icon: UsersRound,      roles: ALL },
   { label: 'Users',            href: '/users',                icon: UserCog,         roles: OWNER_ONLY },
