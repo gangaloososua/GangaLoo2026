@@ -47,9 +47,9 @@ const REPORTS: ReportCard[] = [
   {
     label: 'Receivables aging',
     description: 'Who owes you and how overdue each balance is.',
-    href: '#',
+    href: '/reports/receivables',
     icon: Receipt,
-    ready: false,
+    ready: true,
   },
   {
     label: 'Commission statements',
