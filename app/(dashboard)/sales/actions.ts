@@ -288,66 +288,26 @@ export async function recordPayment(input: RecordPaymentInput): Promise<ActionRe
     }
   }
 
-  // Insert the payment row.
-  const reference = input.reference?.trim() || null
-  const { error: insErr } = await supabase.from('sale_payments').insert({
-    sale_id: input.saleId,
-    method: input.method,
-    amount_cents: input.amountCents,
-    money_account_id: input.moneyAccountId,
-    paid_at: input.paidAt,
-    reference,
+  // Route a single-invoice payment through the shared, ledger-posting engine
+  // (receive_payment) as a one-item allocation. This creates a payment_receipts
+  // row, posts to the ledger via post_sale_payment_to_ledger (account credited,
+  // income booked under Shop Sales), and recomputes the invoice status - the
+  // same proven path Recibir Pago uses. Replaces the old direct insert that
+  // marked the invoice paid but never posted to the account ledger.
+  const { error: rpcErr } = await supabase.rpc('receive_payment', {
+    p_money_account_id: input.moneyAccountId,
+    p_method: input.method,
+    p_received_at: input.paidAt,
+    p_reference: input.reference?.trim() || null,
+    p_allocations: [
+      { sale_id: input.saleId, amount_cents: Math.round(input.amountCents) },
+    ],
   })
-  if (insErr) return { ok: false, error: `Payment insert failed: ${insErr.message}` }
-
-  // Recompute paid_cents from sum of all payments now in the table.
-  const { data: paymentRows, error: sumErr } = await supabase
-    .from('sale_payments')
-    .select('amount_cents')
-    .eq('sale_id', input.saleId)
-  if (sumErr) {
-    return {
-      ok: false,
-      error: `Payment recorded, but recompute failed: ${sumErr.message}. Refresh and check the totals.`,
-    }
-  }
-  const newPaidCents = (paymentRows ?? []).reduce(
-    (sum, p) => sum + (p.amount_cents ?? 0),
-    0,
-  )
-
-  // Derive status.
-  let newStatus: 'paid' | 'partially_paid' | 'confirmed'
-  let newPaidAt: string | null
-  if (newPaidCents >= sale.total_cents) {
-    newStatus = 'paid'
-    // Keep first paid_at if already set, else use this payment's date.
-    newPaidAt = sale.paid_at ?? input.paidAt
-  } else if (newPaidCents > 0) {
-    newStatus = 'partially_paid'
-    newPaidAt = null
-  } else {
-    newStatus = 'confirmed'
-    newPaidAt = null
-  }
-
-  const { error: updErr } = await supabase
-    .from('sales')
-    .update({
-      paid_cents: newPaidCents,
-      status: newStatus,
-      paid_at: newPaidAt,
-    })
-    .eq('id', input.saleId)
-  if (updErr) {
-    return {
-      ok: false,
-      error: `Payment recorded, but status update failed: ${updErr.message}. Refresh and check the totals.`,
-    }
-  }
+  if (rpcErr) return { ok: false, error: rpcErr.message }
 
   revalidatePath(`/sales/${input.saleId}`)
   revalidatePath('/sales')
+  revalidatePath('/money-accounts')
   return { ok: true }
 }
 
