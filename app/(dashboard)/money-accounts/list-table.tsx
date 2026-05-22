@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import * as React from 'react'
 import Link from 'next/link'
@@ -27,6 +27,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 
+import { AccountStatementModal } from './account-statement-modal'
 import type { MoneyAccount } from '@/lib/money-accounts'
 import type { Currency, EffectiveRatesResult } from '@/lib/exchange-rates-types'
 
@@ -324,12 +325,15 @@ export function MoneyAccountsListTable({
                             </TableCell>
                           )}
                           <TableCell className="text-right">
-                            <Button asChild variant="ghost" size="sm">
-                              <Link href={`/money-accounts/${a.id}/edit`}>
-                                <Pencil className="mr-1 size-3.5" />
-                                Edit
-                              </Link>
-                            </Button>
+                            <div className="flex items-center justify-end gap-1">
+                              <AccountStatementModal accountId={a.id} accountName={a.name} />
+                              <Button asChild variant="ghost" size="sm">
+                                <Link href={`/money-accounts/${a.id}/edit`}>
+                                  <Pencil className="mr-1 size-3.5" />
+                                  Edit
+                                </Link>
+                              </Button>
+                            </div>
                           </TableCell>
                         </TableRow>
                       ))}
