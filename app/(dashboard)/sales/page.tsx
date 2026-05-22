@@ -1,4 +1,4 @@
-﻿import { Suspense } from 'react'
+import { Suspense } from 'react'
 import Link from 'next/link'
 import { Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -91,6 +91,11 @@ export default async function SalesPage({
           <div className="text-sm text-muted-foreground">
             {salesResult.total} {salesResult.total === 1 ? 'sale' : 'sales'}
           </div>
+          {canSeeAllSales && (
+            <Button asChild size="sm" variant="outline">
+              <Link href="/sales/receive-payment">Recibir pago</Link>
+            </Button>
+          )}
           <Button asChild size="sm">
             <Link href="/sales/new">
               <Plus className="mr-1 size-4" />
