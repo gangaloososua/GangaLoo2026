@@ -68,7 +68,7 @@ function formatMonth(year: number, month: number): string {
 }
 
 const CURRENCY_SYMBOLS: Record<string, string> = {
-  DOP: '₱',
+  DOP: 'RD$',
   USD: '$',
   EUR: '€',
 }
