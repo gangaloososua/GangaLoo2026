@@ -42,6 +42,7 @@ import {
   markReceived,
   markCancelled,
   markPaidSupplier,
+  correctSupplierPayment,
 } from '../actions'
 import type {
   PurchaseStatus,
@@ -112,12 +113,13 @@ export function PurchaseActionsBar({
   const router = useRouter()
 
   const [busyAction, setBusyAction] =
-    useState<null | 'complete' | 'lost' | 'received' | 'cancelled' | 'paid'>(null)
+    useState<null | 'complete' | 'lost' | 'received' | 'cancelled' | 'paid' | 'correcting'>(null)
   const [completeOpen, setCompleteOpen] = useState(false)
   const [lostOpen, setLostOpen] = useState(false)
   const [receiveOpen, setReceiveOpen] = useState(false)
   const [cancelOpen, setCancelOpen] = useState(false)
   const [payOpen, setPayOpen] = useState(false)
+  const [correctOpen, setCorrectOpen] = useState(false)
 
   const catBlocks = useMemo(() => buildExpenseBlocks(categories), [categories])
 
@@ -189,6 +191,32 @@ export function PurchaseActionsBar({
     payCategory.length > 0 &&
     payAt.length > 0
 
+  // ---- Correct payment dialog state (Round 24g) ----
+  // Starts blank; the current values are visible in the order's Money card.
+  const [corDopTotal, setCorDopTotal] = useState<string>('')
+  const [corExchange, setCorExchange] = useState<string>('')
+  const [corOfficial, setCorOfficial] = useState<string>('')
+  const [corAccount,  setCorAccount]  = useState<string>('')
+  const [corCategory, setCorCategory] = useState<string>('')
+  const [corAt,       setCorAt]       = useState<string>(
+    toLocalDatetimeInputValue(new Date()),
+  )
+
+  const corValid =
+    Number(corDopTotal) > 0 &&
+    Number(corExchange) > 0 &&
+    Number(corOfficial) > 0 &&
+    corAccount.length > 0 &&
+    corCategory.length > 0 &&
+    corAt.length > 0
+
+  // Has any stock been received for this order? Correcting a payment is only
+  // allowed before the first receipt (the DB function also enforces this).
+  const hasReceipts = useMemo(
+    () => items.some((ln) => alreadyReceivedQty(ln.id, lotTrail) > 0),
+    [items, lotTrail],
+  )
+
   // ---- Handlers ----
   async function handleMarkComplete() {
     setBusyAction('complete')
@@ -252,12 +280,30 @@ export function PurchaseActionsBar({
     setPayOpen(false); setBusyAction(null); router.refresh()
   }
 
+  async function handleCorrectPayment() {
+    if (!corValid) return
+    setBusyAction('correcting')
+    const res = await correctSupplierPayment({
+      orderId,
+      dopPaidTotal:          Number(corDopTotal),
+      exchangeRate:          Number(corExchange),
+      officialRateAtPayment: Number(corOfficial),
+      supplierPaymentAccountId: corAccount,
+      paidAtDop: new Date(corAt).toISOString(),
+      categoryId: corCategory,
+    })
+    if (!res.ok) { toast.error(res.error); setBusyAction(null); return }
+    toast.success('Payment corrected. Ledger and cost basis updated.')
+    setCorrectOpen(false); setBusyAction(null); router.refresh()
+  }
+
   // ---- Visibility ----
   const canReceive  = status === 'paid_supplier' || status === 'received'
   const canComplete = status === 'received'
   const canLost     = status === 'received'
   const canCancel   = status === 'pending' || status === 'paid_supplier'
   const canPay      = status === 'pending'
+  const canCorrect  = status === 'paid_supplier' && !hasReceipts
 
   // Add transport is always shown, so the bar always renders.
   return (
@@ -395,6 +441,138 @@ export function PurchaseActionsBar({
                 onClick={(e) => { e.preventDefault(); void handleMarkPaidSupplier() }}
               >
                 {busyAction === 'paid' ? 'Recording...' : 'Record payment'}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
+
+      {/* Correct payment (Round 24g) - paid_supplier orders with no receipts */}
+      {canCorrect && (
+        <AlertDialog open={correctOpen} onOpenChange={setCorrectOpen}>
+          <AlertDialogTrigger asChild>
+            <Button type="button" variant="outline" size="sm">
+              <Banknote className="mr-1.5 h-4 w-4" />
+              Correct payment
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent className="max-w-2xl">
+            <AlertDialogHeader>
+              <AlertDialogTitle>Correct supplier payment</AlertDialogTitle>
+              <AlertDialogDescription asChild>
+                <div className="space-y-2 text-sm">
+                  <div>
+                    Fix a mistaken payment. This reverses the original ledger
+                    entry and re-records it with the corrected figures,
+                    re-allocating the landed cost across the order&apos;s lines.
+                  </div>
+                  <div className="text-muted-foreground">
+                    The current values are shown in the Money panel above. Only
+                    available before any stock has been received.
+                  </div>
+                </div>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="cor-dop-total">DOP paid total</Label>
+                <Input
+                  id="cor-dop-total"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={corDopTotal}
+                  onChange={(e) => setCorDopTotal(e.target.value)}
+                  placeholder="0.00"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="cor-account">From account</Label>
+                <Select value={corAccount} onValueChange={setCorAccount}>
+                  <SelectTrigger id="cor-account">
+                    <SelectValue placeholder="Pick an account..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {moneyAccounts.map((a) => (
+                      <SelectItem key={a.id} value={a.id}>
+                        {a.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="cor-category">Expense category</Label>
+                <Select value={corCategory} onValueChange={setCorCategory}>
+                  <SelectTrigger id="cor-category">
+                    <SelectValue placeholder="Pick a category..." />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-72">
+                    {catBlocks.map((b) => (
+                      <SelectGroup key={b.key}>
+                        <SelectLabel>{b.heading}</SelectLabel>
+                        {b.items.map((c) => (
+                          <SelectItem key={c.id} value={c.id} className="pl-6">
+                            {c.name}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Which expense bucket this purchase posts to in the ledger.
+                </p>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="cor-exchange">Exchange rate (DOP per USD)</Label>
+                <Input
+                  id="cor-exchange"
+                  type="number"
+                  min="0"
+                  step="0.0001"
+                  value={corExchange}
+                  onChange={(e) => setCorExchange(e.target.value)}
+                  placeholder="0.0000"
+                />
+                <p className="text-xs text-muted-foreground">
+                  The negotiated rate you paid at.
+                </p>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="cor-official">Official rate (DOP per USD)</Label>
+                <Input
+                  id="cor-official"
+                  type="number"
+                  min="0"
+                  step="0.0001"
+                  value={corOfficial}
+                  onChange={(e) => setCorOfficial(e.target.value)}
+                  placeholder="0.0000"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Market reference at payment time. Used to book the bank fee.
+                </p>
+              </div>
+              <div className="space-y-1.5 md:col-span-2">
+                <Label htmlFor="cor-at">Paid at</Label>
+                <Input
+                  id="cor-at"
+                  type="datetime-local"
+                  value={corAt}
+                  onChange={(e) => setCorAt(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={busyAction === 'correcting'}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                disabled={!corValid || busyAction === 'correcting'}
+                onClick={(e) => { e.preventDefault(); void handleCorrectPayment() }}
+              >
+                {busyAction === 'correcting' ? 'Correcting...' : 'Save correction'}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
