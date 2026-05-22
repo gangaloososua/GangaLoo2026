@@ -7,10 +7,18 @@
 -- balance (initial_balance_cents). Money in CENTS. amount_cents is signed
 -- (income +, expense -); direction is read from the sign.
 --
+-- TIPO note: migrated money transfers were imported as plain transactions rows
+-- with NO source_transfer_id (the link column is empty on every row) but a
+-- "Transferencia ..." description. There is no money-transfer table (only
+-- stock_transfers / stock_transfer_items, which are inventory, not money). So
+-- after the real source-link checks, we fall back to tagging rows whose
+-- description starts with "Transferencia" as Transferencias. This heals ~80
+-- legacy rows that previously showed as Transacciones.
+--
 -- computed_balance_cents = opening + net of all movements (the honest current
 -- saldo). stored_balance_cents = whatever the account card currently shows;
 -- the two can differ (migration drift) and are reconciled by the stage-2
--- set-starting-saldo control. Excludes the is_initial opening row from the
+-- set_account_opening control. Excludes the is_initial opening row from the
 -- movement list (it's folded into opening_cents instead).
 
 create or replace function public.account_statement(p_account_id uuid)
@@ -31,6 +39,7 @@ returns jsonb language sql stable as $as$
              when t.source_transfer_id          is not null then 'Transferencias'
              when t.source_sale_payment_id is not null
                or t.source_sale_id is not null              then 'Cobros'
+             when t.description ilike 'Transferencia%'       then 'Transferencias'
              else 'Transacciones'
            end as tipo
     from transactions t
