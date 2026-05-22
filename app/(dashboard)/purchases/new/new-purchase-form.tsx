@@ -11,7 +11,9 @@ import { Textarea } from '@/components/ui/textarea'
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
@@ -36,6 +38,7 @@ import type {
   ProductPickerItem,
 } from '@/lib/purchases'
 import type { MoneyAccount } from '@/lib/sales'
+import type { AccountCategoryOption } from '@/lib/transactions'
 
 import { ProductPicker } from './product-picker'
 
@@ -52,6 +55,7 @@ type Props = {
   productGroups: ProductPickerCategoryGroup[]
   warehouses: LookupItem[]
   moneyAccounts: MoneyAccount[]
+  categories: AccountCategoryOption[]
 }
 
 type DraftLine = {
@@ -94,12 +98,38 @@ function formatDOP(n: number): string {
   }).format(n)
 }
 
+// Group expense categories: parent-with-children -> heading + items; childless
+// top-levels collected under "Other expense". Parents with children are
+// headings only (not selectable). Mirrors the courier-payment form.
+type CatBlock = { key: string; heading: string; items: AccountCategoryOption[] }
+function buildExpenseBlocks(categories: AccountCategoryOption[]): CatBlock[] {
+  const childrenOf = new Map<string, AccountCategoryOption[]>()
+  for (const c of categories) {
+    if (c.parentId) {
+      const list = childrenOf.get(c.parentId) ?? []
+      list.push(c)
+      childrenOf.set(c.parentId, list)
+    }
+  }
+  const tops = categories.filter((c) => c.parentId === null)
+  const blocks: CatBlock[] = []
+  const standalone: AccountCategoryOption[] = []
+  for (const top of tops) {
+    const kids = childrenOf.get(top.id)
+    if (kids && kids.length > 0) blocks.push({ key: top.id, heading: top.name, items: kids })
+    else standalone.push(top)
+  }
+  if (standalone.length > 0) blocks.push({ key: 'general', heading: 'Other expense', items: standalone })
+  return blocks
+}
+
 export function NewPurchaseForm({
   suppliers,
   couriers,
   productGroups,
   warehouses,
   moneyAccounts,
+  categories,
 }: Props) {
   // ---- Header state ----
   const [supplierName, setSupplierName]   = useState<string>('')
@@ -132,9 +162,13 @@ export function NewPurchaseForm({
   const [exchangeRate,           setExchangeRate]           = useState<string>('')
   const [officialRateAtPayment,  setOfficialRateAtPayment]  = useState<string>('')
   const [supplierPaymentAccount, setSupplierPaymentAccount] = useState<string>('')
+  const [paymentCategoryId,      setPaymentCategoryId]      = useState<string>('')
   const [paidAtDop,              setPaidAtDop]              = useState<string>(
     toLocalDatetimeInputValue(new Date()),
   )
+
+  // Grouped expense-category blocks for the payment picker.
+  const catBlocks = useMemo(() => buildExpenseBlocks(categories), [categories])
 
   // ---- Optional inline transport ----
   const [payTransportInline,    setPayTransportInline]    = useState<boolean>(false)
@@ -230,6 +264,7 @@ export function NewPurchaseForm({
       Number(exchangeRate)          > 0 &&
       Number(officialRateAtPayment) > 0 &&
       supplierPaymentAccount.length > 0 &&
+      paymentCategoryId.length      > 0 &&
       paidAtDop.length              > 0
     )
 
@@ -282,6 +317,7 @@ export function NewPurchaseForm({
             officialRateAtPayment: Number(officialRateAtPayment),
             supplierPaymentAccountId: supplierPaymentAccount,
             paidAtDop: paidAtDopIso!,
+            categoryId: paymentCategoryId,
           }
         : undefined,
       transport: payTransportInline
@@ -625,6 +661,32 @@ export function NewPurchaseForm({
                   </Select>
                 </div>
                 <div className="space-y-1.5">
+                  <Label htmlFor="payment-category">Expense category</Label>
+                  <Select
+                    value={paymentCategoryId}
+                    onValueChange={setPaymentCategoryId}
+                  >
+                    <SelectTrigger id="payment-category">
+                      <SelectValue placeholder="Pick a category..." />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-72">
+                      {catBlocks.map((b) => (
+                        <SelectGroup key={b.key}>
+                          <SelectLabel>{b.heading}</SelectLabel>
+                          {b.items.map((c) => (
+                            <SelectItem key={c.id} value={c.id} className="pl-6">
+                              {c.name}
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Which expense bucket this purchase posts to in the ledger.
+                  </p>
+                </div>
+                <div className="space-y-1.5">
                   <Label htmlFor="exchange-rate">Exchange rate (DOP per USD)</Label>
                   <Input
                     id="exchange-rate"
@@ -842,7 +904,7 @@ export function NewPurchaseForm({
                 : !linesValid
                 ? 'Add at least one line with qty > 0 and unit cost set.'
                 : !paymentValid
-                ? 'Fill in all supplier payment fields.'
+                ? 'Fill in all supplier payment fields, including the expense category.'
                 : !transportValid
                 ? 'Fill in all transport fields (and turn on supplier payment first).'
                 : !formValid

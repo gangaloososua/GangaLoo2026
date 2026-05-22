@@ -18,7 +18,9 @@ import { Label } from '@/components/ui/label'
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
@@ -47,6 +49,7 @@ import type {
   LotTrailEntry,
 } from '@/lib/purchases-types'
 import type { MoneyAccount } from '@/lib/sales'
+import type { AccountCategoryOption } from '@/lib/transactions'
 
 type Props = {
   orderId: string
@@ -54,6 +57,7 @@ type Props = {
   items: PurchaseOrderItemRow[]
   lotTrail: Map<string, LotTrailEntry[]>
   moneyAccounts: MoneyAccount[]
+  categories: AccountCategoryOption[]
 }
 
 function alreadyReceivedQty(lineId: string, lotTrail: Map<string, LotTrailEntry[]>): number {
@@ -72,12 +76,38 @@ function toLocalDatetimeInputValue(d: Date): string {
   )
 }
 
+// Group expense categories: parent-with-children -> heading + items; childless
+// top-levels collected under "Other expense". Parents with children are
+// headings only (not selectable). Mirrors the courier-payment form.
+type CatBlock = { key: string; heading: string; items: AccountCategoryOption[] }
+function buildExpenseBlocks(categories: AccountCategoryOption[]): CatBlock[] {
+  const childrenOf = new Map<string, AccountCategoryOption[]>()
+  for (const c of categories) {
+    if (c.parentId) {
+      const list = childrenOf.get(c.parentId) ?? []
+      list.push(c)
+      childrenOf.set(c.parentId, list)
+    }
+  }
+  const tops = categories.filter((c) => c.parentId === null)
+  const blocks: CatBlock[] = []
+  const standalone: AccountCategoryOption[] = []
+  for (const top of tops) {
+    const kids = childrenOf.get(top.id)
+    if (kids && kids.length > 0) blocks.push({ key: top.id, heading: top.name, items: kids })
+    else standalone.push(top)
+  }
+  if (standalone.length > 0) blocks.push({ key: 'general', heading: 'Other expense', items: standalone })
+  return blocks
+}
+
 export function PurchaseActionsBar({
   orderId,
   status,
   items,
   lotTrail,
   moneyAccounts,
+  categories,
 }: Props) {
   const router = useRouter()
 
@@ -88,6 +118,8 @@ export function PurchaseActionsBar({
   const [receiveOpen, setReceiveOpen] = useState(false)
   const [cancelOpen, setCancelOpen] = useState(false)
   const [payOpen, setPayOpen] = useState(false)
+
+  const catBlocks = useMemo(() => buildExpenseBlocks(categories), [categories])
 
   // ---- Receive dialog state ----
   const initialReceipts = useMemo(() => {
@@ -144,6 +176,7 @@ export function PurchaseActionsBar({
   const [payExchange, setPayExchange]   = useState<string>('')
   const [payOfficial, setPayOfficial]   = useState<string>('')
   const [payAccount,  setPayAccount]    = useState<string>('')
+  const [payCategory, setPayCategory]   = useState<string>('')
   const [payAt,       setPayAt]         = useState<string>(
     toLocalDatetimeInputValue(new Date()),
   )
@@ -153,6 +186,7 @@ export function PurchaseActionsBar({
     Number(payExchange) > 0 &&
     Number(payOfficial) > 0 &&
     payAccount.length > 0 &&
+    payCategory.length > 0 &&
     payAt.length > 0
 
   // ---- Handlers ----
@@ -211,6 +245,7 @@ export function PurchaseActionsBar({
       officialRateAtPayment: Number(payOfficial),
       supplierPaymentAccountId: payAccount,
       paidAtDop: new Date(payAt).toISOString(),
+      categoryId: payCategory,
     })
     if (!res.ok) { toast.error(res.error); setBusyAction(null); return }
     toast.success('Supplier marked paid. Cost basis allocated across lines.')
@@ -288,6 +323,29 @@ export function PurchaseActionsBar({
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="pay-category">Expense category</Label>
+                <Select value={payCategory} onValueChange={setPayCategory}>
+                  <SelectTrigger id="pay-category">
+                    <SelectValue placeholder="Pick a category..." />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-72">
+                    {catBlocks.map((b) => (
+                      <SelectGroup key={b.key}>
+                        <SelectLabel>{b.heading}</SelectLabel>
+                        {b.items.map((c) => (
+                          <SelectItem key={c.id} value={c.id} className="pl-6">
+                            {c.name}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Which expense bucket this purchase posts to in the ledger.
+                </p>
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="pay-exchange">Exchange rate (DOP per USD)</Label>

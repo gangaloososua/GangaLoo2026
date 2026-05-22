@@ -29,6 +29,7 @@ import {
 } from '@/lib/purchases-types'
 
 import { listMoneyAccounts } from '@/lib/sales'
+import { listAccountCategories } from '@/lib/transactions'
 
 import { PurchaseDetailLineRow } from './detail-line-row'
 import { PurchaseActionsBar } from './actions-bar'
@@ -175,13 +176,15 @@ export default async function PurchaseDetailPage({
   const order = await getPurchaseOrder(id)
   if (!order) notFound()
 
-  // Fetch the four side-data sets in parallel.
-  const [items, lotTrail, transport, moneyAccounts] = await Promise.all([
+  // Fetch the side-data sets in parallel.
+  const [items, lotTrail, transport, moneyAccounts, categories] = await Promise.all([
     getPurchaseOrderItems(order.id),
     getLotTrailForOrder(order.id),
     getTransportSummaryForOrder(order.id),
     listMoneyAccounts(),
+    listAccountCategories(),
   ])
+  const expenseCategories = categories.filter((c) => c.type === 'expense')
 
   const stored = order.status
   const derived = derivedStatus(order)
@@ -242,7 +245,7 @@ export default async function PurchaseDetailPage({
         </div>
         <div className="flex flex-col items-end gap-2">
           <StatusBadge status={stored} />
-          <PurchaseActionsBar orderId={order.id} status={stored} items={items} lotTrail={lotTrail} moneyAccounts={moneyAccounts} />
+          <PurchaseActionsBar orderId={order.id} status={stored} items={items} lotTrail={lotTrail} moneyAccounts={moneyAccounts} categories={expenseCategories} />
         </div>
       </div>
 
@@ -371,7 +374,7 @@ export default async function PurchaseDetailPage({
                       </div>
                       <div className="flex justify-between text-xs">
                         <dt className="text-muted-foreground">To</dt>
-                        <dd>{order.refund_account_name ?? '\u2014'}</dd>
+                        <dd>{order.refund_account_name ?? '—'}</dd>
                       </div>
                       <div className="flex justify-between text-xs">
                         <dt className="text-muted-foreground">Refunded on</dt>

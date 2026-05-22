@@ -28,6 +28,8 @@ export type ActionResult = { ok: true } | { ok: false; error: string }
 // ---------------------------------------------------------------------------
 // pending -> paid_supplier. Allocates the DOP payment across lines,
 // computes bank fee, sets dop_unit_landed_cost on every line.
+// Round 24f: also posts the payment to the accounting ledger under the
+// chosen expense category (required) and moves the account balance.
 // ---------------------------------------------------------------------------
 
 export type MarkPaidSupplierInput = {
@@ -37,6 +39,7 @@ export type MarkPaidSupplierInput = {
   officialRateAtPayment: number
   supplierPaymentAccountId: string
   paidAtDop: string // ISO
+  categoryId: string // expense category - required, posts to the ledger (Round 24f)
 }
 
 export async function markPaidSupplier(
@@ -54,6 +57,8 @@ export async function markPaidSupplier(
   if (!Number.isFinite(input.officialRateAtPayment) || input.officialRateAtPayment <= 0)
     return { ok: false, error: 'Official rate must be greater than zero.' }
   if (!input.paidAtDop) return { ok: false, error: 'Payment date is required.' }
+  if (!input.categoryId)
+    return { ok: false, error: 'Pick an expense category for this payment.' }
 
   const supabase = await createClient()
   const { error } = await supabase.rpc('mark_paid_supplier', {
@@ -63,6 +68,7 @@ export async function markPaidSupplier(
     p_official_rate_at_payment: input.officialRateAtPayment,
     p_supplier_payment_account_id: input.supplierPaymentAccountId,
     p_paid_at_dop: input.paidAtDop,
+    p_category_id: input.categoryId,
   })
   if (error) return { ok: false, error: error.message }
 
@@ -220,6 +226,9 @@ export async function markLost(orderId: string): Promise<ActionResult> {
 // Status outcome:
 //   - no inline payment  -> pending
 //   - inline payment     -> paid_supplier
+//
+// Round 24f: when there IS an inline payment, the chosen expense
+// category (required) rides along and the payment posts to the ledger.
 // ---------------------------------------------------------------------------
 
 export type CreatePurchaseOrderInput = {
@@ -238,6 +247,7 @@ export type CreatePurchaseOrderInput = {
     officialRateAtPayment: number
     supplierPaymentAccountId: string
     paidAtDop: string
+    categoryId: string // expense category - required when paying (Round 24f)
   }
   transport?: {
     amountDop: number
@@ -293,6 +303,8 @@ export async function createPurchaseOrder(
     if (!p.supplierPaymentAccountId)
       return { ok: false, error: 'Pick the account the supplier was paid from.' }
     if (!p.paidAtDop) return { ok: false, error: 'Payment date is required.' }
+    if (!p.categoryId)
+      return { ok: false, error: 'Pick an expense category for this payment.' }
   }
 
   // ---- Inline transport validation ----
@@ -332,6 +344,7 @@ export async function createPurchaseOrder(
     p_official_rate_at_payment:    input.payment?.officialRateAtPayment ?? null,
     p_supplier_payment_account_id: input.payment?.supplierPaymentAccountId ?? null,
     p_paid_at_dop:                 input.payment?.paidAtDop ?? null,
+    p_category_id:                 input.payment?.categoryId ?? null,
     p_transport_amount_dop:        input.transport?.amountDop ?? null,
     p_courier_id:                  input.transport?.courierId ?? null,
     p_transport_account_id:        input.transport?.accountId ?? null,
