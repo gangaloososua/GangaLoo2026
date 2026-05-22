@@ -1,11 +1,14 @@
-﻿import Link from 'next/link'
+import Link from 'next/link'
 import { Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { listPeople, type PeopleFilter, type UserRole } from './actions'
 import { PeopleTable } from './people-table'
 import { PeopleFilters } from './people-filters'
+import { SuppliersManager } from './suppliers-manager'
 import { requireAdminCaller } from '@/lib/auth/guard'
 import { isOwnerEquivalent } from '@/lib/auth/roles'
+import { listSuppliers } from '@/lib/suppliers'
 
 export default async function PeoplePage({
   searchParams,
@@ -41,24 +44,30 @@ export default async function PeoplePage({
     search: sp.q,
   }
   const people = await listPeople(filter)
-  return (
+  // Suppliers/couriers management is owner-only; only fetch when allowed.
+  const suppliers = canManagePeople ? await listSuppliers({}) : []
+
+  const header = (
+    <div>
+      <h1 className="text-2xl font-semibold tracking-tight">People</h1>
+      <p className="text-sm text-muted-foreground">
+        Customers, sellers, distributors, staff, and your suppliers &amp; couriers.
+      </p>
+    </div>
+  )
+
+  const contacts = (
     <div className="space-y-4">
-      <div className="flex items-start justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">People</h1>
-          <p className="text-sm text-muted-foreground">
-            Customers, sellers, distributors, and staff.
-          </p>
-        </div>
-        {canManagePeople && (
+      {canManagePeople && (
+        <div className="flex justify-end">
           <Button asChild>
             <Link href="/people/new">
               <Plus className="mr-2 h-4 w-4" />
               New person
             </Link>
           </Button>
-        )}
-      </div>
+        </div>
+      )}
       <PeopleFilters
         role={effectiveRole as UserRole | undefined}
         distributorOnly={filter.distributorOnly ?? false}
@@ -67,6 +76,35 @@ export default async function PeoplePage({
         canManagePeople={canManagePeople}
       />
       <PeopleTable people={people} />
+    </div>
+  )
+
+  // Non-owners: original single-view experience, no supplier tab.
+  if (!canManagePeople) {
+    return (
+      <div className="space-y-4">
+        {header}
+        {contacts}
+      </div>
+    )
+  }
+
+  // Owners: tabbed - Contacts | Suppliers & Couriers
+  return (
+    <div className="space-y-4">
+      {header}
+      <Tabs defaultValue="contacts">
+        <TabsList>
+          <TabsTrigger value="contacts">Contacts</TabsTrigger>
+          <TabsTrigger value="suppliers">Suppliers &amp; Couriers</TabsTrigger>
+        </TabsList>
+        <TabsContent value="contacts" className="space-y-4 pt-4">
+          {contacts}
+        </TabsContent>
+        <TabsContent value="suppliers" className="pt-4">
+          <SuppliersManager rows={suppliers} />
+        </TabsContent>
+      </Tabs>
     </div>
   )
 }
