@@ -54,9 +54,9 @@ const REPORTS: ReportCard[] = [
   {
     label: 'Commission statements',
     description: 'Per-seller commissions earned vs paid.',
-    href: '#',
+    href: '/reports/commissions',
     icon: HandCoins,
-    ready: false,
+    ready: true,
   },
 ]
 
