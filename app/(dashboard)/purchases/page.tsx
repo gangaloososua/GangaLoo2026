@@ -1,4 +1,4 @@
-﻿import Link from 'next/link'
+import Link from 'next/link'
 import { Suspense } from 'react'
 
 import { requireOwner } from '@/lib/auth/guard'
@@ -9,7 +9,8 @@ import {
   type PurchaseStatus,
 } from '@/lib/purchases'
 
-import { PurchasesListTable } from './list-table'
+import { Button } from '@/components/ui/button'
+ import { PurchasesListTable } from './list-table'
 
 type SearchParams = {
   q?: string
@@ -84,6 +85,9 @@ export default async function PurchasesPage({
             {mismatchOnly ? ' with status mismatches' : ''}.
           </p>
         </div>
+        <Button asChild>
+          <Link href="/purchases/new">New purchase order</Link>
+        </Button>
       </div>
 
       <Suspense>
