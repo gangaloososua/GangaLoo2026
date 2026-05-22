@@ -33,9 +33,9 @@ const REPORTS: ReportCard[] = [
   {
     label: 'Inventory valuation',
     description: 'Stock value by warehouse, product and category, with low- and dead-stock flags.',
-    href: '#',
+    href: '/reports/inventory',
     icon: Boxes,
-    ready: false,
+    ready: true,
   },
   {
     label: 'Sales analysis',
