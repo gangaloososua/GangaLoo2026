@@ -1,28 +1,31 @@
 'use client'
 
-// Per-account "Movimientos" statement modal. Opens from the Money Accounts
-// table; lazy-loads the statement via the read-only getAccountStatement action
-// the first time it's opened. Read-only in stage 1 (no save yet - that's the
-// stage-2 "Recalcular / set starting saldo" control).
+// Per-account "Movimientos" statement modal.
+//
+// Stage 1 (read-only): lazy-loads the statement via getAccountStatement and
+// shows the header stat cards, filters, and the running-saldo table.
+//
+// Stage 2 (write): an "Ajustar saldo" panel lets the owner set the account's
+// starting saldo (opening balance) two ways - by typing the opening directly,
+// or by typing the real current balance and letting us back-solve the opening.
+// Saving calls setAccountOpening, which writes initial_balance_cents and
+// re-syncs balance_cents = opening + sum(movements) (the old "Recalcular").
+// On success we re-fetch the statement (so the modal updates) and refresh the
+// page (so the account card + DOP-equivalent total update).
 //
 // SALDO column shows the true running balance at each movement (opening +
 // cumulative), computed in SQL across ALL movements. The year/month/tipo
-// filters only HIDE rows - they never recompute the saldo, so a filtered view
-// still shows each row's real account balance at that point in time (this
-// matches how the old system behaved). The header stat cards are always
-// account-wide totals, never filter-dependent.
-//
-// Table layout: table-fixed with explicit column widths so the six columns
-// (incl. the money columns) always fit inside the modal; the Descripción
-// column takes the remaining width and truncates long text. The scroll box
-// uses min-h-0 + flex-1 + overflow-auto so rows stay contained and scroll
-// inside the dialog instead of spilling onto the page.
+// filters only HIDE rows - they never recompute the saldo. The header stat
+// cards are always account-wide totals, never filter-dependent.
 
 import * as React from 'react'
+import { useRouter } from 'next/navigation'
 import { Receipt } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import {
   Dialog,
   DialogContent,
@@ -47,7 +50,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 
-import { getAccountStatement } from './statement-actions'
+import { getAccountStatement, setAccountOpening } from './statement-actions'
 import type {
   AccountStatement,
   StatementMovement,
@@ -102,12 +105,16 @@ function formatDate(iso: string): string {
   return Number.isNaN(d.getTime()) ? iso : dateFmt.format(d)
 }
 
+type AdjustMode = 'opening' | 'current'
+
 type Props = {
   accountId: string
   accountName: string
 }
 
 export function AccountStatementModal({ accountId, accountName }: Props) {
+  const router = useRouter()
+
   const [open, setOpen] = React.useState(false)
   const [loading, setLoading] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
@@ -118,7 +125,16 @@ export function AccountStatementModal({ accountId, accountName }: Props) {
   const [year, setYear] = React.useState<string>('all')
   const [month, setMonth] = React.useState<string>('all')
 
-  // Lazy-load the statement the first time the modal opens.
+  // Adjust-saldo panel.
+  const [adjustOpen, setAdjustOpen] = React.useState(false)
+  const [mode, setMode] = React.useState<AdjustMode>('opening')
+  const [amountInput, setAmountInput] = React.useState('')
+  const [confirming, setConfirming] = React.useState(false)
+  const [saving, setSaving] = React.useState(false)
+  const [saveError, setSaveError] = React.useState<string | null>(null)
+
+  // Lazy-load the statement the first time the modal opens (and on reload,
+  // when we set data back to null after a save).
   React.useEffect(() => {
     if (!open || data) return
     let cancelled = false
@@ -134,6 +150,22 @@ export function AccountStatementModal({ accountId, accountName }: Props) {
   }, [open, accountId, data])
 
   const currency = data?.account.currency ?? 'DOP'
+
+  // Net of all movements (in cents): computed = opening + net, so net = the
+  // difference. Used to convert between "opening" and "current" entry modes.
+  const movementsNet = data
+    ? data.computed_balance_cents - data.opening_cents
+    : 0
+
+  const parsed = Number(amountInput)
+  const amountValid = amountInput.trim() !== '' && Number.isFinite(parsed)
+  const enteredCents = amountValid ? Math.round(parsed * 100) : 0
+
+  // What the opening will be set to, and what the new current saldo becomes.
+  const newOpeningCents =
+    mode === 'opening' ? enteredCents : enteredCents - movementsNet
+  const newBalanceCents =
+    mode === 'opening' ? enteredCents + movementsNet : enteredCents
 
   // Distinct years present in the movements, newest first.
   const years = React.useMemo(() => {
@@ -157,8 +189,38 @@ export function AccountStatementModal({ accountId, accountName }: Props) {
     })
   }, [data, tipo, year, month])
 
+  function resetAdjust() {
+    setAdjustOpen(false)
+    setConfirming(false)
+    setAmountInput('')
+    setSaveError(null)
+  }
+
+  async function handleSave() {
+    if (!amountValid || saving) return
+    setSaving(true)
+    setSaveError(null)
+    const res = await setAccountOpening(accountId, newOpeningCents)
+    setSaving(false)
+    if ('error' in res) {
+      setSaveError(res.error)
+      setConfirming(false)
+      return
+    }
+    // Success: close panel, refetch the statement, refresh the page.
+    resetAdjust()
+    setData(null)
+    router.refresh()
+  }
+
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog
+      open={open}
+      onOpenChange={(o) => {
+        setOpen(o)
+        if (!o) resetAdjust()
+      }}
+    >
       <DialogTrigger asChild>
         <Button variant="ghost" size="sm">
           <Receipt className="mr-1 size-3.5" />
@@ -216,6 +278,108 @@ export function AccountStatementModal({ accountId, accountName }: Props) {
                 {data.salidas.count} movimientos
               </div>
             </div>
+          </div>
+        )}
+
+        {/* Adjust-saldo toggle + panel */}
+        {data && (
+          <div className="space-y-2">
+            <div className="flex justify-end">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setAdjustOpen((v) => !v)}
+              >
+                {adjustOpen ? 'Cerrar ajuste' : 'Ajustar saldo'}
+              </Button>
+            </div>
+
+            {adjustOpen && (
+              <div className="space-y-3 rounded-lg border bg-muted/30 p-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-sm font-medium">Ajustar por:</span>
+                  <Button
+                    size="sm"
+                    variant={mode === 'opening' ? 'default' : 'outline'}
+                    onClick={() => setMode('opening')}
+                  >
+                    Saldo inicial
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant={mode === 'current' ? 'default' : 'outline'}
+                    onClick={() => setMode('current')}
+                  >
+                    Saldo real actual
+                  </Button>
+                </div>
+
+                <div className="flex flex-wrap items-end gap-4">
+                  <div className="grid gap-1.5">
+                    <Label htmlFor="adj-amount" className="text-xs">
+                      {mode === 'opening'
+                        ? 'Saldo inicial (apertura)'
+                        : 'Saldo real actual'}
+                    </Label>
+                    <Input
+                      id="adj-amount"
+                      value={amountInput}
+                      onChange={(e) => {
+                        setAmountInput(e.target.value)
+                        setConfirming(false)
+                      }}
+                      placeholder="0.00"
+                      inputMode="decimal"
+                      className="w-44"
+                    />
+                  </div>
+
+                  <div className="text-sm text-muted-foreground">
+                    Nuevo saldo actual:{' '}
+                    <span className="font-medium text-foreground tabular-nums">
+                      {amountValid ? money(newBalanceCents, currency) : '—'}
+                    </span>
+                    {mode === 'current' && amountValid && (
+                      <div className="text-xs">
+                        Saldo inicial calculado:{' '}
+                        <span className="tabular-nums">
+                          {money(newOpeningCents, currency)}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  {!confirming ? (
+                    <Button
+                      size="sm"
+                      onClick={() => setConfirming(true)}
+                      disabled={!amountValid || saving}
+                    >
+                      Guardar
+                    </Button>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm">¿Confirmar cambio?</span>
+                      <Button size="sm" onClick={handleSave} disabled={saving}>
+                        {saving ? 'Guardando…' : 'Sí, guardar'}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setConfirming(false)}
+                        disabled={saving}
+                      >
+                        Cancelar
+                      </Button>
+                    </div>
+                  )}
+                </div>
+
+                {saveError && (
+                  <div className="text-sm text-red-600">{saveError}</div>
+                )}
+              </div>
+            )}
           </div>
         )}
 
