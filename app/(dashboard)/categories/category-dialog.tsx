@@ -81,7 +81,7 @@ export function CategoryDialog({
           <DialogDescription>
             {isEdit
               ? 'Update the category details below.'
-              : 'Add a new product category. Slugs are generated automatically.'}
+              : 'Add a new product category. Slugs are generated automatically, and new categories appear at the bottom of their group — drag to reorder.'}
           </DialogDescription>
         </DialogHeader>
         <form action={handleSubmit} className="space-y-4">
@@ -113,15 +113,6 @@ export function CategoryDialog({
                 ))}
               </SelectContent>
             </Select>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="display_order">Display order</Label>
-            <Input
-              id="display_order"
-              name="display_order"
-              type="number"
-              defaultValue={category?.display_order ?? 0}
-            />
           </div>
           {error && <p className="text-sm text-destructive">{error}</p>}
           <DialogFooter>

@@ -1,4 +1,4 @@
-﻿'use server'
+'use server'
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
@@ -62,19 +62,35 @@ export async function listCategories(): Promise<Category[]> {
 export async function createCategory(formData: FormData) {
   await requireOwner()
   const name = (formData.get('name') as string)?.trim()
-  const parentId = (formData.get('parent_id') as string) || null
-  const displayOrder = Number(formData.get('display_order') ?? 0)
+  const parentRaw = (formData.get('parent_id') as string) || null
+  const parentId = parentRaw === '__root__' ? null : parentRaw
 
   if (!name) {
     return { error: 'Name is required.' }
   }
 
   const supabase = await createClient()
+
+  // A new category drops at the BOTTOM of its sibling group; order is then
+  // managed by dragging on the categories screen, not typed.
+  let nextOrder = 0
+  {
+    let q = supabase
+      .from('categories')
+      .select('display_order')
+      .order('display_order', { ascending: false })
+      .limit(1)
+    q = parentId === null ? q.is('parent_id', null) : q.eq('parent_id', parentId)
+    const { data: top, error: topErr } = await q
+    if (topErr) return { error: topErr.message }
+    if (top && top.length) nextOrder = Number(top[0].display_order ?? 0) + 1
+  }
+
   const { error } = await supabase.from('categories').insert({
     name,
     slug: slugify(name) || 'category',
-    parent_id: parentId === '__root__' ? null : parentId,
-    display_order: Number.isFinite(displayOrder) ? displayOrder : 0,
+    parent_id: parentId,
+    display_order: nextOrder,
   })
 
   if (error) return { error: error.message }
@@ -86,14 +102,14 @@ export async function createCategory(formData: FormData) {
 export async function updateCategory(id: string, formData: FormData) {
   await requireOwner()
   const name = (formData.get('name') as string)?.trim()
-  const parentId = (formData.get('parent_id') as string) || null
-  const displayOrder = Number(formData.get('display_order') ?? 0)
+  const parentRaw = (formData.get('parent_id') as string) || null
+  const parentId = parentRaw === '__root__' ? null : parentRaw
 
   if (!name) {
     return { error: 'Name is required.' }
   }
 
-  if (parentId && parentId !== '__root__' && parentId === id) {
+  if (parentId && parentId === id) {
     return { error: 'A category cannot be its own parent.' }
   }
 
@@ -103,13 +119,38 @@ export async function updateCategory(id: string, formData: FormData) {
     .update({
       name,
       slug: slugify(name) || 'category',
-      parent_id: parentId === '__root__' ? null : parentId,
-      display_order: Number.isFinite(displayOrder) ? displayOrder : 0,
+      parent_id: parentId,
       updated_at: new Date().toISOString(),
+      // display_order is intentionally NOT changed here - ordering is managed
+      // by drag-and-drop on the categories screen.
     })
     .eq('id', id)
 
   if (error) return { error: error.message }
+
+  revalidatePath('/categories')
+  return { success: true }
+}
+
+// Persist a new order for a set of siblings (same level). Called after a
+// drag-and-drop reorder on the categories screen. Owner-gated WRITE.
+export async function reorderCategories(
+  updates: Array<{ id: string; display_order: number }>,
+) {
+  await requireOwner()
+  if (!updates.length) return { success: true }
+
+  const supabase = await createClient()
+  for (const u of updates) {
+    const { error } = await supabase
+      .from('categories')
+      .update({
+        display_order: u.display_order,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', u.id)
+    if (error) return { error: error.message }
+  }
 
   revalidatePath('/categories')
   return { success: true }
