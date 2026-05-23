@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { getProfile } from '../actions'
 import { fetchPersonFinancials } from '@/lib/person-financials'
 import { PersonFinancialsView } from './financials-view'
+import { requireOwner } from '@/lib/auth/guard'
 
 export const dynamic = 'force-dynamic'
 
@@ -13,6 +14,7 @@ export default async function PersonDetailPage({
 }: {
   params: Promise<{ id: string }>
 }) {
+  await requireOwner()
   const { id } = await params
 
   // getProfile gates access: non-owners only see customers (returns null

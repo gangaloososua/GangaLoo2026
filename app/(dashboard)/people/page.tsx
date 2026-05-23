@@ -6,7 +6,7 @@ import { listPeople, type PeopleFilter, type UserRole } from './actions'
 import { PeopleTable } from './people-table'
 import { PeopleFilters } from './people-filters'
 import { SuppliersManager } from './suppliers-manager'
-import { requireAdminCaller } from '@/lib/auth/guard'
+import { requireOwner } from '@/lib/auth/guard'
 import { isOwnerEquivalent } from '@/lib/auth/roles'
 import { listSuppliers } from '@/lib/suppliers'
 
@@ -20,7 +20,7 @@ export default async function PeoplePage({
     q?: string
   }>
 }) {
-  const caller = await requireAdminCaller()
+  const caller = await requireOwner()
   const canManagePeople = isOwnerEquivalent(caller.role)
 
   const sp = await searchParams

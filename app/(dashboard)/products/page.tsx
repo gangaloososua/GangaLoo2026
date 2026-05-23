@@ -4,6 +4,7 @@ import {
   type ProductFilters,
 } from '@/lib/products'
 import { ProductsClient } from './products-client'
+import { requireOwner } from '@/lib/auth/guard'
 
 type SP = {
   q?: string
@@ -18,6 +19,7 @@ export default async function ProductsPage({
 }: {
   searchParams: Promise<SP>
 }) {
+  await requireOwner()
   const params = await searchParams
 
   const filters: ProductFilters = {
