@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import Link from 'next/link'
 import { usePathname, useSearchParams } from 'next/navigation'
@@ -8,11 +8,13 @@ import { Button } from '@/components/ui/button'
 import { logout } from '@/app/actions'
 import { LogOut } from 'lucide-react'
 import type { Role } from '@/lib/auth/roles'
+import { localeForRole, t } from '@/lib/i18n/dictionary'
 
 export function Sidebar({ role }: { role: Role }) {
   const pathname = usePathname()
   const sp = useSearchParams()
 
+  const locale = localeForRole(role)
   const visibleItems = navItems.filter((item) => item.roles.includes(role))
 
   function isActive(href: string): boolean {
@@ -60,7 +62,7 @@ export function Sidebar({ role }: { role: Role }) {
               }`}
             >
               <Icon className="h-4 w-4" />
-              {item.label}
+              {t(locale, 'nav.' + item.label)}
             </Link>
           )
         })}
@@ -74,7 +76,7 @@ export function Sidebar({ role }: { role: Role }) {
             className="w-full justify-start gap-3 text-muted-foreground hover:text-foreground"
           >
             <LogOut className="h-4 w-4" />
-            Sign out
+            {t(locale, 'common.signOut')}
           </Button>
         </form>
       </div>
