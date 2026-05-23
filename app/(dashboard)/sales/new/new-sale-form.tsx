@@ -29,6 +29,7 @@ import { Plus, Trash2 } from 'lucide-react'
 import { formatDOP } from '@/lib/format'
 import { ProductSearch } from './product-search'
 import { confirmPosSale } from '../actions'
+import { QuickCustomerDialog } from './quick-customer-dialog'
 import type {
   CustomerPickerItem,
   MoneyAccount,
@@ -181,13 +182,22 @@ export function NewSaleForm({
 
   const router = useRouter()
 
+  // Round 25q: customers added via the quick "+ New customer" dialog are
+  // merged into the dropdown and selectable immediately.
+  const [extraCustomers, setExtraCustomers] = useState<CustomerPickerItem[]>([])
+  const [newCustomerOpen, setNewCustomerOpen] = useState(false)
+  const allCustomers = useMemo(
+    () => [...customers, ...extraCustomers],
+    [customers, extraCustomers]
+  )
+
   // Round 16.4: customer id usable by the resolver (NULL for walk-in).
   const resolverCustomerId = customerId === WALKIN ? null : customerId
   // Round 17: customer's club_tier for tier-based discount rules.
   const resolverClubTier =
     customerId === WALKIN
       ? null
-      : customers.find((c) => c.id === customerId)?.club_tier ?? null
+      : allCustomers.find((c) => c.id === customerId)?.club_tier ?? null
 
   function onSourceWarehouseChange(id: string) {
     setSourceWarehouseId(id)
@@ -204,7 +214,7 @@ export function NewSaleForm({
   }
 
   const chosenCustomer =
-    customerId === WALKIN ? null : customers.find((c) => c.id === customerId) ?? null
+    customerId === WALKIN ? null : allCustomers.find((c) => c.id === customerId) ?? null
   const customerHasClubTier =
     !!chosenCustomer?.club_tier && chosenCustomer.club_tier !== 'none'
 
@@ -497,13 +507,31 @@ export function NewSaleForm({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value={WALKIN}>Walk-in (no customer)</SelectItem>
-                  {customers.map((c) => (
+                  {allCustomers.map((c) => (
                     <SelectItem key={c.id} value={c.id}>
                       {c.full_name}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="mt-1 h-7 gap-1 px-2 text-xs"
+                onClick={() => setNewCustomerOpen(true)}
+              >
+                <Plus className="size-3" />
+                New customer
+              </Button>
+              <QuickCustomerDialog
+                open={newCustomerOpen}
+                onOpenChange={setNewCustomerOpen}
+                onCreated={(c) => {
+                  setExtraCustomers((prev) => [...prev, c])
+                  setCustomerId(c.id)
+                }}
+              />
               {chosenCustomer?.club_tier && chosenCustomer.club_tier !== 'none' && (
                 <p className="text-xs">
                   <Badge variant="secondary" className="capitalize">
