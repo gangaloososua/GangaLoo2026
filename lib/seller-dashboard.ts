@@ -20,6 +20,11 @@
 import { createClient } from '@/lib/supabase/server'
 import { fetchPersonFinancials } from '@/lib/person-financials'
 import { fetchStockOnHand } from '@/lib/inventory'
+import {
+  listTransfers,
+  listWarehousesForDistributor,
+  type TransferListRow,
+} from '@/lib/stock-transfers'
 
 export type SellerOrderRow = {
   id: string
@@ -62,6 +67,7 @@ export type SellerDashboard = {
   }
   held_cash_cents: number
   held_cash: SellerHeldCashRow[]
+  incoming_transfers: TransferListRow[]
   stock: {
     total_units: number
     by_category: SellerStockCategoryRow[]
@@ -129,6 +135,17 @@ export async function fetchSellerDashboard(
   }))
   const heldCash = heldCashRows.reduce((s, r) => s + r.amount_cents, 0)
 
+  // Distributor view: transfers in transit toward the warehouse(s) they run.
+  // Empty for plain sellers (they run no warehouse).
+  const myWarehouses = await listWarehousesForDistributor(profileId)
+  let incomingTransfers: TransferListRow[] = []
+  if (myWarehouses.length > 0) {
+    const lists = await Promise.all(
+      myWarehouses.map((w) => listTransfers({ status: 'in_transit', toWarehouseId: w.id })),
+    )
+    incomingTransfers = lists.flat().sort((a, b) => b.initiated_at.localeCompare(a.initiated_at))
+  }
+
   // Roll the seller-facing stock view (already top-level-category tagged) into
   // a compact per-category unit summary across all warehouses.
   const byCat = new Map<string, SellerStockCategoryRow>()
@@ -164,6 +181,7 @@ export async function fetchSellerDashboard(
     },
     held_cash_cents: heldCash,
     held_cash: heldCashRows,
+    incoming_transfers: incomingTransfers,
     stock: {
       total_units: totalUnits,
       by_category: byCategory,

@@ -7,7 +7,10 @@ import Link from 'next/link'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { formatDOP, formatDate } from '@/lib/format'
+import { ArrowRight } from 'lucide-react'
 import type { SellerDashboard, SellerOrderRow, SellerHeldCashRow } from '@/lib/seller-dashboard'
+import { formatDateTime } from '@/lib/format'
+import { ReceiveTransferButton } from './transfers/receive-transfer-button'
 
 function StatCard({
   label,
@@ -109,6 +112,41 @@ export function SellerDashboardView({
           Your commissions, your orders, what you owe the business, and what&apos;s in stock.
         </p>
       </div>
+
+      {/* Incoming transfers (distributors): stock heading to their warehouse */}
+      {data.incoming_transfers.length > 0 && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">
+              Incoming transfers
+              <span className="ml-2 text-sm font-normal text-muted-foreground">
+                ({data.incoming_transfers.length} on the way)
+              </span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="divide-y">
+              {data.incoming_transfers.map((t) => (
+                <div key={t.id} className="flex items-center justify-between gap-3 px-6 py-3">
+                  <div className="min-w-0">
+                    <div className="truncate text-sm">
+                      {t.from_warehouse_name}
+                      <ArrowRight className="mx-1 inline h-3 w-3 text-muted-foreground" />
+                      {t.to_warehouse_name}
+                    </div>
+                    <div className="mt-0.5 text-xs text-muted-foreground">
+                      {t.total_qty} {t.total_qty === 1 ? 'unit' : 'units'} ·{' '}
+                      {t.item_count} {t.item_count === 1 ? 'product' : 'products'} ·{' '}
+                      sent {formatDateTime(t.initiated_at)}
+                    </div>
+                  </div>
+                  <ReceiveTransferButton transferId={t.id} toWarehouseName={t.to_warehouse_name} />
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Money stat cards */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
