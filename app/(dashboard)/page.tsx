@@ -1,6 +1,9 @@
 import { ArrowDownRight, ArrowUpRight } from 'lucide-react'
 
-import { requireOwner } from '@/lib/auth/guard'
+import { requireAdminCaller } from '@/lib/auth/guard'
+import { isSellerRole } from '@/lib/auth/roles'
+import { fetchSellerDashboard } from '@/lib/seller-dashboard'
+import { SellerDashboardView } from './seller-dashboard-view'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { formatDOP, formatDate } from '@/lib/format'
@@ -117,7 +120,15 @@ export default async function DashboardPage({
 }: {
   searchParams: Promise<{ period?: string }>
 }) {
-  await requireOwner()
+  const caller = await requireAdminCaller()
+
+  // Sellers/distributors get their own tailored view; owner/admin fall
+  // through to the full business dashboard below.
+  if (isSellerRole(caller.role)) {
+    const data = await fetchSellerDashboard(caller.id)
+    return <SellerDashboardView data={data} sellerName={caller.full_name} />
+  }
+
   const sp = await searchParams
   const mode = parseMode(sp.period)
   const periods = computePeriods(mode)
