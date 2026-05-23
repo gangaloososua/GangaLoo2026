@@ -53,6 +53,7 @@ export default async function NewSalePage() {
         warehouses={warehouses}
         moneyAccounts={moneyAccounts}
         activeDiscountRules={activeDiscountRules}
+        canTakePayment={currentSeller?.role === 'owner' || currentSeller?.role === 'admin'}
       />
     </div>
   )

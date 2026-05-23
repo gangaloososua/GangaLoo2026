@@ -53,6 +53,10 @@ type Props = {
   // Round 16.4: pre-fetched active discount rules. Pure client-side
   // resolution; SQL function is the authority at confirm time.
   activeDiscountRules: DiscountRuleRow[]
+  // Round 25o: owner/admin take payment at the POS; sellers/distributors
+  // create unpaid ORDERS (no payment step) that the owner settles later.
+  // Defaults to true so existing behaviour is unchanged.
+  canTakePayment?: boolean
 }
 
 const WALKIN = '__walkin__'
@@ -158,6 +162,7 @@ export function NewSaleForm({
   warehouses,
   moneyAccounts,
   activeDiscountRules,
+  canTakePayment = true,
 }: Props) {
   const [customerId, setCustomerId] = useState<string>(WALKIN)
   const [sellerId, setSellerId] = useState<string>(defaultSellerId ?? '')
@@ -368,8 +373,14 @@ export function NewSaleForm({
   }
 
   // Auto-seed first tender when cart goes from empty to non-empty.
+  // Order mode (sellers) has no payment step, so don't seed.
   useEffect(() => {
-    if (lines.length > 0 && payments.length === 0 && moneyAccounts.length > 0) {
+    if (
+      canTakePayment &&
+      lines.length > 0 &&
+      payments.length === 0 &&
+      moneyAccounts.length > 0
+    ) {
       addPayment(totals.grandTotal)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -386,12 +397,15 @@ export function NewSaleForm({
   const confirmDisabledReason: string | null = useMemo(() => {
     if (!metaReady) return 'Set seller and warehouses first'
     if (lines.length === 0) return 'Add at least one product to the cart'
-    if (payments.length === 0) return 'Record at least one payment'
-    if (payments.some((p) => !p.money_account_id))
-      return 'Pick an account for every payment row'
-    if (paymentTotal <= 0) return 'Payment amount must be greater than zero'
+    // Payment requirements only apply when this user takes payment.
+    if (canTakePayment) {
+      if (payments.length === 0) return 'Record at least one payment'
+      if (payments.some((p) => !p.money_account_id))
+        return 'Pick an account for every payment row'
+      if (paymentTotal <= 0) return 'Payment amount must be greater than zero'
+    }
     return null
-  }, [metaReady, lines.length, payments, paymentTotal])
+  }, [metaReady, lines.length, payments, paymentTotal, canTakePayment])
 
   const confirmReady = confirmDisabledReason === null
 
@@ -426,15 +440,24 @@ export function NewSaleForm({
             cap_hit: b.capHit,
           })),
         })),
-        payments: payments.map((p) => ({
-          method: p.method,
-          amount_cents: p.amount_cents,
-          money_account_id: p.money_account_id,
-          reference: p.reference || null,
-        })),
+        // Order mode (sellers/distributors): no payment - the owner records
+        // it later. The RPC creates a confirmed, unpaid order and posts
+        // nothing to the ledger.
+        payments: canTakePayment
+          ? payments.map((p) => ({
+              method: p.method,
+              amount_cents: p.amount_cents,
+              money_account_id: p.money_account_id,
+              reference: p.reference || null,
+            }))
+          : [],
       })
       if (res.ok) {
-        toast.success(`Sale ${res.invoice_number} confirmed.`)
+        toast.success(
+          canTakePayment
+            ? `Sale ${res.invoice_number} confirmed.`
+            : `Order ${res.invoice_number} created.`
+        )
         router.push(`/sales/${res.sale_id}`)
       } else {
         toast.error(res.error)
@@ -450,7 +473,7 @@ export function NewSaleForm({
 
   return (
     <div className="space-y-4">
-      {moneyAccounts.length === 0 && (
+      {canTakePayment && moneyAccounts.length === 0 && (
         <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
           <div className="font-medium">No active money accounts</div>
           <div className="mt-0.5">
@@ -806,7 +829,7 @@ export function NewSaleForm({
         </CardContent>
       </Card>
 
-      {metaReady && lines.length > 0 && (
+      {canTakePayment && metaReady && lines.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Payment</CardTitle>
@@ -944,6 +967,13 @@ export function NewSaleForm({
         </Card>
       )}
 
+      {!canTakePayment && metaReady && lines.length > 0 && (
+        <div className="rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
+          This is an <span className="font-medium">order</span> — no payment is
+          taken here. The owner records payment once the customer settles up.
+        </div>
+      )}
+
       <div className="flex items-center justify-end gap-2">
         <Button variant="outline" type="button" disabled>
           Save draft
@@ -951,23 +981,38 @@ export function NewSaleForm({
         <Button
           type="button"
           disabled={!confirmReady || submitting}
-          title={confirmDisabledReason ?? 'Confirm sale'}
+          title={
+            confirmDisabledReason ??
+            (canTakePayment ? 'Confirm sale' : 'Create order')
+          }
           onClick={() => setConfirmOpen(true)}
         >
-          {submitting ? 'Confirming…' : 'Confirm sale'}
+          {submitting
+            ? canTakePayment
+              ? 'Confirming…'
+              : 'Creating…'
+            : canTakePayment
+              ? 'Confirm sale'
+              : 'Create order'}
         </Button>
       </div>
 
       <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Confirm this sale?</AlertDialogTitle>
+            <AlertDialogTitle>
+              {canTakePayment ? 'Confirm this sale?' : 'Create this order?'}
+            </AlertDialogTitle>
             <AlertDialogDescription asChild>
               <div className="space-y-2 text-sm">
                 <div>
-                  {lines.length} {lines.length === 1 ? 'item' : 'items'},{' '}
-                  total {formatDOP(totals.grandTotal)}, paid{' '}
-                  {formatDOP(paymentTotal)}.
+                  {lines.length} {lines.length === 1 ? 'item' : 'items'}, total{' '}
+                  {formatDOP(totals.grandTotal)}
+                  {canTakePayment ? (
+                    <>, paid {formatDOP(paymentTotal)}.</>
+                  ) : (
+                    <> (unpaid order).</>
+                  )}
                 </div>
                 {anyOverStock && (
                   <div className="text-amber-700">
@@ -976,21 +1021,21 @@ export function NewSaleForm({
                     lot negative.
                   </div>
                 )}
-                {outstanding > 0 && (
+                {canTakePayment && outstanding > 0 && (
                   <div className="text-amber-700">
                     Outstanding balance of {formatDOP(outstanding)} will
                     remain after this sale.
                   </div>
                 )}
-                {outstanding < 0 && (
+                {canTakePayment && outstanding < 0 && (
                   <div className="text-rose-700">
                     Overpayment of {formatDOP(-outstanding)} will be recorded.
                   </div>
                 )}
                 <div className="text-muted-foreground">
-                  This writes the sale, consumes inventory, and records
-                  payments + commissions atomically. It cannot be undone
-                  without a refund.
+                  {canTakePayment
+                    ? 'This writes the sale, consumes inventory, and records payments + commissions atomically. It cannot be undone without a refund.'
+                    : 'This creates an unpaid order: it consumes inventory and sets the commission pending, but records no payment. The owner records payment later. It cannot be undone without a refund.'}
                 </div>
               </div>
             </AlertDialogDescription>
@@ -1005,7 +1050,7 @@ export function NewSaleForm({
                 void handleConfirm()
               }}
             >
-              Confirm sale
+              {canTakePayment ? 'Confirm sale' : 'Create order'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

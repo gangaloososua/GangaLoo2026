@@ -401,8 +401,7 @@ export async function confirmPosSale(
     return { ok: false, error: 'Fulfillment warehouse is required.' }
   if (input.items.length < 1)
     return { ok: false, error: 'Add at least one item to the cart.' }
-  if (input.payments.length < 1)
-    return { ok: false, error: 'Record at least one payment before confirming.' }
+  // Round 25o: payment is optional - sellers create unpaid orders. The form gates payment for owner/admin; the RPC is the authority.
 
   const supabase = await createClient()
   const { data, error } = await supabase.rpc('confirm_pos_sale', {
