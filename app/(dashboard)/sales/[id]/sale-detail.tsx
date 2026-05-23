@@ -4,7 +4,7 @@ import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import Link from 'next/link'
-import { ChevronDown, ChevronRight, MoreVertical, XCircle, RotateCcw, Plus, Banknote, CreditCard, ArrowRightLeft, Wallet, Printer } from 'lucide-react'
+import { ChevronDown, ChevronRight, MoreVertical, XCircle, RotateCcw, Plus, Banknote, CreditCard, ArrowRightLeft, Wallet, Printer, Pencil } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -125,6 +125,7 @@ function HeaderCard({ sale }: { sale: SaleDetailType }) {
     sale.status === 'confirmed' ||
     sale.status === 'paid' ||
     sale.status === 'partially_paid'
+  const canEditProducts = sale.status === 'confirmed' && sale.paid_cents === 0
   const hasAnyAction = true // Print receipt is always available
 
   function doCancel() {
@@ -191,6 +192,14 @@ function HeaderCard({ sale }: { sale: SaleDetailType }) {
                         </Link>
                       </DropdownMenuItem>
                       {(canCancel || canRefund) && <DropdownMenuSeparator />}
+                      {canEditProducts && (
+                        <DropdownMenuItem asChild>
+                          <Link href={`/sales/${sale.id}/edit-products`}>
+                            <Pencil className="mr-2 h-4 w-4" />
+                            Edit products
+                          </Link>
+                        </DropdownMenuItem>
+                      )}
                       {canCancel && (
                         <DropdownMenuItem onClick={() => setCancelOpen(true)}>
                           <XCircle className="mr-2 h-4 w-4" />
