@@ -1,4 +1,4 @@
-﻿import { Suspense } from 'react'
+import { Suspense } from 'react'
 import Link from 'next/link'
 import { Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -9,7 +9,10 @@ import {
   groupTagsFromAccounts,
 } from '@/lib/money-accounts'
 import { fetchEffectiveRatesForCurrencies } from '@/lib/exchange-rates'
+import { listAccountTransfers, listAccountsForTransfer } from '@/lib/account-transfers'
 import { MoneyAccountsListTable } from './list-table'
+import { MoveMoneyDialog } from './move-money-dialog'
+import { TransfersList } from './transfers-list'
 
 export const dynamic = 'force-dynamic'
 
@@ -43,6 +46,11 @@ export default async function MoneyAccountsPage({
 
   const rates = await fetchEffectiveRatesForCurrencies(currencies)
 
+  const [transfers, transferAccounts] = await Promise.all([
+    listAccountTransfers(),
+    listAccountsForTransfer(),
+  ])
+
   return (
     <div className="space-y-4">
       <div className="flex items-baseline justify-between">
@@ -54,12 +62,15 @@ export default async function MoneyAccountsPage({
             Where the money sits.
           </p>
         </div>
-        <Button asChild size="sm">
-          <Link href="/money-accounts/new">
-            <Plus className="mr-1 size-4" />
-            New account
-          </Link>
-        </Button>
+        <div className="flex items-center gap-2">
+          <MoveMoneyDialog accounts={transferAccounts} />
+          <Button asChild size="sm">
+            <Link href="/money-accounts/new">
+              <Plus className="mr-1 size-4" />
+              New account
+            </Link>
+          </Button>
+        </div>
       </div>
 
       <Suspense>
@@ -75,6 +86,8 @@ export default async function MoneyAccountsPage({
           }}
         />
       </Suspense>
+
+      <TransfersList transfers={transfers} />
     </div>
   )
 }

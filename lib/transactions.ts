@@ -28,6 +28,7 @@ export type TransactionRow = {
   scope: AccountScope
   description: string | null
   isManual: boolean
+  currency: string
 }
 
 export type AccountCategoryOption = {
@@ -64,7 +65,7 @@ type TxnJoin = {
   scope: AccountScope
   description: string | null
   is_manual: boolean
-  money_accounts: { name: string } | null
+  money_accounts: { name: string; currency: string } | null
   account_categories: { name: string; type: AccountType } | null
 }
 
@@ -79,7 +80,7 @@ export async function fetchTransactions(
     .from('transactions')
     .select(
       'id, occurred_at, money_account_id, category_id, amount_cents, scope, ' +
-      'description, is_manual, money_accounts(name), account_categories(name, type)',
+      'description, is_manual, money_accounts(name, currency), account_categories(name, type)',
     )
     .order('created_at', { ascending: false })
     .order('occurred_at', { ascending: false })
@@ -110,6 +111,7 @@ export async function fetchTransactions(
     scope: t.scope,
     description: t.description,
     isManual: t.is_manual,
+    currency: t.money_accounts?.currency ?? 'DOP',
   }))
 
   if (filters.type) {

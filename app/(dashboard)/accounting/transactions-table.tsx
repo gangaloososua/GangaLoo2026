@@ -43,6 +43,18 @@ import { deleteTransaction } from './actions'
 
 const ALL = '__all__'
 
+// Currency-aware amount formatter (the ledger holds multiple currencies;
+// formatDOP would mislabel non-DOP rows as RD$).
+const CURRENCY_SYMBOLS: Record<string, string> = { DOP: 'RD$', USD: '$', EUR: "\u20AC" }
+function formatMoney(cents: number, currency: string): string {
+  const sym = CURRENCY_SYMBOLS[currency] ?? ''
+  const n = new Intl.NumberFormat('en-GB', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(Math.abs(cents) / 100)
+  return sym + n
+}
+
 const TYPE_LABEL: Record<AccountType, string> = {
   income: 'Income',
   expense: 'Expense',
@@ -285,7 +297,7 @@ export function TransactionsTable({ rows, accounts, categories, current }: Props
                           (positive ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400')
                         }
                       >
-                        {positive ? '+' : '−'}{formatDOP(Math.abs(r.amountCents))}
+                        {positive ? '+' : '−'}{formatMoney(r.amountCents, r.currency)}
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-1">
@@ -340,7 +352,7 @@ export function TransactionsTable({ rows, accounts, categories, current }: Props
             <div className="rounded-md border p-3 text-sm">
               <div className="flex justify-between"><span className="text-muted-foreground">Account</span><span>{deleting.accountName}</span></div>
               <div className="flex justify-between"><span className="text-muted-foreground">Category</span><span>{deleting.categoryName}</span></div>
-              <div className="flex justify-between"><span className="text-muted-foreground">Amount</span><span className="tabular-nums">{deleting.amountCents >= 0 ? '+' : '−'}{formatDOP(Math.abs(deleting.amountCents))}</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Amount</span><span className="tabular-nums">{deleting.amountCents >= 0 ? '+' : '−'}{formatMoney(deleting.amountCents, deleting.currency)}</span></div>
             </div>
             {delError && <p className="text-sm text-destructive">{delError}</p>}
             <DialogFooter>
