@@ -89,11 +89,17 @@ export function InventoryView({ data }: { data: InventoryReport }) {
   return (
     <div className="space-y-6">
       {/* Headline cards */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
         <StatCard
           label="Units in stock"
           value={data.units.toLocaleString('en-US')}
           sub={`${data.by_category.length} categories`}
+        />
+        <StatCard
+          label="On the way"
+          value={data.incoming_units.toLocaleString('en-US')}
+          sub={formatDOP(data.incoming_cost_cents)}
+          accent="#f59e0b"
         />
         <StatCard label="Value at cost" value={formatDOP(data.cost_cents)} sub="what it cost you" />
         <StatCard label="Potential retail" value={formatDOP(data.retail_cents)} sub="if sold at list price" />

@@ -31,6 +31,8 @@ export type InventoryReport = {
   margin_cents: number
   slow_cost_cents: number
   slow_units: number
+  incoming_units: number
+  incoming_cost_cents: number
   by_warehouse: InvWarehouseRow[]
   by_category: InvCategoryRow[]
   top_products: InvProductRow[]
