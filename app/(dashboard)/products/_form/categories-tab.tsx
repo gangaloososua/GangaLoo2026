@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import { useId, useState, useTransition } from 'react'
 import { toast } from 'sonner'
@@ -19,16 +19,22 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { GripVertical, Trash2 } from 'lucide-react'
+import { ChevronsUpDown, GripVertical, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover'
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command'
 import { saveProductCategories } from '../actions'
 import type { ProductCategory } from '@/lib/products'
 
@@ -109,7 +115,7 @@ export function CategoriesTab({
   allCategories: FlatCategory[]
 }) {
   const [rows, setRows] = useState<Row[]>(initialRows)
-  const [pickerValue, setPickerValue] = useState<string>('')
+  const [open, setOpen] = useState(false)
   const dndContextId = useId()
   const [isPending, startTransition] = useTransition()
 
@@ -120,6 +126,32 @@ export function CategoriesTab({
 
   const assignedIds = new Set(rows.map((r) => r.category_id))
   const available = allCategories.filter((c) => !assignedIds.has(c.id))
+
+  // Group the still-available categories under their MAIN category (parent),
+  // so the picker reads main -> subs. A main with parent_id null heads its own
+  // group; its sub-categories nest under it. Mains render bold, subs indented.
+  // cmdk searches the visible text, so typing filters across every group.
+  const groups = (() => {
+    const m = new Map<string, { name: string; items: FlatCategory[] }>()
+    for (const c of available) {
+      const mainId = c.parent_id ?? c.id
+      const mainName =
+        allCategories.find((x) => x.id === mainId)?.name ?? 'Other'
+      if (!m.has(mainId)) m.set(mainId, { name: mainName, items: [] })
+      m.get(mainId)!.items.push(c)
+    }
+    return [...m.entries()]
+      .map(([mainId, g]) => ({
+        mainId,
+        name: g.name,
+        items: g.items.sort((a, b) => {
+          if (a.id === mainId) return -1
+          if (b.id === mainId) return 1
+          return a.name.localeCompare(b.name)
+        }),
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name))
+  })()
 
   function addCategory(id: string) {
     const cat = allCategories.find((c) => c.id === id)
@@ -132,7 +164,7 @@ export function CategoriesTab({
       display_order: rows.length,
     }
     setRows([...rows, next])
-    setPickerValue('')
+    setOpen(false)
   }
 
   function removeCategory(id: string) {
@@ -180,18 +212,51 @@ export function CategoriesTab({
       <div className="flex items-end gap-2">
         <div className="flex-1">
           <label className="mb-1 block text-sm font-medium">Add category</label>
-          <Select value={pickerValue} onValueChange={addCategory}>
-            <SelectTrigger>
-              <SelectValue placeholder={available.length ? 'Select a category…' : 'All categories assigned'} />
-            </SelectTrigger>
-            <SelectContent>
-              {available.map((c) => (
-                <SelectItem key={c.id} value={c.id}>
-                  {c.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <Popover open={open} onOpenChange={setOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                type="button"
+                variant="outline"
+                role="combobox"
+                aria-expanded={open}
+                disabled={available.length === 0}
+                className="w-full justify-between font-normal"
+              >
+                {available.length
+                  ? 'Select a category…'
+                  : 'All categories assigned'}
+                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent
+              className="w-[var(--radix-popover-trigger-width)] p-0"
+              align="start"
+            >
+              <Command>
+                <CommandInput placeholder="Search categories…" />
+                <CommandList>
+                  <CommandEmpty>No category found.</CommandEmpty>
+                  {groups.map((g) => (
+                    <CommandGroup key={g.mainId} heading={g.name}>
+                      {g.items.map((c) => {
+                        const isMain = c.id === g.mainId
+                        return (
+                          <CommandItem
+                            key={c.id}
+                            value={`${c.name} ${c.id}`}
+                            onSelect={() => addCategory(c.id)}
+                            className={isMain ? 'font-medium' : 'pl-6'}
+                          >
+                            {c.name}
+                          </CommandItem>
+                        )
+                      })}
+                    </CommandGroup>
+                  ))}
+                </CommandList>
+              </Command>
+            </PopoverContent>
+          </Popover>
         </div>
       </div>
 
