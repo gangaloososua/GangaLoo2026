@@ -7,7 +7,7 @@ import Link from 'next/link'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { formatDOP, formatDate } from '@/lib/format'
-import type { SellerDashboard, SellerOrderRow } from '@/lib/seller-dashboard'
+import type { SellerDashboard, SellerOrderRow, SellerHeldCashRow } from '@/lib/seller-dashboard'
 
 function StatCard({
   label,
@@ -164,6 +164,42 @@ export function SellerDashboardView({
           <OrderTable rows={data.orders.recent} emptyText="No orders yet." />
         </CardContent>
       </Card>
+
+      {/* Cash you're holding — per-order breakdown */}
+      {data.held_cash.length > 0 && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">
+              Cash you&apos;re holding
+              <span className="ml-2 text-sm font-normal text-muted-foreground">
+                ({formatDOP(data.held_cash_cents)} not yet handed in)
+              </span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="divide-y">
+              {data.held_cash.map((c: SellerHeldCashRow) => (
+                <Link
+                  key={c.id}
+                  href={`/sales/${c.sale_id}`}
+                  className="flex items-center justify-between px-6 py-2.5 hover:bg-muted/40"
+                >
+                  <div className="min-w-0">
+                    <div className="font-mono font-medium">
+                      {c.invoice_number ?? c.sale_id.slice(0, 8)}
+                    </div>
+                    <div className="truncate text-xs text-muted-foreground">
+                      {formatDate(c.collected_at)}
+                      {c.note ? ` · ${c.note}` : ''}
+                    </div>
+                  </div>
+                  <div className="tabular-nums">{formatDOP(c.amount_cents)}</div>
+                </Link>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Available stock */}
       <Card>

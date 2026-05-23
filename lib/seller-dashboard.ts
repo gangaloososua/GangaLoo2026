@@ -38,6 +38,15 @@ export type SellerStockCategoryRow = {
   units: number
 }
 
+export type SellerHeldCashRow = {
+  id: string
+  sale_id: string
+  invoice_number: string | null
+  amount_cents: number
+  note: string | null
+  collected_at: string
+}
+
 export type SellerDashboard = {
   commissions: {
     earned_cents: number
@@ -52,6 +61,7 @@ export type SellerDashboard = {
     recent: SellerOrderRow[]
   }
   held_cash_cents: number
+  held_cash: SellerHeldCashRow[]
   stock: {
     total_units: number
     by_category: SellerStockCategoryRow[]
@@ -80,9 +90,10 @@ export async function fetchSellerDashboard(
       .limit(200),
     supabase
       .from('seller_cash_collections')
-      .select('amount_cents')
+      .select(`id, sale_id, amount_cents, note, collected_at, sale:sale_id ( invoice_number )`)
       .eq('seller_id', profileId)
-      .eq('status', 'held'),
+      .eq('status', 'held')
+      .order('collected_at', { ascending: false }),
     fetchStockOnHand(),
   ])
 
@@ -108,10 +119,15 @@ export async function fetchSellerDashboard(
   const recent = allOrders.slice(0, RECENT_LIMIT)
   const openOutstanding = open.reduce((s, o) => s + o.outstanding_cents, 0)
 
-  const heldCash = ((heldRes.data ?? []) as Array<{ amount_cents: number }>).reduce(
-    (s, r) => s + (Number(r.amount_cents) || 0),
-    0,
-  )
+  const heldCashRows: SellerHeldCashRow[] = ((heldRes.data ?? []) as any[]).map((r) => ({
+    id: r.id,
+    sale_id: r.sale_id,
+    invoice_number: r.sale?.invoice_number ?? null,
+    amount_cents: Number(r.amount_cents) || 0,
+    note: r.note ?? null,
+    collected_at: r.collected_at,
+  }))
+  const heldCash = heldCashRows.reduce((s, r) => s + r.amount_cents, 0)
 
   // Roll the seller-facing stock view (already top-level-category tagged) into
   // a compact per-category unit summary across all warehouses.
@@ -147,6 +163,7 @@ export async function fetchSellerDashboard(
       recent,
     },
     held_cash_cents: heldCash,
+    held_cash: heldCashRows,
     stock: {
       total_units: totalUnits,
       by_category: byCategory,
