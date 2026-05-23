@@ -87,7 +87,7 @@ export function PeopleTable({ people }: { people: ProfileListRow[] }) {
               people.map((p) => (
                 <TableRow key={p.id}>
                   <TableCell className="font-medium">
-                    <Link href={`/people/${p.id}/edit`} className="hover:underline">
+                    <Link href={`/people/${p.id}`} className="hover:underline">
                       {p.full_name}
                     </Link>
                   </TableCell>
