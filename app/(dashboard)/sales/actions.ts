@@ -345,6 +345,39 @@ export async function searchProductsForSaleAction(input: {
 }
 
 // ============================================================
+// 26a — log seller cash collected (Option-1 tracker)
+// ============================================================
+// Seller-callable: records that the seller is HOLDING cash for one of their
+// own orders. Touches nothing in the books (no ledger, no paid status) — the
+// owner books the real payment later via hand-in. Gated with
+// requireAdminCaller (permits sellers); the RPC re-checks the caller is the
+// order's seller.
+
+export type LogCashResult = { ok: true } | { ok: false; error: string }
+
+export async function logCashCollected(input: {
+  saleId: string
+  amountCents: number
+  note?: string | null
+}): Promise<LogCashResult> {
+  await requireAdminCaller()
+  if (!input.saleId) return { ok: false, error: 'Sale id is required.' }
+  if (!Number.isFinite(input.amountCents) || input.amountCents <= 0) {
+    return { ok: false, error: 'Amount must be greater than zero.' }
+  }
+  const supabase = await createClient()
+  const { error } = await supabase.rpc('log_seller_cash_collection', {
+    p_sale_id: input.saleId,
+    p_amount_cents: Math.round(input.amountCents),
+    p_note: input.note?.trim() || null,
+  })
+  if (error) return { ok: false, error: error.message }
+
+  revalidatePath(`/sales/${input.saleId}`)
+  return { ok: true }
+}
+
+// ============================================================
 // 9.8 — POS confirm
 // ============================================================
 

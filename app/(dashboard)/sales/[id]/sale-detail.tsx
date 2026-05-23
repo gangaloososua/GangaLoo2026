@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
@@ -35,8 +35,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { cancelSale, refundSale, recordPayment } from '../actions'
+import { cancelSale, refundSale, recordPayment, logCashCollected } from '../actions'
 import { buildInvoiceWhatsAppLink } from '@/lib/whatsapp'
+import { isOwnerEquivalent, type Role } from '@/lib/auth/roles'
 import {
   Select,
   SelectContent,
@@ -90,13 +91,15 @@ const FULFILLMENT_LABEL: Record<string, string> = {
 export function SaleDetail({
   sale,
   moneyAccounts,
+  role,
 }: {
   sale: SaleDetailType
   moneyAccounts: MoneyAccount[]
+  role: Role
 }) {
   return (
     <div className="space-y-4">
-      <HeaderCard sale={sale} />
+      <HeaderCard sale={sale} role={role} />
       <ItemsCard items={sale.items} />
       <SummaryCards sale={sale} moneyAccounts={moneyAccounts} />
     </div>
@@ -107,7 +110,7 @@ export function SaleDetail({
 // HeaderCard — invoice number, status, dates, customer, seller, warehouse
 // ---------------------------------------------------------------------------
 
-function HeaderCard({ sale }: { sale: SaleDetailType }) {
+function HeaderCard({ sale, role }: { sale: SaleDetailType; role: Role }) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
 
@@ -118,6 +121,8 @@ function HeaderCard({ sale }: { sale: SaleDetailType }) {
   const [refundReason, setRefundReason] = useState('')
   const [refundRestock, setRefundRestock] = useState(true)
 
+  const [logCashOpen, setLogCashOpen] = useState(false)
+
   const canCancel =
     sale.status === 'draft' ||
     sale.status === 'confirmed' ||
@@ -127,6 +132,10 @@ function HeaderCard({ sale }: { sale: SaleDetailType }) {
     sale.status === 'paid' ||
     sale.status === 'partially_paid'
   const canEditProducts = sale.status === 'confirmed' && sale.paid_cents === 0
+  const outstandingForCash = sale.total_cents - sale.paid_cents
+  const canLogCash =
+    outstandingForCash > 0 &&
+    (sale.status === 'confirmed' || sale.status === 'partially_paid')
   const hasAnyAction = true // Print receipt is always available
   const waHref = buildInvoiceWhatsAppLink({ phone: sale.customer_phone, customerName: sale.customer_name, invoiceNumber: sale.invoice_number, totalCents: sale.total_cents })
 
@@ -199,6 +208,12 @@ function HeaderCard({ sale }: { sale: SaleDetailType }) {
                             <MessageCircle className="mr-2 h-4 w-4" />
                             Send by WhatsApp
                           </a>
+                        </DropdownMenuItem>
+                      )}
+                      {canLogCash && (
+                        <DropdownMenuItem onClick={() => setLogCashOpen(true)}>
+                          <Banknote className="mr-2 h-4 w-4" />
+                          Log cash collected
                         </DropdownMenuItem>
                       )}
                       {(canCancel || canRefund) && <DropdownMenuSeparator />}
@@ -381,9 +396,127 @@ function HeaderCard({ sale }: { sale: SaleDetailType }) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <LogCashDialog
+        open={logCashOpen}
+        onOpenChange={setLogCashOpen}
+        saleId={sale.id}
+        outstandingCents={outstandingForCash}
+        sellerName={sale.seller_name}
+        isOnBehalf={isOwnerEquivalent(role)}
+      />
     </>
   )
 }
+
+function LogCashDialog({
+  open,
+  onOpenChange,
+  saleId,
+  outstandingCents,
+  sellerName,
+  isOnBehalf,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  saleId: string
+  outstandingCents: number
+  sellerName: string | null
+  isOnBehalf: boolean
+}) {
+  const router = useRouter()
+  const [pending, startTransition] = useTransition()
+  const [amountStr, setAmountStr] = useState<string>(
+    (Math.max(outstandingCents, 0) / 100).toFixed(2),
+  )
+  const [note, setNote] = useState<string>('')
+
+  function handleOpenChange(next: boolean) {
+    if (next) {
+      setAmountStr((Math.max(outstandingCents, 0) / 100).toFixed(2))
+      setNote('')
+    }
+    onOpenChange(next)
+  }
+
+  function doSubmit() {
+    const amount = Number(amountStr)
+    if (!Number.isFinite(amount) || amount <= 0) {
+      toast.error('Amount must be greater than zero.')
+      return
+    }
+    startTransition(async () => {
+      const res = await logCashCollected({
+        saleId,
+        amountCents: Math.round(amount * 100),
+        note: note.trim() || undefined,
+      })
+      if (res.ok) {
+        toast.success('Cash collection logged.')
+        handleOpenChange(false)
+        router.refresh()
+      } else {
+        toast.error(res.error)
+      }
+    })
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Log cash collected</DialogTitle>
+          <DialogDescription>
+            {isOnBehalf
+              ? `Records that ${sellerName ?? 'the seller'} is holding this cash for the order. It does not record a payment — the money is booked when you mark it handed in.`
+              : 'Records that you are holding this cash for the order. It does not pay the order off — the owner books it when you hand the cash in.'}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div className="space-y-1">
+            <Label htmlFor="logcash-amount" className="text-xs">
+              Amount collected (DOP) <span className="text-rose-600">*</span>
+            </Label>
+            <Input
+              id="logcash-amount"
+              type="number"
+              step="0.01"
+              min="0"
+              value={amountStr}
+              onChange={(e) => setAmountStr(e.target.value)}
+              disabled={pending}
+            />
+            <p className="text-xs text-muted-foreground">
+              Outstanding on this order: {formatDOP(Math.max(outstandingCents, 0))}
+            </p>
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="logcash-note" className="text-xs">
+              Note (optional)
+            </Label>
+            <Textarea
+              id="logcash-note"
+              placeholder="e.g. collected at delivery"
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              rows={2}
+              disabled={pending}
+            />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => handleOpenChange(false)} disabled={pending}>
+            Cancel
+          </Button>
+          <Button onClick={doSubmit} disabled={pending}>
+            {pending ? 'Logging…' : 'Log collection'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 function Field({ label, value }: { label: string; value: string }) {
   return (
     <div>

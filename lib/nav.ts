@@ -43,6 +43,7 @@ export const navItems: NavItem[] = [
   { label: 'Courier Payments', href: '/courier-payments',     icon: Receipt,         roles: OWNER_ONLY },
   { label: 'Money Accounts',   href: '/money-accounts',       icon: Wallet,          roles: OWNER_ONLY },
   { label: 'Commissions',      href: '/commissions',          icon: HandCoins,       roles: OWNER_ONLY },
+  { label: 'Seller Cash',      href: '/seller-cash',          icon: HandCoins,       roles: OWNER_ONLY },
   { label: 'Accounting',       href: '/accounting',           icon: BookOpen,        roles: OWNER_ONLY },
   { label: 'Reports',          href: '/reports',               icon: LineChart,       roles: OWNER_ONLY },
   { label: 'Discount Rules',   href: '/discount-rules',       icon: Receipt,         roles: OWNER_ONLY },

@@ -1,4 +1,4 @@
-﻿import Link from 'next/link'
+import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 import { ChevronLeft } from 'lucide-react'
 import { getSale, listMoneyAccounts } from '@/lib/sales'
@@ -47,7 +47,7 @@ export default async function SaleDetailPage({
           Back to sales
         </Link>
       </div>
-      <SaleDetail sale={sale} moneyAccounts={moneyAccounts} />
+      <SaleDetail sale={sale} moneyAccounts={moneyAccounts} role={caller.role} />
     </div>
   )
 }
