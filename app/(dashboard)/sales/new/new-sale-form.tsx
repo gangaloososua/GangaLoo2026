@@ -34,6 +34,7 @@ import type {
   CustomerPickerItem,
   MoneyAccount,
   ProductSearchResult,
+  SaleCategoryPickerItem,
   SellerOption,
 } from '@/lib/sales'
 // Round 16.4: auto-discount integration
@@ -51,6 +52,7 @@ type Props = {
   defaultSellerId: string | null
   warehouses: LookupItem[]
   moneyAccounts: MoneyAccount[]
+  categories: SaleCategoryPickerItem[]
   // Round 16.4: pre-fetched active discount rules. Pure client-side
   // resolution; SQL function is the authority at confirm time.
   activeDiscountRules: DiscountRuleRow[]
@@ -162,6 +164,7 @@ export function NewSaleForm({
   defaultSellerId,
   warehouses,
   moneyAccounts,
+  categories,
   activeDiscountRules,
   canTakePayment = true,
 }: Props) {
@@ -653,6 +656,7 @@ export function NewSaleForm({
             <>
               <ProductSearch
                 warehouseId={sourceWarehouseId}
+                categories={categories}
                 onAdd={addProduct}
               />
 

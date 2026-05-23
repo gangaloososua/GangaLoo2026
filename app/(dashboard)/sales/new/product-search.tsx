@@ -1,30 +1,82 @@
-﻿'use client'
+'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { ChevronsUpDown, X } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover'
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command'
 import { formatDOP } from '@/lib/format'
 import { searchProductsForSaleAction } from '../actions'
-import type { ProductSearchResult } from '@/lib/sales'
+import type { ProductSearchResult, SaleCategoryPickerItem } from '@/lib/sales'
 
 type Props = {
   warehouseId: string
+  categories: SaleCategoryPickerItem[]
   onAdd: (product: ProductSearchResult) => void
 }
 
 const DEBOUNCE_MS = 250
 const MIN_QUERY_LEN = 2
 
-export function ProductSearch({ warehouseId, onAdd }: Props) {
+export function ProductSearch({ warehouseId, categories, onAdd }: Props) {
   const [query, setQuery] = useState('')
+  const [categoryId, setCategoryId] = useState<string | null>(null)
   const [results, setResults] = useState<ProductSearchResult[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [open, setOpen] = useState(false)
+  const [catOpen, setCatOpen] = useState(false)
   const reqIdRef = useRef(0)
   const containerRef = useRef<HTMLDivElement>(null)
 
-  // Click-outside closes the dropdown without clearing the input —
+  // A search is "armed" when there's a long-enough text query OR a category
+  // is selected. Either one (or both) drives results.
+  const hasQuery = query.trim().length >= MIN_QUERY_LEN
+  const armed = hasQuery || categoryId !== null
+
+  // Group categories main -> subs for the picker, mirroring the product
+  // form's combobox. A main (parent_id null) heads its group; its subs nest
+  // beneath it. cmdk searches the visible text so typing filters all groups.
+  const groups = useMemo(() => {
+    const m = new Map<string, { name: string; items: SaleCategoryPickerItem[] }>()
+    for (const c of categories) {
+      const mainId = c.parent_id ?? c.id
+      const mainName =
+        categories.find((x) => x.id === mainId)?.name ?? 'Other'
+      if (!m.has(mainId)) m.set(mainId, { name: mainName, items: [] })
+      m.get(mainId)!.items.push(c)
+    }
+    return [...m.entries()]
+      .map(([mainId, g]) => ({
+        mainId,
+        name: g.name,
+        items: g.items.sort((a, b) => {
+          if (a.id === mainId) return -1
+          if (b.id === mainId) return 1
+          return a.name.localeCompare(b.name)
+        }),
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name))
+  }, [categories])
+
+  const selectedCategoryName = categoryId
+    ? categories.find((c) => c.id === categoryId)?.name ?? null
+    : null
+
+  // Click-outside closes the results dropdown without clearing the inputs —
   // operator might want to re-open and pick again.
   useEffect(() => {
     function onClickOutside(e: MouseEvent) {
@@ -40,10 +92,11 @@ export function ProductSearch({ warehouseId, onAdd }: Props) {
   }, [])
 
   // Debounced fetch. Each call gets a monotonically increasing reqId;
-  // late responses to old queries are dropped.
+  // late responses to old queries are dropped. Re-runs when the text query,
+  // the chosen category, or the warehouse changes.
   useEffect(() => {
     const q = query.trim()
-    if (q.length < MIN_QUERY_LEN) {
+    if (!armed) {
       setResults([])
       setLoading(false)
       setError(null)
@@ -58,6 +111,7 @@ export function ProductSearch({ warehouseId, onAdd }: Props) {
       const res = await searchProductsForSaleAction({
         query: q,
         warehouseId,
+        categoryId,
       })
       if (myReqId !== reqIdRef.current) return
       setLoading(false)
@@ -70,13 +124,27 @@ export function ProductSearch({ warehouseId, onAdd }: Props) {
     }, DEBOUNCE_MS)
 
     return () => clearTimeout(t)
-  }, [query, warehouseId])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query, categoryId, warehouseId])
 
   function handlePick(p: ProductSearchResult) {
     onAdd(p)
     setQuery('')
     setResults([])
     setOpen(false)
+    // Keep the category selected so the operator can add several items
+    // from the same category in a row without re-picking it.
+  }
+
+  function pickCategory(id: string) {
+    setCategoryId(id)
+    setCatOpen(false)
+    setOpen(true)
+  }
+
+  function clearCategory() {
+    setCategoryId(null)
+    setOpen(true)
   }
 
   function stockBadge(qty: number) {
@@ -98,7 +166,7 @@ export function ProductSearch({ warehouseId, onAdd }: Props) {
   }
 
   return (
-    <div ref={containerRef} className="relative">
+    <div ref={containerRef} className="relative space-y-2">
       <Input
         placeholder="Search by SKU or name…"
         value={query}
@@ -110,7 +178,69 @@ export function ProductSearch({ warehouseId, onAdd }: Props) {
         autoComplete="off"
       />
 
-      {open && query.trim().length >= MIN_QUERY_LEN && (
+      {/* Category filter sits under the search box. Picking one lists that
+          category's products (plus its sub-categories) even with no text. */}
+      <div className="flex items-center gap-2">
+        <Popover open={catOpen} onOpenChange={setCatOpen}>
+          <PopoverTrigger asChild>
+            <Button
+              type="button"
+              variant="outline"
+              role="combobox"
+              aria-expanded={catOpen}
+              disabled={categories.length === 0}
+              className="flex-1 justify-between font-normal"
+            >
+              <span className={selectedCategoryName ? '' : 'text-muted-foreground'}>
+                {selectedCategoryName ?? 'Filter by category…'}
+              </span>
+              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent
+            className="w-[var(--radix-popover-trigger-width)] p-0"
+            align="start"
+          >
+            <Command>
+              <CommandInput placeholder="Search categories…" />
+              <CommandList>
+                <CommandEmpty>No category found.</CommandEmpty>
+                {groups.map((g) => (
+                  <CommandGroup key={g.mainId} heading={g.name}>
+                    {g.items.map((c) => {
+                      const isMain = c.id === g.mainId
+                      return (
+                        <CommandItem
+                          key={c.id}
+                          value={`${c.name} ${c.id}`}
+                          onSelect={() => pickCategory(c.id)}
+                          className={isMain ? 'font-medium' : 'pl-6'}
+                        >
+                          {c.name}
+                        </CommandItem>
+                      )
+                    })}
+                  </CommandGroup>
+                ))}
+              </CommandList>
+            </Command>
+          </PopoverContent>
+        </Popover>
+
+        {categoryId && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={clearCategory}
+            aria-label="Clear category filter"
+          >
+            <X className="size-4" />
+          </Button>
+        )}
+      </div>
+
+      {open && armed && (
         <div className="absolute left-0 right-0 top-full z-10 mt-1 max-h-[28rem] overflow-y-auto rounded-md border bg-popover shadow-lg">
           {loading && (
             <div className="px-3 py-2 text-sm text-muted-foreground">

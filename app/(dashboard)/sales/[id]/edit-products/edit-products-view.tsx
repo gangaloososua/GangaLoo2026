@@ -21,7 +21,7 @@ import { Trash2 } from 'lucide-react'
 import { formatDOP } from '@/lib/format'
 import { ProductSearch } from '../../new/product-search'
 import { editUnpaidSale } from './edit-actions'
-import type { ProductSearchResult } from '@/lib/sales'
+import type { ProductSearchResult, SaleCategoryPickerItem } from '@/lib/sales'
 import type { UnpaidSaleForEdit } from '@/lib/edit-unpaid-sale'
 import type { DiscountRuleRow } from '@/lib/discount-rules'
 import {
@@ -32,6 +32,7 @@ import {
 type Props = {
   sale: UnpaidSaleForEdit
   activeDiscountRules: DiscountRuleRow[]
+  categories: SaleCategoryPickerItem[]
 }
 
 // A cart line. Mirrors new-sale-form's CartLine (auto/manual discount state).
@@ -80,7 +81,7 @@ function makeId(): string {
     : `tmp-${Date.now()}-${Math.random().toString(36).slice(2)}`
 }
 
-export function EditProductsView({ sale, activeDiscountRules }: Props) {
+export function EditProductsView({ sale, activeDiscountRules, categories }: Props) {
   const router = useRouter()
 
   // Pre-load the cart from the sale's current items. Existing discounts are
@@ -266,6 +267,7 @@ export function EditProductsView({ sale, activeDiscountRules }: Props) {
         <CardContent className="min-h-[24rem] space-y-4">
           <ProductSearch
             warehouseId={sale.source_warehouse_id}
+            categories={categories}
             onAdd={addProduct}
           />
 

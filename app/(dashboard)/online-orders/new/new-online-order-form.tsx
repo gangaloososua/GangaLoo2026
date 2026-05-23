@@ -47,6 +47,7 @@ import type {
   CustomerPickerItem,
   MoneyAccount,
   ProductSearchResult,
+  SaleCategoryPickerItem,
   SellerOption,
 } from '@/lib/sales'
 // Round 16.5: auto-discount integration (mirrors 16.4 POS form)
@@ -65,6 +66,7 @@ type Props = {
   defaultSellerId: string | null
   warehouses: LookupItem[]
   moneyAccounts: MoneyAccount[]
+  categories: SaleCategoryPickerItem[]
   // Round 16.5: pre-fetched active discount rules. Pure client-side
   // resolution; SQL function is the authority at confirm time.
   activeDiscountRules: DiscountRuleRow[]
@@ -184,6 +186,7 @@ export function NewOnlineOrderForm({
   defaultSellerId,
   warehouses,
   moneyAccounts,
+  categories,
   activeDiscountRules,
   deliveryFees,
 }: Props) {
@@ -713,6 +716,7 @@ export function NewOnlineOrderForm({
             <>
               <ProductSearch
                 warehouseId={sourceWarehouseId}
+                categories={categories}
                 onAdd={addProduct}
               />
 

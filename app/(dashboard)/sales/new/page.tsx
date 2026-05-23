@@ -6,6 +6,7 @@ import {
   getCurrentSeller,
   listWarehousesForFilter,
   listMoneyAccounts,
+  listCategoriesForSale,
 } from '@/lib/sales'
 import { listDiscountRules } from '@/lib/discount-rules'
 import { NewSaleForm } from './new-sale-form'
@@ -20,6 +21,7 @@ export default async function NewSalePage() {
     warehouses,
     moneyAccounts,
     activeDiscountRules,
+    categories,
   ] = await Promise.all([
     listCustomersForPicker(),
     listSellers(),
@@ -27,6 +29,7 @@ export default async function NewSalePage() {
     listWarehousesForFilter(),
     listMoneyAccounts(),
     listDiscountRules({ activeOnly: true }),
+    listCategoriesForSale(),
   ])
 
   return (
@@ -53,6 +56,7 @@ export default async function NewSalePage() {
         warehouses={warehouses}
         moneyAccounts={moneyAccounts}
         activeDiscountRules={activeDiscountRules}
+        categories={categories}
         canTakePayment={currentSeller?.role === 'owner' || currentSeller?.role === 'admin'}
       />
     </div>

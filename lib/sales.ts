@@ -153,6 +153,34 @@ export async function listWarehousesForFilter(): Promise<Array<{ id: string; nam
 }
 
 // ---------------------------------------------------------------------------
+// Categories for the POS product-search filter
+// ---------------------------------------------------------------------------
+// Active categories with parent info so the picker can group main -> subs,
+// reusing the same searchable-combobox shape as the product form. Read-only.
+
+export type SaleCategoryPickerItem = {
+  id: string
+  name: string
+  parent_id: string | null
+}
+
+export async function listCategoriesForSale(): Promise<SaleCategoryPickerItem[]> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('categories')
+    .select('id, name, parent_id, display_order')
+    .eq('is_active', true)
+    .order('display_order', { nullsFirst: false })
+    .order('name')
+  if (error) throw new Error(`listCategoriesForSale: ${error.message}`)
+  return (data ?? []).map((c) => ({
+    id: c.id as string,
+    name: c.name as string,
+    parent_id: (c.parent_id as string | null) ?? null,
+  }))
+}
+
+// ---------------------------------------------------------------------------
 // getSale: full detail for one sale (header + items + FIFO + commissions + payments)
 // ---------------------------------------------------------------------------
 
@@ -471,10 +499,12 @@ export type ProductSearchResult = {
 export async function searchProductsForSale(opts: {
   query: string
   warehouseId: string
+  categoryId?: string | null
   limit?: number
 }): Promise<ProductSearchResult[]> {
   const { query, warehouseId } = opts
-  const limit = opts.limit ?? 20
+  const categoryId = opts.categoryId ?? null
+  const limit = opts.limit ?? (categoryId ? 100 : 20)
 
   // Sanitize for PostgREST .or() — strip chars that would break the
   // filter expression, then collapse whitespace.
@@ -482,18 +512,48 @@ export async function searchProductsForSale(opts: {
     .replace(/[,'"()*%]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()
-  if (!q) return []
+
+  // Need either a text query or a chosen category to search on.
+  if (!q && !categoryId) return []
 
   const supabase = await createClient()
 
+  // When a category is chosen, resolve the set of product ids in that
+  // category OR any of its sub-categories (picking a MAIN category shows
+  // everything beneath it). Uses ALL category assignments, not just the
+  // primary one, matching the per-category counts in the categories admin.
+  let categoryProductIds: string[] | null = null
+  if (categoryId) {
+    const { data: children, error: childErr } = await supabase
+      .from('categories')
+      .select('id')
+      .eq('parent_id', categoryId)
+    if (childErr) throw childErr
+    const catIds = [categoryId, ...(children ?? []).map((c) => c.id as string)]
+
+    const { data: pcRows, error: pcErr } = await supabase
+      .from('product_categories')
+      .select('product_id')
+      .in('category_id', catIds)
+    if (pcErr) throw pcErr
+
+    categoryProductIds = [
+      ...new Set((pcRows ?? []).map((r) => r.product_id as string)),
+    ]
+    // Empty category -> nothing to show.
+    if (categoryProductIds.length === 0) return []
+  }
+
   // 1) Matching active products.
-  const { data: products, error: pErr } = await supabase
+  let pq = supabase
     .from('products')
     .select(
       'id, sku, name, primary_image_url, price_cents, club_price_cents, commission_percent'
     )
     .eq('is_active', true)
-    .or(`sku.ilike.%${q}%,name.ilike.%${q}%`)
+  if (q) pq = pq.or(`sku.ilike.%${q}%,name.ilike.%${q}%`)
+  if (categoryProductIds) pq = pq.in('id', categoryProductIds)
+  const { data: products, error: pErr } = await pq
     .order('name', { ascending: true })
     .limit(limit)
   if (pErr) throw pErr

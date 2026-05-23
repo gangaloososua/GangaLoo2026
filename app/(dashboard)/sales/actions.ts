@@ -322,6 +322,7 @@ export type SearchProductsResult =
 export async function searchProductsForSaleAction(input: {
   query: string
   warehouseId: string
+  categoryId?: string | null
 }): Promise<SearchProductsResult> {
   await requireAdminCaller()
   // Caller is responsible for ensuring auth — every page in (dashboard)
@@ -334,6 +335,7 @@ export async function searchProductsForSaleAction(input: {
     const results = await searchProductsForSale({
       query: input.query,
       warehouseId: input.warehouseId,
+      categoryId: input.categoryId ?? null,
     })
     return { ok: true, results }
   } catch (err) {

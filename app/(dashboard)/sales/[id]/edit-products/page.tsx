@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { ChevronLeft } from 'lucide-react'
 import { listDiscountRules } from '@/lib/discount-rules'
+import { listCategoriesForSale } from '@/lib/sales'
 import { getUnpaidSaleForEdit } from '@/lib/edit-unpaid-sale'
 import { EditProductsView } from './edit-products-view'
 
@@ -23,7 +24,10 @@ export default async function EditProductsPage({
   }
   const sale = result.sale
 
-  const activeDiscountRules = await listDiscountRules({ activeOnly: true })
+  const [activeDiscountRules, categories] = await Promise.all([
+    listDiscountRules({ activeOnly: true }),
+    listCategoriesForSale(),
+  ])
 
   return (
     <div className="space-y-4">
@@ -44,7 +48,7 @@ export default async function EditProductsPage({
           payment is taken.
         </p>
       </div>
-      <EditProductsView sale={sale} activeDiscountRules={activeDiscountRules} />
+      <EditProductsView sale={sale} activeDiscountRules={activeDiscountRules} categories={categories} />
     </div>
   )
 }
