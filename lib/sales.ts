@@ -76,7 +76,7 @@ export async function listSales(filters: SaleFilters = {}): Promise<SaleListResu
       sold_at,
       total_cents,
       paid_cents,
-      customer:customer_id ( id, full_name ),
+      customer:customer_id ( id, full_name, phone ),
       seller:seller_id ( id, full_name ),
       warehouse:fulfillment_warehouse_id ( id, name ),
       sale_items ( id )
@@ -208,6 +208,7 @@ export type SaleDetail = {
   status: SaleStatus
   customer_id: string | null
   customer_name: string | null
+  customer_phone: string | null
   seller_id: string | null
   seller_name: string | null
   source_warehouse_id: string | null
@@ -246,7 +247,7 @@ export async function getSale(id: string): Promise<SaleDetail | null> {
     .select(
       `
       *,
-      customer:customer_id ( id, full_name ),
+      customer:customer_id ( id, full_name, phone ),
       seller:seller_id ( id, full_name ),
       source_wh:source_warehouse_id ( id, name ),
       fulfillment_wh:fulfillment_warehouse_id ( id, name ),
@@ -334,6 +335,7 @@ export async function getSale(id: string): Promise<SaleDetail | null> {
     status: s.status,
     customer_id: s.customer_id,
     customer_name: s.customer?.full_name ?? null,
+    customer_phone: s.customer?.phone ?? null,
     seller_id: s.seller_id,
     seller_name: s.seller?.full_name ?? null,
     source_warehouse_id: s.source_warehouse_id,

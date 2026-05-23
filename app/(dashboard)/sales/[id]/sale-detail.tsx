@@ -4,7 +4,7 @@ import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import Link from 'next/link'
-import { ChevronDown, ChevronRight, MoreVertical, XCircle, RotateCcw, Plus, Banknote, CreditCard, ArrowRightLeft, Wallet, Printer, Pencil } from 'lucide-react'
+import { ChevronDown, ChevronRight, MoreVertical, XCircle, RotateCcw, Plus, Banknote, CreditCard, ArrowRightLeft, Wallet, Printer, Pencil, MessageCircle } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -36,6 +36,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { cancelSale, refundSale, recordPayment } from '../actions'
+import { buildInvoiceWhatsAppLink } from '@/lib/whatsapp'
 import {
   Select,
   SelectContent,
@@ -127,6 +128,7 @@ function HeaderCard({ sale }: { sale: SaleDetailType }) {
     sale.status === 'partially_paid'
   const canEditProducts = sale.status === 'confirmed' && sale.paid_cents === 0
   const hasAnyAction = true // Print receipt is always available
+  const waHref = buildInvoiceWhatsAppLink({ phone: sale.customer_phone, customerName: sale.customer_name, invoiceNumber: sale.invoice_number, totalCents: sale.total_cents })
 
   function doCancel() {
     startTransition(async () => {
@@ -191,6 +193,14 @@ function HeaderCard({ sale }: { sale: SaleDetailType }) {
                           Print receipt
                         </Link>
                       </DropdownMenuItem>
+                      {waHref && (
+                        <DropdownMenuItem asChild>
+                          <a href={waHref} target="_blank" rel="noopener noreferrer">
+                            <MessageCircle className="mr-2 h-4 w-4" />
+                            Send by WhatsApp
+                          </a>
+                        </DropdownMenuItem>
+                      )}
                       {(canCancel || canRefund) && <DropdownMenuSeparator />}
                       {canEditProducts && (
                         <DropdownMenuItem asChild>
