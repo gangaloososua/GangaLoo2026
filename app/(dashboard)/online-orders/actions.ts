@@ -1,18 +1,16 @@
 'use server'
 // Round 15.3 — online orders server actions
 //
-// Thin TypeScript wrappers around the four online-orders RPCs:
-//   create_online_order      → createOnlineOrder
-//   mark_dispatched          → markOnlineOrderDispatched
-//   mark_delivered           → markOnlineOrderDelivered
-//   mark_cancelled_online    → cancelOnlineOrder
+// Thin TypeScript wrappers around the online-orders RPCs:
+//   create_online_order       → createOnlineOrder
+//   mark_dispatched           → markOnlineOrderDispatched
+//   mark_delivered            → markOnlineOrderDelivered
+//   mark_cancelled_online     → cancelOnlineOrder
+//   confirm_storefront_order  → confirmStorefrontOrder   (Round 28: storefront drafts)
 //
 // RBAC: owner + admin only, gated via requireRole(['owner','admin']).
 // The RPCs re-check at SQL layer (defence in depth) and are the
-// authoritative validators. Client-side validation here is light
-// "fail fast on obvious nonsense" only.
-//
-// Spec: docs/round-15-online-orders.md
+// authoritative validators.
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
@@ -40,13 +38,11 @@ export type CreateOnlineOrderItemInput = {
   qty: number
   unitPriceCents: number
   discountCents: number
-  // 16.6: per-rule discount breakdown for audit persistence.
-  // Optional - omitted/empty means RPC treats discount_cents as manual.
   discountBreakdown?: CreateOnlineOrderDiscountApplication[]
 }
 
 export type CreateOnlineOrderPaymentInput = {
-  method: string // cash | card | transfer | paypal | stripe | credit | mixed
+  method: string
   amountCents: number
   moneyAccountId: string
   reference: string | null
@@ -104,10 +100,7 @@ export async function createOnlineOrder(
     if (!pay.moneyAccountId)
       return { ok: false, error: 'Each payment must select a money account' }
   }
-  if (
-    !Number.isFinite(input.discountCents) ||
-    input.discountCents < 0
-  )
+  if (!Number.isFinite(input.discountCents) || input.discountCents < 0)
     return { ok: false, error: 'Order discount must be >= 0' }
   if (!Number.isFinite(input.shippingCents) || input.shippingCents < 0)
     return { ok: false, error: 'Shipping fee must be >= 0' }
@@ -143,7 +136,6 @@ export async function createOnlineOrder(
 
   if (error) return { ok: false, error: error.message }
 
-  // RPC returns jsonb: { sale_id, invoice_number }
   const result = (data ?? {}) as {
     sale_id?: string
     invoice_number?: string
@@ -163,6 +155,52 @@ export async function createOnlineOrder(
     saleId: result.sale_id,
     invoiceNumber: result.invoice_number,
   }
+}
+
+// ----------------------------------------------------------------------
+// confirmStorefrontOrder (Round 28) — confirm a storefront DRAFT
+// ----------------------------------------------------------------------
+export type ConfirmStorefrontInput = { saleId: string; sellerId: string }
+export type ConfirmStorefrontResult = Ok<object> | Err
+
+export async function confirmStorefrontOrder(
+  input: ConfirmStorefrontInput,
+): Promise<ConfirmStorefrontResult> {
+  await requireRole(['owner', 'admin'] as const)
+
+  if (!input.saleId) return { ok: false, error: 'Sale id is required' }
+  if (!input.sellerId)
+    return { ok: false, error: 'Please choose a salesperson to credit' }
+
+  const supabase = await createClient()
+  const { error } = await supabase.rpc('confirm_storefront_order', {
+    p_sale_id: input.saleId,
+    p_seller_id: input.sellerId,
+  })
+
+  if (error) return { ok: false, error: error.message }
+
+  revalidatePath('/online-orders')
+  revalidatePath(`/online-orders/${input.saleId}`)
+  return { ok: true }
+}
+
+// Sellers list for the confirm picker (owner/admin/seller/distributor profiles)
+export type ConfirmSellerOption = { id: string; full_name: string }
+
+export async function getSellersForConfirm(): Promise<ConfirmSellerOption[]> {
+  await requireRole(['owner', 'admin'] as const)
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id, full_name, role')
+    .in('role', ['owner', 'admin', 'seller', 'distributor'])
+    .order('full_name')
+  if (error) return []
+  return (data ?? []).map((p) => ({
+    id: p.id as string,
+    full_name: p.full_name as string,
+  }))
 }
 
 // ----------------------------------------------------------------------
