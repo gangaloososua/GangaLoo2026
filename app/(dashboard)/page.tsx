@@ -2,6 +2,7 @@ import { ArrowDownRight, ArrowUpRight } from 'lucide-react'
 
 import { requireAdminCaller } from '@/lib/auth/guard'
 import { isSellerRole } from '@/lib/auth/roles'
+import { localeForRole } from '@/lib/i18n/dictionary'
 import { fetchSellerDashboard } from '@/lib/seller-dashboard'
 import { SellerDashboardView } from './seller-dashboard-view'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -126,7 +127,7 @@ export default async function DashboardPage({
   // through to the full business dashboard below.
   if (isSellerRole(caller.role)) {
     const data = await fetchSellerDashboard(caller.id)
-    return <SellerDashboardView data={data} sellerName={caller.full_name} />
+    return <SellerDashboardView data={data} sellerName={caller.full_name} locale={localeForRole(caller.role)} />
   }
 
   const sp = await searchParams

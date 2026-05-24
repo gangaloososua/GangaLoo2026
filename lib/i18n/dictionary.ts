@@ -5,9 +5,10 @@
 //   seller / distributor -> Spanish ('es')
 //
 // Usage (works in both server and client components — no server-only deps):
-//   import { localeForRole, t } from '@/lib/i18n/dictionary'
+//   import { localeForRole, t, plural } from '@/lib/i18n/dictionary'
 //   const locale = localeForRole(role)
-//   t(locale, 'nav.Sales')   // -> 'Ventas' for a seller, 'Sales' for owner
+//   t(locale, 'nav.Sales')                       // -> 'Ventas' for a seller
+//   plural(locale, n, 'unit.one', 'unit.other')  // -> 'unidad' / 'unidades'
 //
 // Missing keys fall back to English, then to the key itself, so a
 // forgotten translation degrades gracefully instead of breaking the UI.
@@ -45,8 +46,50 @@ const en: Messages = {
   'nav.Customers': 'Customers',
   'nav.Distributors': 'Distributors',
   'nav.Settings': 'Settings',
+
   // Common chrome
   'common.signOut': 'Sign out',
+
+  // Order / sale status badges
+  'status.paid': 'Paid',
+  'status.partial': 'Partial',
+  'status.confirmed': 'Confirmed',
+  'status.cancelled': 'Cancelled',
+  'status.refunded': 'Refunded',
+
+  // Plural word pairs (use via plural())
+  'unit.one': 'unit',
+  'unit.other': 'units',
+  'product.one': 'product',
+  'product.other': 'products',
+  'order.one': 'order',
+  'order.other': 'orders',
+
+  // Seller dashboard
+  'dash.greeting': 'Hi',
+  'dash.myDashboard': 'My dashboard',
+  'dash.subtitle': "Your commissions, your orders, what you owe the business, and what's in stock.",
+  'dash.incomingTransfers': 'Incoming transfers',
+  'dash.onTheWay': 'on the way',
+  'dash.sent': 'sent',
+  'dash.walkIn': 'Walk-in / no customer',
+  'dash.owes': 'owes',
+  'dash.commissionOwed': 'Commission owed to you',
+  'dash.earned': 'earned',
+  'dash.paid': 'paid',
+  'dash.unpaidOnOrders': 'Unpaid on your orders',
+  'dash.businessOwedThis': 'the business is owed this',
+  'dash.cashHolding': "Cash you're holding",
+  'dash.collectedNotHandedIn': 'collected, not yet handed in',
+  'dash.openOrders': 'Open orders',
+  'dash.stillOwing': 'still owing',
+  'dash.noOpenOrders': 'No open orders — nothing owing right now.',
+  'dash.recentOrders': 'Recent orders',
+  'dash.total': 'total',
+  'dash.noOrders': 'No orders yet.',
+  'dash.notYetHandedIn': 'not yet handed in',
+  'dash.availableStock': 'Available stock',
+  'dash.nothingInStock': 'Nothing in stock.',
 }
 
 const es: Messages = {
@@ -72,12 +115,63 @@ const es: Messages = {
   'nav.Customers': 'Clientes',
   'nav.Distributors': 'Distribuidores',
   'nav.Settings': 'Configuración',
+
   // Common chrome
   'common.signOut': 'Cerrar sesión',
+
+  // Order / sale status badges
+  'status.paid': 'Pagado',
+  'status.partial': 'Parcial',
+  'status.confirmed': 'Confirmado',
+  'status.cancelled': 'Cancelado',
+  'status.refunded': 'Reembolsado',
+
+  // Plural word pairs
+  'unit.one': 'unidad',
+  'unit.other': 'unidades',
+  'product.one': 'producto',
+  'product.other': 'productos',
+  'order.one': 'pedido',
+  'order.other': 'pedidos',
+
+  // Seller dashboard
+  'dash.greeting': 'Hola',
+  'dash.myDashboard': 'Mi panel',
+  'dash.subtitle': 'Tus comisiones, tus pedidos, lo que le debes al negocio y lo que hay en stock.',
+  'dash.incomingTransfers': 'Transferencias entrantes',
+  'dash.onTheWay': 'en camino',
+  'dash.sent': 'enviado',
+  'dash.walkIn': 'Sin cliente / mostrador',
+  'dash.owes': 'debe',
+  'dash.commissionOwed': 'Comisión que se te debe',
+  'dash.earned': 'ganado',
+  'dash.paid': 'pagado',
+  'dash.unpaidOnOrders': 'Sin pagar en tus pedidos',
+  'dash.businessOwedThis': 'el negocio cobra esto',
+  'dash.cashHolding': 'Efectivo que tienes',
+  'dash.collectedNotHandedIn': 'cobrado, aún no entregado',
+  'dash.openOrders': 'Pedidos abiertos',
+  'dash.stillOwing': 'con saldo pendiente',
+  'dash.noOpenOrders': 'No hay pedidos abiertos — nada pendiente ahora.',
+  'dash.recentOrders': 'Pedidos recientes',
+  'dash.total': 'en total',
+  'dash.noOrders': 'Aún no hay pedidos.',
+  'dash.notYetHandedIn': 'aún sin entregar',
+  'dash.availableStock': 'Stock disponible',
+  'dash.nothingInStock': 'Nada en stock.',
 }
 
 const messages: Record<Locale, Messages> = { en, es }
 
 export function t(locale: Locale, key: string): string {
   return messages[locale][key] ?? messages.en[key] ?? key
+}
+
+export function plural(
+  locale: Locale,
+  n: number,
+  oneKey: string,
+  otherKey: string,
+): string {
+  return t(locale, n === 1 ? oneKey : otherKey)
 }
