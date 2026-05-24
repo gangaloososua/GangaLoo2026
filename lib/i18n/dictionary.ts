@@ -49,10 +49,16 @@ const en: Messages = {
 
   // Common chrome
   'common.signOut': 'Sign out',
+  'common.previous': 'Previous',
+  'common.next': 'Next',
+  'common.page': 'Page',
+  'common.of': 'of',
 
   // Order / sale status badges
+  'status.draft': 'Draft',
   'status.paid': 'Paid',
   'status.partial': 'Partial',
+  'status.partiallyPaid': 'Partially paid',
   'status.confirmed': 'Confirmed',
   'status.cancelled': 'Cancelled',
   'status.refunded': 'Refunded',
@@ -64,6 +70,8 @@ const en: Messages = {
   'product.other': 'products',
   'order.one': 'order',
   'order.other': 'orders',
+  'sale.one': 'sale',
+  'sale.other': 'sales',
 
   // Seller dashboard
   'dash.greeting': 'Hi',
@@ -90,6 +98,33 @@ const en: Messages = {
   'dash.notYetHandedIn': 'not yet handed in',
   'dash.availableStock': 'Available stock',
   'dash.nothingInStock': 'Nothing in stock.',
+
+  // Sales list page
+  'sales.title': 'Sales',
+  'sales.subtitle': 'In-person POS sales. Online orders live in their own module.',
+  'sales.receivePayment': 'Receive payment',
+  'sales.newPosSale': 'New POS sale',
+  'sales.noMatch': 'No sales match the current filters.',
+  'sales.walkIn': 'Walk-in',
+
+  // Sales table columns
+  'sales.col.invoice': 'Invoice',
+  'sales.col.date': 'Date',
+  'sales.col.status': 'Status',
+  'sales.col.customer': 'Customer',
+  'sales.col.seller': 'Seller',
+  'sales.col.warehouse': 'Warehouse',
+  'sales.col.items': 'Items',
+  'sales.col.total': 'Total',
+  'sales.col.paid': 'Paid',
+
+  // Filters
+  'filter.anyStatus': 'Any status',
+  'filter.anySeller': 'Any seller',
+  'filter.anyWarehouse': 'Any warehouse',
+  'filter.from': 'From',
+  'filter.to': 'To',
+  'filter.clear': 'Clear filters',
 }
 
 const es: Messages = {
@@ -118,10 +153,16 @@ const es: Messages = {
 
   // Common chrome
   'common.signOut': 'Cerrar sesión',
+  'common.previous': 'Anterior',
+  'common.next': 'Siguiente',
+  'common.page': 'Página',
+  'common.of': 'de',
 
   // Order / sale status badges
+  'status.draft': 'Borrador',
   'status.paid': 'Pagado',
   'status.partial': 'Parcial',
+  'status.partiallyPaid': 'Pagado parcial',
   'status.confirmed': 'Confirmado',
   'status.cancelled': 'Cancelado',
   'status.refunded': 'Reembolsado',
@@ -133,6 +174,8 @@ const es: Messages = {
   'product.other': 'productos',
   'order.one': 'pedido',
   'order.other': 'pedidos',
+  'sale.one': 'venta',
+  'sale.other': 'ventas',
 
   // Seller dashboard
   'dash.greeting': 'Hola',
@@ -159,6 +202,33 @@ const es: Messages = {
   'dash.notYetHandedIn': 'aún sin entregar',
   'dash.availableStock': 'Stock disponible',
   'dash.nothingInStock': 'Nada en stock.',
+
+  // Sales list page
+  'sales.title': 'Ventas',
+  'sales.subtitle': 'Ventas POS en persona. Los pedidos en línea están en su propio módulo.',
+  'sales.receivePayment': 'Recibir pago',
+  'sales.newPosSale': 'Nueva venta POS',
+  'sales.noMatch': 'Ninguna venta coincide con los filtros actuales.',
+  'sales.walkIn': 'Mostrador',
+
+  // Sales table columns
+  'sales.col.invoice': 'Factura',
+  'sales.col.date': 'Fecha',
+  'sales.col.status': 'Estado',
+  'sales.col.customer': 'Cliente',
+  'sales.col.seller': 'Vendedor',
+  'sales.col.warehouse': 'Almacén',
+  'sales.col.items': 'Artículos',
+  'sales.col.total': 'Total',
+  'sales.col.paid': 'Pagado',
+
+  // Filters
+  'filter.anyStatus': 'Cualquier estado',
+  'filter.anySeller': 'Cualquier vendedor',
+  'filter.anyWarehouse': 'Cualquier almacén',
+  'filter.from': 'Desde',
+  'filter.to': 'Hasta',
+  'filter.clear': 'Limpiar filtros',
 }
 
 const messages: Record<Locale, Messages> = { en, es }

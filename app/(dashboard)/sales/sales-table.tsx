@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import Link from 'next/link'
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
@@ -14,12 +14,14 @@ import {
 } from '@/components/ui/table'
 import { formatDOP, formatDate } from '@/lib/format'
 import type { SaleListItem, SaleStatus } from '@/lib/sales'
+import { type Locale, t } from '@/lib/i18n/dictionary'
 
 type Props = {
   rows: SaleListItem[]
   total: number
   page: number
   pageSize: number
+  locale: Locale
 }
 
 // Visual treatment per status. Tailwind utility classes only (no compiler).
@@ -32,16 +34,17 @@ const STATUS_VARIANT: Record<SaleStatus, string> = {
   cancelled: 'bg-rose-100 text-rose-800',
 }
 
-const STATUS_LABEL: Record<SaleStatus, string> = {
-  draft: 'Draft',
-  confirmed: 'Confirmed',
-  paid: 'Paid',
-  partially_paid: 'Partially paid',
-  refunded: 'Refunded',
-  cancelled: 'Cancelled',
+// Status -> dictionary key (label resolved via t() at render time).
+const STATUS_KEY: Record<SaleStatus, string> = {
+  draft: 'status.draft',
+  confirmed: 'status.confirmed',
+  paid: 'status.paid',
+  partially_paid: 'status.partiallyPaid',
+  refunded: 'status.refunded',
+  cancelled: 'status.cancelled',
 }
 
-export function SalesTable({ rows, total, page, pageSize }: Props) {
+export function SalesTable({ rows, total, page, pageSize, locale }: Props) {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
@@ -61,7 +64,7 @@ export function SalesTable({ rows, total, page, pageSize }: Props) {
     return (
       <div className="rounded-md border bg-card p-12 text-center">
         <p className="text-sm text-muted-foreground">
-          No sales match the current filters.
+          {t(locale, 'sales.noMatch')}
         </p>
       </div>
     )
@@ -73,15 +76,15 @@ export function SalesTable({ rows, total, page, pageSize }: Props) {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Invoice</TableHead>
-              <TableHead>Date</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Customer</TableHead>
-              <TableHead>Seller</TableHead>
-              <TableHead>Warehouse</TableHead>
-              <TableHead className="text-right">Items</TableHead>
-              <TableHead className="text-right">Total</TableHead>
-              <TableHead className="text-right">Paid</TableHead>
+              <TableHead>{t(locale, 'sales.col.invoice')}</TableHead>
+              <TableHead>{t(locale, 'sales.col.date')}</TableHead>
+              <TableHead>{t(locale, 'sales.col.status')}</TableHead>
+              <TableHead>{t(locale, 'sales.col.customer')}</TableHead>
+              <TableHead>{t(locale, 'sales.col.seller')}</TableHead>
+              <TableHead>{t(locale, 'sales.col.warehouse')}</TableHead>
+              <TableHead className="text-right">{t(locale, 'sales.col.items')}</TableHead>
+              <TableHead className="text-right">{t(locale, 'sales.col.total')}</TableHead>
+              <TableHead className="text-right">{t(locale, 'sales.col.paid')}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -97,12 +100,12 @@ export function SalesTable({ rows, total, page, pageSize }: Props) {
                   <TableCell>{formatDate(r.sold_at)}</TableCell>
                   <TableCell>
                     <Badge variant="secondary" className={STATUS_VARIANT[r.status]}>
-                      {STATUS_LABEL[r.status]}
+                      {t(locale, STATUS_KEY[r.status])}
                     </Badge>
                   </TableCell>
                   <TableCell>
                     {r.customer_name ?? (
-                      <span className="text-muted-foreground">Walk-in</span>
+                      <span className="text-muted-foreground">{t(locale, 'sales.walkIn')}</span>
                     )}
                   </TableCell>
                   <TableCell>
@@ -133,7 +136,7 @@ export function SalesTable({ rows, total, page, pageSize }: Props) {
 
       <div className="flex items-center justify-between text-sm">
         <div className="text-muted-foreground">
-          {from}–{to} of {total}
+          {from}–{to} {t(locale, 'common.of')} {total}
         </div>
         <div className="flex items-center gap-2">
           <Button
@@ -142,10 +145,10 @@ export function SalesTable({ rows, total, page, pageSize }: Props) {
             disabled={page <= 1}
             onClick={() => goToPage(page - 1)}
           >
-            Previous
+            {t(locale, 'common.previous')}
           </Button>
           <span className="text-muted-foreground">
-            Page {page} of {pageCount}
+            {t(locale, 'common.page')} {page} {t(locale, 'common.of')} {pageCount}
           </span>
           <Button
             variant="outline"
@@ -153,7 +156,7 @@ export function SalesTable({ rows, total, page, pageSize }: Props) {
             disabled={page >= pageCount}
             onClick={() => goToPage(page + 1)}
           >
-            Next
+            {t(locale, 'common.next')}
           </Button>
         </div>
       </div>

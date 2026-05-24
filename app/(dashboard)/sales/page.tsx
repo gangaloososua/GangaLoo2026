@@ -13,6 +13,7 @@ import { SalesFilters } from './sales-filters'
 import { SalesTable } from './sales-table'
 import { requireAdminCaller } from '@/lib/auth/guard'
 import { isOwnerEquivalent } from '@/lib/auth/roles'
+import { localeForRole, t, plural } from '@/lib/i18n/dictionary'
 
 export const dynamic = 'force-dynamic'
 
@@ -62,6 +63,7 @@ export default async function SalesPage({
 }) {
   const caller = await requireAdminCaller()
   const canSeeAllSales = isOwnerEquivalent(caller.role)
+  const locale = localeForRole(caller.role)
 
   const sp = await searchParams
   const filters = parseFilters(sp)
@@ -82,24 +84,24 @@ export default async function SalesPage({
     <div className="space-y-4">
       <div className="flex items-baseline justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Sales</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">{t(locale, 'sales.title')}</h1>
           <p className="text-sm text-muted-foreground">
-            In-person POS sales. Online orders live in their own module.
+            {t(locale, 'sales.subtitle')}
           </p>
         </div>
         <div className="flex items-center gap-3">
           <div className="text-sm text-muted-foreground">
-            {salesResult.total} {salesResult.total === 1 ? 'sale' : 'sales'}
+            {salesResult.total} {plural(locale, salesResult.total, 'sale.one', 'sale.other')}
           </div>
           {canSeeAllSales && (
             <Button asChild size="sm" variant="outline">
-              <Link href="/sales/receive-payment">Recibir pago</Link>
+              <Link href="/sales/receive-payment">{t(locale, 'sales.receivePayment')}</Link>
             </Button>
           )}
           <Button asChild size="sm">
             <Link href="/sales/new">
               <Plus className="mr-1 size-4" />
-              New POS sale
+              {t(locale, 'sales.newPosSale')}
             </Link>
           </Button>
         </div>
@@ -110,6 +112,7 @@ export default async function SalesPage({
           sellers={sellers}
           warehouses={warehouses}
           canFilterBySeller={canSeeAllSales}
+          locale={locale}
           currentFilters={{
             search: filters.search ?? '',
             status: filters.status ?? '',
@@ -126,6 +129,7 @@ export default async function SalesPage({
         total={salesResult.total}
         page={salesResult.page}
         pageSize={salesResult.pageSize}
+        locale={locale}
       />
     </div>
   )
