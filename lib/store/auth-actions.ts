@@ -22,6 +22,7 @@ export async function signUpCustomer(input: {
   if (!email || !email.includes('@')) return { ok: false, error: 'EMAIL_INVALID' }
   if (!input.password || input.password.length < 6)
     return { ok: false, error: 'PASSWORD_SHORT' }
+  if (!phone) return { ok: false, error: 'PHONE_REQUIRED' }
 
   const supabase = await createClient()
 

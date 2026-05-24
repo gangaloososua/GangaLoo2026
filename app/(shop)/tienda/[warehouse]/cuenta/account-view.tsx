@@ -25,7 +25,7 @@ const T = {
     name: 'Nombre',
     email: 'Correo',
     password: 'Contraseña',
-    phone: 'Teléfono (opcional)',
+    phone: 'Teléfono',
     haveAccount: '¿Ya tienes cuenta? Inicia sesión',
     noAccount: '¿Eres nuevo? Crea una cuenta',
     signOut: 'Cerrar sesión',
@@ -35,6 +35,7 @@ const T = {
     err_NAME_REQUIRED: 'Escribe tu nombre.',
     err_EMAIL_INVALID: 'Escribe un correo válido.',
     err_PASSWORD_SHORT: 'La contraseña debe tener al menos 6 caracteres.',
+    err_PHONE_REQUIRED: 'Escribe tu teléfono.',
     err_EMAIL_TAKEN: 'Ya existe una cuenta con ese correo. Inicia sesión.',
     err_PHONE_TAKEN: 'Ese teléfono ya está registrado. Déjalo en blanco o contáctanos.',
     err_CREDENTIALS_REQUIRED: 'Escribe tu correo y contraseña.',
@@ -49,7 +50,7 @@ const T = {
     name: 'Name',
     email: 'Email',
     password: 'Password',
-    phone: 'Phone (optional)',
+    phone: 'Phone',
     haveAccount: 'Already have an account? Log in',
     noAccount: 'New here? Create an account',
     signOut: 'Sign out',
@@ -59,6 +60,7 @@ const T = {
     err_NAME_REQUIRED: 'Please enter your name.',
     err_EMAIL_INVALID: 'Please enter a valid email.',
     err_PASSWORD_SHORT: 'Password must be at least 6 characters.',
+    err_PHONE_REQUIRED: 'Please enter your phone number.',
     err_EMAIL_TAKEN: 'An account with that email already exists. Log in instead.',
     err_PHONE_TAKEN: 'That phone is already registered. Leave it blank or contact us.',
     err_CREDENTIALS_REQUIRED: 'Please enter your email and password.',
@@ -206,7 +208,7 @@ export function AccountView({
               </div>
               {mode === 'register' ? (
                 <div>
-                  <label className="mb-1 block text-[12px]" style={{ color: MUTED }}>{t.phone}</label>
+                  <label className="mb-1 block text-[12px]" style={{ color: MUTED }}>{t.phone} *</label>
                   <input value={phone} onChange={(e) => setPhone(e.target.value)} inputMode="tel" style={inputStyle} />
                 </div>
               ) : null}
