@@ -1,11 +1,11 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { formatDOP } from '@/lib/format'
 import { ts, type Locale } from '@/lib/i18n/shop'
 import { useCart } from '@/lib/store/cart'
-import type { StoreCatalog, StoreProduct } from '@/lib/store/catalog'
+import type { StoreCatalog, StoreProduct, StoreDeal } from '@/lib/store/catalog'
 
 const NAVY = '#0A2A66'
 const RED = '#CE1126'
@@ -34,6 +34,7 @@ const ICON = {
   plus: 'M12 5v14M5 12h14',
   warehouse: 'M3 9l9-5 9 5v11H3zM7 20v-6h10v6',
   chevron: 'M6 9l6 6 6-6',
+  clock: 'M12 7v5l3 2M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18',
 }
 
 function ProductCard({
@@ -98,13 +99,69 @@ function ProductCard({
   )
 }
 
+const DEAL_T = {
+  es: { daily: 'Oferta del Día', weekly: 'Oferta de la Semana', endsIn: 'Termina en' },
+  en: { daily: 'Deal of the Day', weekly: 'Deal of the Week', endsIn: 'Ends in' },
+} as const
+
+function Countdown({ endsAt, onExpire, locale, accent }: { endsAt: string; onExpire: () => void; locale: Locale; accent: string }) {
+  const [now, setNow] = useState<number | null>(null)
+  useEffect(() => {
+    const tick = () => {
+      setNow(Date.now())
+      if (new Date(endsAt).getTime() - Date.now() <= 0) onExpire()
+    }
+    tick()
+    const id = window.setInterval(tick, 1000)
+    return () => window.clearInterval(id)
+  }, [endsAt, onExpire])
+
+  let text = ''
+  if (now != null) {
+    const s = Math.max(0, Math.floor((new Date(endsAt).getTime() - now) / 1000))
+    const d = Math.floor(s / 86400)
+    const h = Math.floor((s % 86400) / 3600)
+    const m = Math.floor((s % 3600) / 60)
+    const x = s % 60
+    const pad = (n: number) => (n < 10 ? '0' : '') + n
+    text = d > 0 ? `${d}d ${pad(h)}:${pad(m)}` : `${pad(h)}:${pad(m)}:${pad(x)}`
+  }
+
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[12px] font-semibold text-white" style={{ background: accent }}>
+      <Icon d={ICON.clock} size={14} />
+      <span>{DEAL_T[locale].endsIn} {text}</span>
+    </span>
+  )
+}
+
+function DealSection({ deal, locale, storeSlug, onAdd }: { deal: StoreDeal; locale: Locale; storeSlug: string; onAdd: (p: StoreProduct) => void }) {
+  const [hidden, setHidden] = useState(false)
+  const onExpire = useCallback(() => setHidden(true), [])
+  if (hidden || deal.products.length === 0) return null
+  const accent = deal.slot === 'daily' ? RED : NAVY
+  return (
+    <section className="mx-auto w-full max-w-[1100px] px-4 pb-7">
+      <div className="mb-3 flex items-center gap-3">
+        <h2 className="text-[16px] font-semibold" style={{ color: NAVY }}>{DEAL_T[locale][deal.slot]}</h2>
+        {deal.endsAt && <Countdown endsAt={deal.endsAt} onExpire={onExpire} locale={locale} accent={accent} />}
+      </div>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+        {deal.products.slice(0, 8).map((p, i) => (
+          <ProductCard key={p.id} p={p} locale={locale} delay={i * 35} storeSlug={storeSlug} onAdd={onAdd} />
+        ))}
+      </div>
+    </section>
+  )
+}
+
 export function StorePage({ catalog }: { catalog: StoreCatalog }) {
   const [locale, setLocale] = useState<Locale>('es')
   const [activeCat, setActiveCat] = useState<string>('all')
   const [visible, setVisible] = useState(PAGE)
   const [bump, setBump] = useState(false)
 
-  const { warehouse, products, offers, categories } = catalog
+  const { warehouse, products, offers, categories, dailyDeal, weeklyDeal } = catalog
   const cart = useCart(warehouse.slug)
 
   const handleAdd = (p: StoreProduct) => {
@@ -191,6 +248,13 @@ export function StorePage({ catalog }: { catalog: StoreCatalog }) {
           <Icon d="M5 12h14M13 6l6 6-6 6" size={16} />
         </a>
       </section>
+
+      {activeCat === 'all' && dailyDeal && (
+        <DealSection deal={dailyDeal} locale={locale} storeSlug={warehouse.slug} onAdd={handleAdd} />
+      )}
+      {activeCat === 'all' && weeklyDeal && (
+        <DealSection deal={weeklyDeal} locale={locale} storeSlug={warehouse.slug} onAdd={handleAdd} />
+      )}
 
       {categories.length > 0 && (
         <div className="gl-chips mx-auto flex w-full max-w-[1100px] gap-2 overflow-x-auto px-4 pb-5">

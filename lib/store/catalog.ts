@@ -20,21 +20,31 @@ export type StoreProduct = {
   name: string
   slug: string
   basePriceCents: number
-  priceCents: number // effective price in this store (override if any)
+  priceCents: number // effective price in this store (deal > override > base)
   isOffer: boolean
   offerPercent: number // 0 when not an offer
   imageUrl: string | null
   category: { id: string; name: string } | null
   stock: number // qty on hand in THIS warehouse
+  dealSlot?: 'daily' | 'weekly' | null // featured deal slot, if any
+  dealEndsAt?: string | null // when this product's deal ends (ISO), if any
 }
 
 export type StoreCategory = { id: string; name: string }
+
+export type StoreDeal = {
+  slot: 'daily' | 'weekly'
+  endsAt: string | null // section countdown target (soonest among its products)
+  products: StoreProduct[]
+}
 
 export type StoreCatalog = {
   warehouse: StoreWarehouse
   products: StoreProduct[]
   offers: StoreProduct[]
   categories: StoreCategory[]
+  dailyDeal: StoreDeal | null
+  weeklyDeal: StoreDeal | null
 }
 
 function cleanName(raw: string): string {
@@ -88,7 +98,14 @@ export async function fetchStoreCatalog(
     .order('name', { ascending: true })
   if (error) throw error
   if (!products || products.length === 0) {
-    return { warehouse, products: [], offers: [], categories: [] }
+    return {
+      warehouse,
+      products: [],
+      offers: [],
+      categories: [],
+      dailyDeal: null,
+      weeklyDeal: null,
+    }
   }
 
   const ids = products.map((p) => p.id)
@@ -119,6 +136,32 @@ export async function fetchStoreCatalog(
     stockByProduct.set(r.product_id, Number(r.qty_on_hand) || 0)
   }
 
+  // Active, non-expired featured deals (daily/weekly) for this store. The
+  // store_offers view already filters to live deals and computes the price.
+  const { data: dealRows } = await supabase
+    .from('store_offers')
+    .select('product_id, deal_slot, ends_at, deal_price_cents, priority')
+    .eq('warehouse_id', warehouse.id)
+    .in('product_id', ids)
+  const dealByProduct = new Map<
+    string,
+    { slot: 'daily' | 'weekly'; price: number; endsAt: string | null; priority: number }
+  >()
+  for (const d of dealRows ?? []) {
+    if (d.deal_price_cents == null) continue
+    if (d.deal_slot !== 'daily' && d.deal_slot !== 'weekly') continue
+    const prev = dealByProduct.get(d.product_id)
+    const priority = Number(d.priority) || 0
+    if (!prev || priority > prev.priority) {
+      dealByProduct.set(d.product_id, {
+        slot: d.deal_slot,
+        price: d.deal_price_cents,
+        endsAt: d.ends_at,
+        priority,
+      })
+    }
+  }
+
   const { data: primaryLinks } = await supabase
     .from('store_product_categories')
     .select('product_id, category_id')
@@ -146,21 +189,31 @@ export async function fetchStoreCatalog(
 
     const base = p.price_cents
     const override = setting?.price_override_cents ?? null
-    const eff = override != null ? override : base
-    const isOffer = override != null && override < base
+    // The product's NORMAL price in this store: the per-store override if one
+    // is set, otherwise the base price.
+    const storeNormal = override != null ? override : base
+    const deal = dealByProduct.get(p.id)
+    // The "was" price to compare against and strike through:
+    //  - on a featured deal: the normal store price (so % off is honest)
+    //  - on a plain override offer: the base list price
+    const compareAt = deal ? storeNormal : base
+    const eff = deal ? deal.price : storeNormal
+    const isOffer = eff < compareAt
 
     rows.push({
       id: p.id,
       sku: p.sku,
       name: p.name,
       slug: p.slug,
-      basePriceCents: base,
+      basePriceCents: compareAt,
       priceCents: eff,
       isOffer,
-      offerPercent: isOffer ? Math.round((1 - eff / base) * 100) : 0,
+      offerPercent: isOffer ? Math.round((1 - eff / compareAt) * 100) : 0,
       imageUrl: p.primary_image_url,
       category: catByProduct.get(p.id) ?? null,
       stock: stockByProduct.get(p.id) ?? 0,
+      dealSlot: deal?.slot ?? null,
+      dealEndsAt: deal?.endsAt ?? null,
     })
   }
 
@@ -170,7 +223,23 @@ export async function fetchStoreCatalog(
       a.name.localeCompare(b.name),
   )
 
-  const offers = rows.filter((r) => r.isOffer)
+  // Generic price-override offers (NOT featured deals -- those get their own
+  // sections so they don't appear twice).
+  const offers = rows.filter((r) => r.isOffer && !r.dealSlot)
+
+  // Featured daily / weekly deals. Section countdown = soonest end among its
+  // products. Higher-priority (and in-stock) products first.
+  function buildDeal(slot: 'daily' | 'weekly'): StoreDeal | null {
+    const items = rows.filter((r) => r.dealSlot === slot)
+    if (items.length === 0) return null
+    const ends = items
+      .map((r) => r.dealEndsAt)
+      .filter((e): e is string => !!e)
+      .sort()
+    return { slot, endsAt: ends[0] ?? null, products: items }
+  }
+  const dailyDeal = buildDeal('daily')
+  const weeklyDeal = buildDeal('weekly')
 
   const catMap = new Map<string, string>()
   for (const r of rows) if (r.category) catMap.set(r.category.id, r.category.name)
@@ -178,5 +247,5 @@ export async function fetchStoreCatalog(
     .map(([id, name]) => ({ id, name }))
     .sort((a, b) => a.name.localeCompare(b.name))
 
-  return { warehouse, products: rows, offers, categories }
+  return { warehouse, products: rows, offers, categories, dailyDeal, weeklyDeal }
 }
