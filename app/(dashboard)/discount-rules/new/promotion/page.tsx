@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic'
 export default async function NewPromotionRulePage() {
   await requireRole(['owner', 'admin'] as const)
   const supabase = await createClient()
-  const [productsRes, categoriesRes, primaryRes] = await Promise.all([
+  const [productsRes, categoriesRes, primaryRes, warehousesRes] = await Promise.all([
     supabase
       .from('products')
       .select('id, name, sku')
@@ -24,10 +24,17 @@ export default async function NewPromotionRulePage() {
       .from('product_categories')
       .select('product_id, category_id')
       .eq('is_primary', true),
+    supabase
+      .from('warehouses')
+      .select('id, name')
+      .eq('is_active', true)
+      .order('display_order', { ascending: true })
+      .order('name', { ascending: true }),
   ])
   if (productsRes.error) throw productsRes.error
   if (categoriesRes.error) throw categoriesRes.error
   if (primaryRes.error) throw primaryRes.error
+  if (warehousesRes.error) throw warehousesRes.error
 
   const primaryByProduct = new Map<string, string>()
   for (const row of primaryRes.data ?? []) {
@@ -43,6 +50,10 @@ export default async function NewPromotionRulePage() {
   const categories = (categoriesRes.data ?? []).map((c) => ({
     id: c.id as string,
     name: c.name as string,
+  }))
+  const warehouses = (warehousesRes.data ?? []).map((w) => ({
+    id: w.id as string,
+    name: (w.name as string).replace(/^\s*\d+\s*[-–—]\s*/, '').trim(),
   }))
   return (
     <div className="space-y-4">
@@ -65,7 +76,7 @@ export default async function NewPromotionRulePage() {
           daily or weekly deal.
         </p>
       </div>
-      <NewPromotionRuleForm products={products} categories={categories} />
+      <NewPromotionRuleForm products={products} categories={categories} warehouses={warehouses} />
     </div>
   )
 }

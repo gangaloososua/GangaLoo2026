@@ -344,6 +344,10 @@ export type CreatePromotionRuleInput = {
   startsAt: string | null // ISO datetime
   endsAt: string | null // ISO datetime
   priority: number
+  // Online deal (optional). When dealSlot is set, this promotion is featured
+  // on the online store as a Daily/Weekly deal with a countdown.
+  scopeWarehouseId?: string | null // null = all stores
+  dealSlot?: 'daily' | 'weekly' | null
 }
 export type CreatePromotionRuleResult = Ok<{ ruleId: string }> | Err
 
@@ -379,6 +383,15 @@ export async function createPromotionRule(
     return { ok: false, error: 'Priority must be a non-negative integer' }
   }
 
+  // Online deal guards: a featured online deal needs a valid slot and an end
+  // time (the countdown target). scope_warehouse_id is optional (null = all).
+  if (input.dealSlot != null && !['daily', 'weekly'].includes(input.dealSlot)) {
+    return { ok: false, error: 'Deal type must be daily or weekly' }
+  }
+  if (input.dealSlot != null && !input.endsAt) {
+    return { ok: false, error: 'An online deal needs an end date and time' }
+  }
+
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('discount_rules')
@@ -389,6 +402,8 @@ export async function createPromotionRule(
       starts_at: input.startsAt,
       ends_at: input.endsAt,
       scope_product_id: input.scopeProductId,
+      scope_warehouse_id: input.scopeWarehouseId ?? null,
+      deal_slot: input.dealSlot ?? null,
       delta_percent: input.deltaPercent,
       priority: input.priority,
       created_by: caller.id,

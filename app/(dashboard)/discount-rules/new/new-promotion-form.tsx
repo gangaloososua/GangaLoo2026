@@ -1,12 +1,14 @@
 'use client'
 
 // Round 20 — New promotion rule form
-// Round 20.1 — product picker swapped for the searchable ProductPicker
-//              (category filter + type-to-search).
+// Round 20.1 — product picker swapped for the searchable ProductPicker.
+// Deals stage 3b — optional "Online deal" section: mark a promotion as an
+//   online Daily/Weekly deal for a chosen store with an exact end time. When
+//   the toggle is off, the form behaves exactly as before (in-person promotion
+//   with date-based window).
 //
 // A promotion is a time-bound % off a single product, for EVERYONE
-// (incl. walk-ins), with NO minimum quantity. A "daily deal" is a
-// promotion whose date window covers one day; a "weekly deal" a week.
+// (incl. walk-ins), with NO minimum quantity.
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
@@ -25,6 +27,7 @@ import { createPromotionRule } from '../actions'
 type Props = {
   products: PickerProduct[]
   categories: PickerCategory[]
+  warehouses: { id: string; name: string }[]
 }
 
 function toIsoOrNull(dateStr: string, endOfDay: boolean): string | null {
@@ -33,7 +36,10 @@ function toIsoOrNull(dateStr: string, endOfDay: boolean): string | null {
   return `${dateStr}${suffix}`
 }
 
-export function NewPromotionRuleForm({ products, categories }: Props) {
+const selectClass =
+  'h-9 w-full rounded-md border bg-background px-3 text-sm shadow-sm'
+
+export function NewPromotionRuleForm({ products, categories, warehouses }: Props) {
   const router = useRouter()
 
   const [name, setName] = useState('')
@@ -43,6 +49,12 @@ export function NewPromotionRuleForm({ products, categories }: Props) {
   const [endsAtStr, setEndsAtStr] = useState('')
   const [priorityStr, setPriorityStr] = useState('0')
   const [submitting, setSubmitting] = useState(false)
+
+  // Online deal section
+  const [onlineDeal, setOnlineDeal] = useState(false)
+  const [dealSlot, setDealSlot] = useState<'daily' | 'weekly'>('daily')
+  const [warehouseId, setWarehouseId] = useState('') // '' = all stores
+  const [endsAtLocal, setEndsAtLocal] = useState('') // datetime-local
 
   const percentValue = Number(percentStr)
   const priorityValue = parseInt(priorityStr, 10)
@@ -58,8 +70,17 @@ export function NewPromotionRuleForm({ products, categories }: Props) {
       !Number.isInteger(priorityValue)
     )
       return 'Priority must be a non-negative integer'
-    if (startsAtStr && endsAtStr && new Date(startsAtStr) > new Date(endsAtStr))
+    if (onlineDeal) {
+      if (!endsAtLocal) return 'Pick when the online deal ends'
+      if (new Date(endsAtLocal).getTime() <= Date.now())
+        return 'The end time must be in the future'
+    } else if (
+      startsAtStr &&
+      endsAtStr &&
+      new Date(startsAtStr) > new Date(endsAtStr)
+    ) {
       return 'Start date must be on or before end date'
+    }
     return null
   })()
 
@@ -69,13 +90,22 @@ export function NewPromotionRuleForm({ products, categories }: Props) {
     if (!canSubmit) return
     setSubmitting(true)
     try {
+      const startsAt = onlineDeal
+        ? new Date().toISOString()
+        : toIsoOrNull(startsAtStr, false)
+      const endsAt = onlineDeal
+        ? new Date(endsAtLocal).toISOString()
+        : toIsoOrNull(endsAtStr, true)
+
       const result = await createPromotionRule({
         name: name.trim(),
         scopeProductId: productId,
         deltaPercent: percentValue,
-        startsAt: toIsoOrNull(startsAtStr, false),
-        endsAt: toIsoOrNull(endsAtStr, true),
+        startsAt,
+        endsAt,
         priority: priorityValue,
+        scopeWarehouseId: onlineDeal && warehouseId ? warehouseId : null,
+        dealSlot: onlineDeal ? dealSlot : null,
       })
       if (result.ok) {
         toast.success(`Rule "${name.trim()}" created.`)
@@ -112,7 +142,6 @@ export function NewPromotionRuleForm({ products, categories }: Props) {
             />
           </div>
 
-          {/* Searchable product picker (category filter + search) */}
           <div className="space-y-1 sm:col-span-2">
             <Label className="text-xs">
               Product <span className="text-rose-600">*</span>
@@ -163,30 +192,100 @@ export function NewPromotionRuleForm({ products, categories }: Props) {
               Higher priority applies first within the same rule kind.
             </p>
           </div>
+        </div>
 
-          <div className="space-y-1">
-            <Label htmlFor="dr-starts" className="text-xs">
-              Active from (optional)
-            </Label>
-            <Input
-              id="dr-starts"
-              type="date"
-              value={startsAtStr}
-              onChange={(e) => setStartsAtStr(e.target.value)}
+        <div className="mt-6 rounded-md border p-4">
+          <label className="flex items-center gap-2 text-sm font-medium">
+            <input
+              type="checkbox"
+              className="h-4 w-4"
+              checked={onlineDeal}
+              onChange={(e) => setOnlineDeal(e.target.checked)}
             />
-          </div>
+            Feature this on the online store (Deal of the Day / Week)
+          </label>
 
-          <div className="space-y-1">
-            <Label htmlFor="dr-ends" className="text-xs">
-              Active to (optional)
-            </Label>
-            <Input
-              id="dr-ends"
-              type="date"
-              value={endsAtStr}
-              onChange={(e) => setEndsAtStr(e.target.value)}
-            />
-          </div>
+          {onlineDeal ? (
+            <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="space-y-1">
+                <Label htmlFor="dr-slot" className="text-xs">
+                  Deal type <span className="text-rose-600">*</span>
+                </Label>
+                <select
+                  id="dr-slot"
+                  className={selectClass}
+                  value={dealSlot}
+                  onChange={(e) =>
+                    setDealSlot(e.target.value as 'daily' | 'weekly')
+                  }
+                >
+                  <option value="daily">Deal of the Day</option>
+                  <option value="weekly">Deal of the Week</option>
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <Label htmlFor="dr-store" className="text-xs">
+                  Store
+                </Label>
+                <select
+                  id="dr-store"
+                  className={selectClass}
+                  value={warehouseId}
+                  onChange={(e) => setWarehouseId(e.target.value)}
+                >
+                  <option value="">All stores</option>
+                  {warehouses.map((w) => (
+                    <option key={w.id} value={w.id}>
+                      {w.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-1 sm:col-span-2">
+                <Label htmlFor="dr-ends-at" className="text-xs">
+                  Ends at <span className="text-rose-600">*</span>
+                </Label>
+                <Input
+                  id="dr-ends-at"
+                  type="datetime-local"
+                  value={endsAtLocal}
+                  onChange={(e) => setEndsAtLocal(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">
+                  The store shows a live countdown to this time, then the deal
+                  disappears and the price returns to normal. Starts immediately.
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="space-y-1">
+                <Label htmlFor="dr-starts" className="text-xs">
+                  Active from (optional)
+                </Label>
+                <Input
+                  id="dr-starts"
+                  type="date"
+                  value={startsAtStr}
+                  onChange={(e) => setStartsAtStr(e.target.value)}
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label htmlFor="dr-ends" className="text-xs">
+                  Active to (optional)
+                </Label>
+                <Input
+                  id="dr-ends"
+                  type="date"
+                  value={endsAtStr}
+                  onChange={(e) => setEndsAtStr(e.target.value)}
+                />
+              </div>
+            </div>
+          )}
         </div>
 
         {validationError ? (
