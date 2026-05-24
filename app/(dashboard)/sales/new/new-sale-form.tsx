@@ -43,6 +43,7 @@ import {
   resolveLineDiscount,
   type AppliedDiscount,
 } from '@/lib/discount-rules-resolver'
+import { type Locale, t, plural } from '@/lib/i18n/dictionary'
 
 type LookupItem = { id: string; name: string }
 
@@ -60,18 +61,19 @@ type Props = {
   // create unpaid ORDERS (no payment step) that the owner settles later.
   // Defaults to true so existing behaviour is unchanged.
   canTakePayment?: boolean
+  locale: Locale
 }
 
 const WALKIN = '__walkin__'
 
 const FULFILLMENT_OPTIONS: Array<{
   value: 'in_store' | 'pickup' | 'delivery'
-  label: string
-  hint: string
+  labelKey: string
+  hintKey: string
 }> = [
-  { value: 'in_store', label: 'In-store', hint: 'Customer buys and walks out with it' },
-  { value: 'pickup', label: 'Pickup', hint: 'Customer collects later from this warehouse' },
-  { value: 'delivery', label: 'Delivery', hint: 'Sent from this warehouse to the customer' },
+  { value: 'in_store', labelKey: 'fulfill.in_store', hintKey: 'ns.fhInStore' },
+  { value: 'pickup', labelKey: 'fulfill.pickup', hintKey: 'ns.fhPickup' },
+  { value: 'delivery', labelKey: 'fulfill.delivery', hintKey: 'ns.fhDelivery' },
 ]
 
 type PaymentMethod =
@@ -84,14 +86,14 @@ type PaymentMethod =
 
 const PAYMENT_METHOD_OPTIONS: Array<{
   value: PaymentMethod
-  label: string
+  labelKey: string
 }> = [
-  { value: 'cash', label: 'Cash' },
-  { value: 'card', label: 'Card' },
-  { value: 'transfer', label: 'Transfer' },
-  { value: 'paypal', label: 'PayPal' },
-  { value: 'stripe', label: 'Stripe' },
-  { value: 'credit', label: 'Store credit' },
+  { value: 'cash', labelKey: 'method.cash' },
+  { value: 'card', labelKey: 'method.card' },
+  { value: 'transfer', labelKey: 'method.transfer' },
+  { value: 'paypal', labelKey: 'method.paypal' },
+  { value: 'stripe', labelKey: 'method.stripe' },
+  { value: 'credit', labelKey: 'ns.storeCredit' },
 ]
 
 // A cart line. Round 16.4 added is_manual_discount + discount_breakdown.
@@ -167,6 +169,7 @@ export function NewSaleForm({
   categories,
   activeDiscountRules,
   canTakePayment = true,
+  locale,
 }: Props) {
   const [customerId, setCustomerId] = useState<string>(WALKIN)
   const [sellerId, setSellerId] = useState<string>(defaultSellerId ?? '')
@@ -408,17 +411,17 @@ export function NewSaleForm({
   // === confirm gate ===
 
   const confirmDisabledReason: string | null = useMemo(() => {
-    if (!metaReady) return 'Set seller and warehouses first'
-    if (lines.length === 0) return 'Add at least one product to the cart'
+    if (!metaReady) return t(locale, 'ns.gateMetaFirst')
+    if (lines.length === 0) return t(locale, 'ns.gateAddProduct')
     // Payment requirements only apply when this user takes payment.
     if (canTakePayment) {
-      if (payments.length === 0) return 'Record at least one payment'
+      if (payments.length === 0) return t(locale, 'ns.gateRecordPayment')
       if (payments.some((p) => !p.money_account_id))
-        return 'Pick an account for every payment row'
-      if (paymentTotal <= 0) return 'Payment amount must be greater than zero'
+        return t(locale, 'ns.gatePickAccountAll')
+      if (paymentTotal <= 0) return t(locale, 'ns.gatePaymentPositive')
     }
     return null
-  }, [metaReady, lines.length, payments, paymentTotal, canTakePayment])
+  }, [metaReady, lines.length, payments, paymentTotal, canTakePayment, locale])
 
   const confirmReady = confirmDisabledReason === null
 
@@ -468,8 +471,8 @@ export function NewSaleForm({
       if (res.ok) {
         toast.success(
           canTakePayment
-            ? `Sale ${res.invoice_number} confirmed.`
-            : `Order ${res.invoice_number} created.`
+            ? `${t(locale, 'ns.saleWord')} ${res.invoice_number} ${t(locale, 'ns.confirmedSuffix')}`
+            : `${t(locale, 'ns.orderWord')} ${res.invoice_number} ${t(locale, 'ns.createdSuffix')}`
         )
         router.push(`/sales/${res.sale_id}`)
       } else {
@@ -478,7 +481,7 @@ export function NewSaleForm({
       }
     } catch (err) {
       const msg =
-        err instanceof Error ? err.message : 'Confirm sale failed.'
+        err instanceof Error ? err.message : t(locale, 'ns.toastConfirmFailed')
       toast.error(msg)
       setSubmitting(false)
     }
@@ -488,28 +491,26 @@ export function NewSaleForm({
     <div className="space-y-4">
       {canTakePayment && moneyAccounts.length === 0 && (
         <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
-          <div className="font-medium">No active money accounts</div>
+          <div className="font-medium">{t(locale, 'ns.noAcctTitle')}</div>
           <div className="mt-0.5">
-            Before you can confirm a sale you need at least one active money
-            account (cash drawer, bank, etc). Set one up in Settings, then
-            come back here.
+            {t(locale, 'ns.noAcctBody')}
           </div>
         </div>
       )}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Sale details</CardTitle>
+          <CardTitle className="text-base">{t(locale, 'ns.saleDetails')}</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <div className="space-y-1 sm:col-span-2 lg:col-span-1">
-              <Label className="text-xs">Customer</Label>
+              <Label className="text-xs">{t(locale, 'sales.col.customer')}</Label>
               <Select value={customerId} onValueChange={setCustomerId}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value={WALKIN}>Walk-in (no customer)</SelectItem>
+                  <SelectItem value={WALKIN}>{t(locale, 'ns.walkinOption')}</SelectItem>
                   {allCustomers.map((c) => (
                     <SelectItem key={c.id} value={c.id}>
                       {c.full_name}
@@ -525,11 +526,12 @@ export function NewSaleForm({
                 onClick={() => setNewCustomerOpen(true)}
               >
                 <Plus className="size-3" />
-                New customer
+                {t(locale, 'ns.qcTitle')}
               </Button>
               <QuickCustomerDialog
                 open={newCustomerOpen}
                 onOpenChange={setNewCustomerOpen}
+                locale={locale}
                 onCreated={(c) => {
                   setExtraCustomers((prev) => [...prev, c])
                   setCustomerId(c.id)
@@ -538,7 +540,7 @@ export function NewSaleForm({
               {chosenCustomer?.club_tier && chosenCustomer.club_tier !== 'none' && (
                 <p className="text-xs">
                   <Badge variant="secondary" className="capitalize">
-                    {chosenCustomer.club_tier} tier
+                    {chosenCustomer.club_tier} {t(locale, 'ns.tierWord')}
                   </Badge>
                 </p>
               )}
@@ -546,11 +548,11 @@ export function NewSaleForm({
 
             <div className="space-y-1">
               <Label className="text-xs">
-                Seller <span className="text-rose-600">*</span>
+                {t(locale, 'sales.col.seller')} <span className="text-rose-600">*</span>
               </Label>
               <Select value={sellerId} onValueChange={setSellerId}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Pick a seller…" />
+                  <SelectValue placeholder={t(locale, 'ns.pickSeller')} />
                 </SelectTrigger>
                 <SelectContent>
                   {sellers.map((s) => (
@@ -564,14 +566,14 @@ export function NewSaleForm({
 
             <div className="space-y-1">
               <Label className="text-xs">
-                Source warehouse <span className="text-rose-600">*</span>
+                {t(locale, 'sd.sourceWarehouse')} <span className="text-rose-600">*</span>
               </Label>
               <Select
                 value={sourceWarehouseId}
                 onValueChange={onSourceWarehouseChange}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Pick where stock is pulled from…" />
+                  <SelectValue placeholder={t(locale, 'ns.pickSource')} />
                 </SelectTrigger>
                 <SelectContent>
                   {warehouses.map((w) => (
@@ -585,7 +587,7 @@ export function NewSaleForm({
 
             <div className="space-y-1">
               <Label className="text-xs">
-                Fulfillment warehouse <span className="text-rose-600">*</span>
+                {t(locale, 'ns.fulfillmentWarehouse')} <span className="text-rose-600">*</span>
               </Label>
               <Select
                 value={fulfillmentWarehouseId}
@@ -595,7 +597,7 @@ export function NewSaleForm({
                 <SelectTrigger>
                   <SelectValue
                     placeholder={
-                      sourceWarehouseId ? 'Pick fulfillment…' : 'Pick source first'
+                      sourceWarehouseId ? t(locale, 'ns.pickFulfillment') : t(locale, 'ns.pickSourceFirst')
                     }
                   />
                 </SelectTrigger>
@@ -611,13 +613,13 @@ export function NewSaleForm({
                 sourceWarehouseId &&
                 sourceWarehouseId === fulfillmentWarehouseId && (
                   <p className="text-xs text-muted-foreground">
-                    Same as source.
+                    {t(locale, 'ns.sameAsSource')}
                   </p>
                 )}
             </div>
 
             <div className="space-y-1 sm:col-span-2">
-              <Label className="text-xs">Fulfillment method</Label>
+              <Label className="text-xs">{t(locale, 'ns.fulfillmentMethod')}</Label>
               <div className="flex flex-wrap gap-2">
                 {FULFILLMENT_OPTIONS.map((o) => {
                   const active = fulfillmentMethod === o.value
@@ -632,8 +634,8 @@ export function NewSaleForm({
                           : 'border-border hover:bg-muted/40'
                       }`}
                     >
-                      <div className="font-medium">{o.label}</div>
-                      <div className="text-xs text-muted-foreground">{o.hint}</div>
+                      <div className="font-medium">{t(locale, o.labelKey)}</div>
+                      <div className="text-xs text-muted-foreground">{t(locale, o.hintKey)}</div>
                     </button>
                   )
                 })}
@@ -645,12 +647,12 @@ export function NewSaleForm({
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Cart</CardTitle>
+          <CardTitle className="text-base">{t(locale, 'ns.cart')}</CardTitle>
         </CardHeader>
         <CardContent className="min-h-[32rem] space-y-4">
           {!metaReady ? (
             <p className="text-sm text-muted-foreground">
-              Set seller and warehouses above to enable the cart.
+              {t(locale, 'ns.cartMetaHint')}
             </p>
           ) : (
             <>
@@ -658,22 +660,23 @@ export function NewSaleForm({
                 warehouseId={sourceWarehouseId}
                 categories={categories}
                 onAdd={addProduct}
+                locale={locale}
               />
 
               {lines.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
-                  No items yet. Search and pick a product above to add it.
+                  {t(locale, 'ns.cartEmpty')}
                 </p>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b text-left text-xs text-muted-foreground">
-                        <th className="py-2 pr-3 font-medium">Product</th>
-                        <th className="py-2 pr-3 font-medium">Qty</th>
-                        <th className="py-2 pr-3 font-medium">Unit price</th>
-                        <th className="py-2 pr-3 font-medium">Line discount</th>
-                        <th className="py-2 pr-3 text-right font-medium">Total</th>
+                        <th className="py-2 pr-3 font-medium">{t(locale, 'sd.colProduct')}</th>
+                        <th className="py-2 pr-3 font-medium">{t(locale, 'sd.colQty')}</th>
+                        <th className="py-2 pr-3 font-medium">{t(locale, 'sd.colUnitPrice')}</th>
+                        <th className="py-2 pr-3 font-medium">{t(locale, 'ns.lineDiscount')}</th>
+                        <th className="py-2 pr-3 text-right font-medium">{t(locale, 'sales.col.total')}</th>
                         <th className="py-2 pl-3"></th>
                       </tr>
                     </thead>
@@ -704,12 +707,12 @@ export function NewSaleForm({
                                   <div className="mt-1 text-xs">
                                     {overStock ? (
                                       <span className="text-rose-700">
-                                        Stock: {l.qty_on_hand_at_add} (short by{' '}
+                                        {t(locale, 'ns.stock')}: {l.qty_on_hand_at_add} ({t(locale, 'ns.shortBy')}{' '}
                                         {l.qty - l.qty_on_hand_at_add})
                                       </span>
                                     ) : (
                                       <span className="text-muted-foreground">
-                                        Stock at add: {l.qty_on_hand_at_add}
+                                        {t(locale, 'ns.stockAtAdd')}: {l.qty_on_hand_at_add}
                                       </span>
                                     )}
                                   </div>
@@ -773,13 +776,13 @@ export function NewSaleForm({
                                     .map((b) => `${b.percent ?? 0}%`)
                                     .join(' × ')}
                                   {l.discount_breakdown[0].capHit
-                                    ? ' (capped at 30%)'
+                                    ? t(locale, 'ns.cappedAt30')
                                     : ''}
                                 </div>
                               ) : null}
                               {l.is_manual_discount ? (
                                 <div className="mt-1 text-xs text-amber-700">
-                                  Manual (auto silenced)
+                                  {t(locale, 'ns.manualSilenced')}
                                 </div>
                               ) : null}
                             </td>
@@ -792,7 +795,7 @@ export function NewSaleForm({
                                 variant="ghost"
                                 size="icon"
                                 onClick={() => removeLine(l.line_id)}
-                                aria-label="Remove line"
+                                aria-label={t(locale, 'ns.removeLine')}
                               >
                                 <Trash2 className="size-4" />
                               </Button>
@@ -808,7 +811,7 @@ export function NewSaleForm({
               {lines.length > 0 && (
                 <div className="grid grid-cols-1 gap-3 border-t pt-3 sm:grid-cols-2">
                   <div className="space-y-1">
-                    <Label className="text-xs">Sale-level discount (DOP)</Label>
+                    <Label className="text-xs">{t(locale, 'ns.saleLevelDiscount')}</Label>
                     <Input
                       type="number"
                       min={0}
@@ -822,7 +825,7 @@ export function NewSaleForm({
                   </div>
                   <div className="space-y-1 text-sm sm:text-right">
                     <div className="flex justify-between sm:justify-end sm:gap-6">
-                      <span className="text-muted-foreground">Subtotal</span>
+                      <span className="text-muted-foreground">{t(locale, 'sd.subtotal')}</span>
                       <span className="tabular-nums">
                         {formatDOP(totals.subtotal)}
                       </span>
@@ -830,7 +833,7 @@ export function NewSaleForm({
                     {totals.lineDiscounts > 0 && (
                       <div className="flex justify-between sm:justify-end sm:gap-6">
                         <span className="text-muted-foreground">
-                          Line discounts
+                          {t(locale, 'ns.lineDiscounts')}
                         </span>
                         <span className="tabular-nums">
                           −{formatDOP(totals.lineDiscounts)}
@@ -840,7 +843,7 @@ export function NewSaleForm({
                     {saleDiscountCents > 0 && (
                       <div className="flex justify-between sm:justify-end sm:gap-6">
                         <span className="text-muted-foreground">
-                          Sale discount
+                          {t(locale, 'ns.saleDiscount')}
                         </span>
                         <span className="tabular-nums">
                           −{formatDOP(saleDiscountCents)}
@@ -848,7 +851,7 @@ export function NewSaleForm({
                       </div>
                     )}
                     <div className="flex justify-between border-t pt-1 text-base font-semibold sm:justify-end sm:gap-6">
-                      <span>Total</span>
+                      <span>{t(locale, 'sales.col.total')}</span>
                       <span className="tabular-nums">
                         {formatDOP(totals.grandTotal)}
                       </span>
@@ -864,13 +867,12 @@ export function NewSaleForm({
       {canTakePayment && metaReady && lines.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Payment</CardTitle>
+            <CardTitle className="text-base">{t(locale, 'ns.payment')}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             {moneyAccounts.length === 0 && (
               <p className="text-sm text-rose-700">
-                No active money accounts exist. Configure at least one before
-                ringing up sales.
+                {t(locale, 'ns.noAcctInline')}
               </p>
             )}
 
@@ -880,7 +882,7 @@ export function NewSaleForm({
                 className="grid grid-cols-1 gap-2 rounded-md border p-3 sm:grid-cols-12"
               >
                 <div className="space-y-1 sm:col-span-3">
-                  <Label className="text-xs">Method</Label>
+                  <Label className="text-xs">{t(locale, 'sd.method')}</Label>
                   <Select
                     value={p.method}
                     onValueChange={(v) =>
@@ -893,7 +895,7 @@ export function NewSaleForm({
                     <SelectContent>
                       {PAYMENT_METHOD_OPTIONS.map((m) => (
                         <SelectItem key={m.value} value={m.value}>
-                          {m.label}
+                          {t(locale, m.labelKey)}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -901,7 +903,7 @@ export function NewSaleForm({
                 </div>
 
                 <div className="space-y-1 sm:col-span-3">
-                  <Label className="text-xs">Amount (DOP)</Label>
+                  <Label className="text-xs">{t(locale, 'sd.amountDop')}</Label>
                   <Input
                     type="number"
                     min={0}
@@ -916,7 +918,7 @@ export function NewSaleForm({
                 </div>
 
                 <div className="space-y-1 sm:col-span-3">
-                  <Label className="text-xs">Account</Label>
+                  <Label className="text-xs">{t(locale, 'sd.account')}</Label>
                   <Select
                     value={p.money_account_id || undefined}
                     onValueChange={(v) =>
@@ -924,14 +926,14 @@ export function NewSaleForm({
                     }
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Pick…" />
+                      <SelectValue placeholder={t(locale, 'ns.pickShort')} />
                     </SelectTrigger>
                     <SelectContent>
                       {moneyAccounts.map((a) => (
                         <SelectItem key={a.id} value={a.id}>
                           {a.name}{' '}
                           <span className="text-xs text-muted-foreground">
-                            ({a.kind})
+                            ({t(locale, 'acctKind.' + a.kind)})
                           </span>
                         </SelectItem>
                       ))}
@@ -940,14 +942,14 @@ export function NewSaleForm({
                 </div>
 
                 <div className="space-y-1 sm:col-span-2">
-                  <Label className="text-xs">Reference</Label>
+                  <Label className="text-xs">{t(locale, 'sd.reference')}</Label>
                   <Input
                     type="text"
                     value={p.reference}
                     onChange={(e) =>
                       updatePayment(p.tender_id, { reference: e.target.value })
                     }
-                    placeholder="(optional)"
+                    placeholder={t(locale, 'ns.optionalParen')}
                   />
                 </div>
 
@@ -957,7 +959,7 @@ export function NewSaleForm({
                     variant="ghost"
                     size="icon"
                     onClick={() => removePayment(p.tender_id)}
-                    aria-label="Remove tender"
+                    aria-label={t(locale, 'ns.removeTender')}
                   >
                     <Trash2 className="size-4" />
                   </Button>
@@ -974,23 +976,23 @@ export function NewSaleForm({
                 disabled={moneyAccounts.length === 0}
               >
                 <Plus className="mr-1 size-4" />
-                Add tender
+                {t(locale, 'ns.addTender')}
               </Button>
 
               <div className="text-sm tabular-nums">
-                <span className="text-muted-foreground">Paid:</span>{' '}
+                <span className="text-muted-foreground">{t(locale, 'sales.col.paid')}:</span>{' '}
                 <span className="font-medium">{formatDOP(paymentTotal)}</span>
                 <span className="mx-2 text-muted-foreground">/</span>
-                <span className="text-muted-foreground">Total:</span>{' '}
+                <span className="text-muted-foreground">{t(locale, 'sales.col.total')}:</span>{' '}
                 <span className="font-medium">{formatDOP(totals.grandTotal)}</span>
                 {outstanding > 0 && (
                   <span className="ml-3 text-amber-700">
-                    Outstanding: {formatDOP(outstanding)}
+                    {t(locale, 'sd.outstanding')}: {formatDOP(outstanding)}
                   </span>
                 )}
                 {outstanding < 0 && (
                   <span className="ml-3 text-rose-700">
-                    Overpayment: {formatDOP(-outstanding)}
+                    {t(locale, 'ns.overpayment')}: {formatDOP(-outstanding)}
                   </span>
                 )}
               </div>
@@ -1001,31 +1003,30 @@ export function NewSaleForm({
 
       {!canTakePayment && metaReady && lines.length > 0 && (
         <div className="rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
-          This is an <span className="font-medium">order</span> — no payment is
-          taken here. The owner records payment once the customer settles up.
+          {t(locale, 'ns.orderInfo')}
         </div>
       )}
 
       <div className="flex items-center justify-end gap-2">
         <Button variant="outline" type="button" disabled>
-          Save draft
+          {t(locale, 'ns.saveDraft')}
         </Button>
         <Button
           type="button"
           disabled={!confirmReady || submitting}
           title={
             confirmDisabledReason ??
-            (canTakePayment ? 'Confirm sale' : 'Create order')
+            (canTakePayment ? t(locale, 'ns.confirmSale') : t(locale, 'ns.createOrder'))
           }
           onClick={() => setConfirmOpen(true)}
         >
           {submitting
             ? canTakePayment
-              ? 'Confirming…'
-              : 'Creating…'
+              ? t(locale, 'ns.confirming')
+              : t(locale, 'ns.creating')
             : canTakePayment
-              ? 'Confirm sale'
-              : 'Create order'}
+              ? t(locale, 'ns.confirmSale')
+              : t(locale, 'ns.createOrder')}
         </Button>
       </div>
 
@@ -1033,47 +1034,44 @@ export function NewSaleForm({
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              {canTakePayment ? 'Confirm this sale?' : 'Create this order?'}
+              {canTakePayment ? t(locale, 'ns.confirmSaleTitle') : t(locale, 'ns.createOrderTitle')}
             </AlertDialogTitle>
             <AlertDialogDescription asChild>
               <div className="space-y-2 text-sm">
                 <div>
-                  {lines.length} {lines.length === 1 ? 'item' : 'items'}, total{' '}
+                  {lines.length} {plural(locale, lines.length, 'item.one', 'item.other')}, {t(locale, 'ns.totalWord')}{' '}
                   {formatDOP(totals.grandTotal)}
                   {canTakePayment ? (
-                    <>, paid {formatDOP(paymentTotal)}.</>
+                    <>, {t(locale, 'ns.paidWord')} {formatDOP(paymentTotal)}.</>
                   ) : (
-                    <> (unpaid order).</>
+                    <> {t(locale, 'ns.unpaidOrderParen')}</>
                   )}
                 </div>
                 {anyOverStock && (
                   <div className="text-amber-700">
-                    Warning: one or more lines exceed the stock that was on
-                    hand when added. Confirming anyway will push the oldest
-                    lot negative.
+                    {t(locale, 'ns.warnOverStock')}
                   </div>
                 )}
                 {canTakePayment && outstanding > 0 && (
                   <div className="text-amber-700">
-                    Outstanding balance of {formatDOP(outstanding)} will
-                    remain after this sale.
+                    {t(locale, 'ns.outstandingBalPre')} {formatDOP(outstanding)} {t(locale, 'ns.outstandingBalPost')}
                   </div>
                 )}
                 {canTakePayment && outstanding < 0 && (
                   <div className="text-rose-700">
-                    Overpayment of {formatDOP(-outstanding)} will be recorded.
+                    {t(locale, 'ns.overpaymentOfPre')} {formatDOP(-outstanding)} {t(locale, 'ns.overpaymentOfPost')}
                   </div>
                 )}
                 <div className="text-muted-foreground">
                   {canTakePayment
-                    ? 'This writes the sale, consumes inventory, and records payments + commissions atomically. It cannot be undone without a refund.'
-                    : 'This creates an unpaid order: it consumes inventory and sets the commission pending, but records no payment. The owner records payment later. It cannot be undone without a refund.'}
+                    ? t(locale, 'ns.confirmNoteSale')
+                    : t(locale, 'ns.confirmNoteOrder')}
                 </div>
               </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={submitting}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel disabled={submitting}>{t(locale, 'common.cancel')}</AlertDialogCancel>
             <AlertDialogAction
               disabled={submitting}
               onClick={(e) => {
@@ -1082,7 +1080,7 @@ export function NewSaleForm({
                 void handleConfirm()
               }}
             >
-              {canTakePayment ? 'Confirm sale' : 'Create order'}
+              {canTakePayment ? t(locale, 'ns.confirmSale') : t(locale, 'ns.createOrder')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

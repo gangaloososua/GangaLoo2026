@@ -10,6 +10,8 @@ import {
 } from '@/lib/sales'
 import { listDiscountRules } from '@/lib/discount-rules'
 import { NewSaleForm } from './new-sale-form'
+import { localeForRole, t } from '@/lib/i18n/dictionary'
+import { requireAdminCaller } from '@/lib/auth/guard'
 
 export const dynamic = 'force-dynamic'
 
@@ -32,6 +34,11 @@ export default async function NewSalePage() {
     listCategoriesForSale(),
   ])
 
+  // Language is chosen from the signed-in caller's role (auth_user_id-based,
+  // reliable). Kept separate from getCurrentSeller so sale behaviour is untouched.
+  const caller = await requireAdminCaller()
+  const locale = localeForRole(caller.role)
+
   return (
     <div className="space-y-4">
       <div>
@@ -40,13 +47,13 @@ export default async function NewSalePage() {
           className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground"
         >
           <ChevronLeft className="h-4 w-4" />
-          Back to sales
+          {t(locale, 'ns.backToSales')}
         </Link>
       </div>
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">New POS sale</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">{t(locale, 'sales.newPosSale')}</h1>
         <p className="text-sm text-muted-foreground">
-          Set the meta, then add products, take payment, and confirm.
+          {t(locale, 'ns.pageSubtitle')}
         </p>
       </div>
       <NewSaleForm
@@ -58,6 +65,7 @@ export default async function NewSalePage() {
         activeDiscountRules={activeDiscountRules}
         categories={categories}
         canTakePayment={currentSeller?.role === 'owner' || currentSeller?.role === 'admin'}
+        locale={locale}
       />
     </div>
   )

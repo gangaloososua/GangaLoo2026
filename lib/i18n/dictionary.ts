@@ -102,6 +102,8 @@ const en: Messages = {
   'row.other': 'rows',
   'line.one': 'line',
   'line.other': 'lines',
+  'item.one': 'item',
+  'item.other': 'items',
 
   // Seller dashboard
   'dash.greeting': 'Hi',
@@ -157,7 +159,6 @@ const en: Messages = {
   'filter.clear': 'Clear filters',
 
   // ---- Sale detail (sd.*) ----
-  // Header / actions menu
   'sd.draftPlaceholder': '— (draft)',
   'sd.actions': 'Actions',
   'sd.printReceipt': 'Print receipt',
@@ -171,20 +172,17 @@ const en: Messages = {
   'sd.paidAt': 'paid',
   'sd.totalLabel': 'Total',
   'sd.paidSuffix': 'paid',
-  // Fields
   'sd.fulfillment': 'Fulfillment',
   'sd.sourceWarehouse': 'Source warehouse',
   'sd.tracking': 'Tracking',
   'sd.deliveryNotes': 'Delivery notes',
   'sd.noReason': 'no reason given',
-  // Cancel dialog
   'sd.cancelTitle': 'Cancel this sale?',
   'sd.cancelDesc': 'The sale will move to cancelled. Stock movements are not reversed. If this sale already had stock pulled, refund it instead.',
   'sd.reasonOptional': 'Reason (optional)',
   'sd.cancelReasonPh': 'Operator error, duplicate entry, …',
   'sd.keepSale': 'Keep sale',
   'sd.cancelling': 'Cancelling…',
-  // Refund dialog
   'sd.refundTitle': 'Refund this sale?',
   'sd.refundDesc': 'Status moves to refunded. Audit-trail stock movements are written for every consumed lot. All commissions on this sale are voided (including ones already paid out, which creates a clawback debt).',
   'sd.refundReason': 'Refund reason',
@@ -192,7 +190,6 @@ const en: Messages = {
   'sd.restockBold': 'Add stock back to lots.',
   'sd.restockHint': "Uncheck only if the items were damaged or destroyed and won't return to inventory.",
   'sd.refunding': 'Refunding…',
-  // Log cash dialog
   'sd.recordsThat': 'Records that',
   'sd.theSeller': 'the seller',
   'sd.logCashHoldingTail': 'is holding this cash for the order. It does not record a payment — the money is booked when you mark it handed in.',
@@ -203,7 +200,6 @@ const en: Messages = {
   'sd.logCashNotePh': 'e.g. collected at delivery',
   'sd.logging': 'Logging…',
   'sd.logCollection': 'Log collection',
-  // Items card
   'sd.noLineItems': 'This sale has no line items.',
   'sd.colProduct': 'Product',
   'sd.colQty': 'Qty',
@@ -215,24 +211,20 @@ const en: Messages = {
   'sd.lot': 'Lot',
   'sd.unitCost': 'Unit cost',
   'sd.subtotalCost': 'Subtotal cost',
-  // Totals card
   'sd.totals': 'Totals',
   'sd.subtotal': 'Subtotal',
   'sd.tax': 'Tax',
   'sd.shipping': 'Shipping',
   'sd.outstanding': 'Outstanding',
   'sd.grossProfit': 'Gross profit',
-  // Payments panel
   'sd.payments': 'Payments',
   'sd.addPayment': 'Add payment',
   'sd.noPayments': 'No payments recorded.',
   'sd.overpaid': 'Overpaid',
-  // Commissions panel
   'sd.commissions': 'Commissions',
   'sd.noCommissions': 'No commissions recorded.',
   'sd.pending': 'Pending',
   'sd.void': 'Void',
-  // Add payment dialog
   'sd.addPaymentDesc': 'Records a payment against this sale and updates the paid total.',
   'sd.method': 'Method',
   'sd.amountDop': 'Amount (DOP)',
@@ -243,7 +235,6 @@ const en: Messages = {
   'sd.referencePh': 'Transfer #, auth code…',
   'sd.recording': 'Recording…',
   'sd.recordPayment': 'Record payment',
-  // Toasts
   'sd.toastSaleCancelled': 'Sale cancelled.',
   'sd.toastRefundReasonRequired': 'Refund reason is required.',
   'sd.toastRefundedRestock': 'Sale refunded and stock returned to lots.',
@@ -252,6 +243,109 @@ const en: Messages = {
   'sd.toastAmountPositive': 'Amount must be greater than zero.',
   'sd.toastPickAccount': 'Pick a money account.',
   'sd.toastPaymentRecorded': 'Payment recorded.',
+
+  // ---- Product search (ps.*) — SHARED component, default English ----
+  'ps.searchPlaceholder': 'Search by SKU or name…',
+  'ps.filterByCategory': 'Filter by category…',
+  'ps.searchCategories': 'Search categories…',
+  'ps.noCategory': 'No category found.',
+  'ps.other': 'Other',
+  'ps.searching': 'Searching…',
+  'ps.noProducts': 'No products match.',
+  'ps.out': 'out',
+  'ps.clearCategory': 'Clear category filter',
+
+  // ---- New sale form (ns.*) ----
+  'ns.backToSales': 'Back to sales',
+  'ns.pageSubtitle': 'Set the meta, then add products, take payment, and confirm.',
+  // Quick customer dialog
+  'ns.qcTitle': 'New customer',
+  'ns.qcDesc': 'Add a customer on the fly. You can fill in the rest of their details later from the People page.',
+  'ns.qcName': 'Name',
+  'ns.qcFullNamePh': 'Full name',
+  'ns.qcPhone': 'Phone',
+  'ns.qcPhoneHint': 'Used for sending invoices by WhatsApp.',
+  'ns.qcEmail': 'Email (optional)',
+  'ns.qcAdding': 'Adding…',
+  'ns.qcAddCustomer': 'Add customer',
+  'ns.qcNameRequired': 'Name is required.',
+  'ns.qcCustomerAddedPre': 'Customer',
+  'ns.qcCustomerAddedSuffix': 'added.',
+  'ns.qcCouldNotAdd': 'Could not add customer.',
+  // Fulfilment hints
+  'ns.fhInStore': 'Customer buys and walks out with it',
+  'ns.fhPickup': 'Customer collects later from this warehouse',
+  'ns.fhDelivery': 'Sent from this warehouse to the customer',
+  // Payment method extra
+  'ns.storeCredit': 'Store credit',
+  // Confirm-gate reasons
+  'ns.gateMetaFirst': 'Set seller and warehouses first',
+  'ns.gateAddProduct': 'Add at least one product to the cart',
+  'ns.gateRecordPayment': 'Record at least one payment',
+  'ns.gatePickAccountAll': 'Pick an account for every payment row',
+  'ns.gatePaymentPositive': 'Payment amount must be greater than zero',
+  // Toasts / dual-mode words
+  'ns.saleWord': 'Sale',
+  'ns.confirmedSuffix': 'confirmed.',
+  'ns.orderWord': 'Order',
+  'ns.createdSuffix': 'created.',
+  'ns.toastConfirmFailed': 'Confirm sale failed.',
+  // No-accounts warnings
+  'ns.noAcctTitle': 'No active money accounts',
+  'ns.noAcctBody': 'Before you can confirm a sale you need at least one active money account (cash drawer, bank, etc). Set one up in Settings, then come back here.',
+  'ns.noAcctInline': 'No active money accounts exist. Configure at least one before ringing up sales.',
+  // Sale details card
+  'ns.saleDetails': 'Sale details',
+  'ns.walkinOption': 'Walk-in (no customer)',
+  'ns.tierWord': 'tier',
+  'ns.pickSeller': 'Pick a seller…',
+  'ns.pickSource': 'Pick where stock is pulled from…',
+  'ns.fulfillmentWarehouse': 'Fulfillment warehouse',
+  'ns.pickFulfillment': 'Pick fulfillment…',
+  'ns.pickSourceFirst': 'Pick source first',
+  'ns.sameAsSource': 'Same as source.',
+  'ns.fulfillmentMethod': 'Fulfillment method',
+  // Cart card
+  'ns.cart': 'Cart',
+  'ns.cartMetaHint': 'Set seller and warehouses above to enable the cart.',
+  'ns.cartEmpty': 'No items yet. Search and pick a product above to add it.',
+  'ns.lineDiscount': 'Line discount',
+  'ns.stock': 'Stock',
+  'ns.shortBy': 'short by',
+  'ns.stockAtAdd': 'Stock at add',
+  'ns.cappedAt30': ' (capped at 30%)',
+  'ns.manualSilenced': 'Manual (auto silenced)',
+  'ns.removeLine': 'Remove line',
+  'ns.saleLevelDiscount': 'Sale-level discount (DOP)',
+  'ns.lineDiscounts': 'Line discounts',
+  'ns.saleDiscount': 'Sale discount',
+  // Payment card
+  'ns.payment': 'Payment',
+  'ns.pickShort': 'Pick…',
+  'ns.optionalParen': '(optional)',
+  'ns.removeTender': 'Remove tender',
+  'ns.addTender': 'Add tender',
+  'ns.overpayment': 'Overpayment',
+  // Order-mode info
+  'ns.orderInfo': 'This is an order — no payment is taken here. The owner records payment once the customer settles up.',
+  // Footer + confirm dialog
+  'ns.saveDraft': 'Save draft',
+  'ns.confirming': 'Confirming…',
+  'ns.creating': 'Creating…',
+  'ns.confirmSale': 'Confirm sale',
+  'ns.createOrder': 'Create order',
+  'ns.confirmSaleTitle': 'Confirm this sale?',
+  'ns.createOrderTitle': 'Create this order?',
+  'ns.totalWord': 'total',
+  'ns.paidWord': 'paid',
+  'ns.unpaidOrderParen': '(unpaid order).',
+  'ns.warnOverStock': 'Warning: one or more lines exceed the stock that was on hand when added. Confirming anyway will push the oldest lot negative.',
+  'ns.outstandingBalPre': 'Outstanding balance of',
+  'ns.outstandingBalPost': 'will remain after this sale.',
+  'ns.overpaymentOfPre': 'Overpayment of',
+  'ns.overpaymentOfPost': 'will be recorded.',
+  'ns.confirmNoteSale': 'This writes the sale, consumes inventory, and records payments + commissions atomically. It cannot be undone without a refund.',
+  'ns.confirmNoteOrder': 'This creates an unpaid order: it consumes inventory and sets the commission pending, but records no payment. The owner records payment later. It cannot be undone without a refund.',
 }
 
 const es: Messages = {
@@ -333,6 +427,8 @@ const es: Messages = {
   'row.other': 'filas',
   'line.one': 'línea',
   'line.other': 'líneas',
+  'item.one': 'artículo',
+  'item.other': 'artículos',
 
   // Seller dashboard
   'dash.greeting': 'Hola',
@@ -388,7 +484,6 @@ const es: Messages = {
   'filter.clear': 'Limpiar filtros',
 
   // ---- Sale detail (sd.*) ----
-  // Header / actions menu
   'sd.draftPlaceholder': '— (borrador)',
   'sd.actions': 'Acciones',
   'sd.printReceipt': 'Imprimir recibo',
@@ -402,20 +497,17 @@ const es: Messages = {
   'sd.paidAt': 'pagado',
   'sd.totalLabel': 'Total',
   'sd.paidSuffix': 'pagado',
-  // Fields
   'sd.fulfillment': 'Entrega',
   'sd.sourceWarehouse': 'Almacén de origen',
   'sd.tracking': 'Seguimiento',
   'sd.deliveryNotes': 'Notas de entrega',
   'sd.noReason': 'sin motivo',
-  // Cancel dialog
   'sd.cancelTitle': '¿Cancelar esta venta?',
   'sd.cancelDesc': 'La venta pasará a cancelada. Los movimientos de stock no se revierten. Si esta venta ya descontó stock, mejor reembólsala.',
   'sd.reasonOptional': 'Motivo (opcional)',
   'sd.cancelReasonPh': 'Error de operador, entrada duplicada, …',
   'sd.keepSale': 'Mantener venta',
   'sd.cancelling': 'Cancelando…',
-  // Refund dialog
   'sd.refundTitle': '¿Reembolsar esta venta?',
   'sd.refundDesc': 'El estado pasa a reembolsada. Se registran movimientos de stock (para auditoría) por cada lote consumido. Todas las comisiones de esta venta se anulan (incluidas las ya pagadas, lo que genera una deuda por recuperar).',
   'sd.refundReason': 'Motivo del reembolso',
@@ -423,7 +515,6 @@ const es: Messages = {
   'sd.restockBold': 'Devolver el stock a los lotes.',
   'sd.restockHint': 'Desmarca solo si los artículos se dañaron o destruyeron y no volverán al inventario.',
   'sd.refunding': 'Reembolsando…',
-  // Log cash dialog
   'sd.recordsThat': 'Registra que',
   'sd.theSeller': 'el vendedor',
   'sd.logCashHoldingTail': 'tiene este efectivo para el pedido. No registra un pago — el dinero se contabiliza cuando marcas que fue entregado.',
@@ -434,7 +525,6 @@ const es: Messages = {
   'sd.logCashNotePh': 'p. ej. cobrado en la entrega',
   'sd.logging': 'Registrando…',
   'sd.logCollection': 'Registrar cobro',
-  // Items card
   'sd.noLineItems': 'Esta venta no tiene artículos.',
   'sd.colProduct': 'Producto',
   'sd.colQty': 'Cant.',
@@ -446,24 +536,20 @@ const es: Messages = {
   'sd.lot': 'Lote',
   'sd.unitCost': 'Costo unit.',
   'sd.subtotalCost': 'Costo subtotal',
-  // Totals card
   'sd.totals': 'Totales',
   'sd.subtotal': 'Subtotal',
   'sd.tax': 'Impuesto',
   'sd.shipping': 'Envío',
   'sd.outstanding': 'Pendiente',
   'sd.grossProfit': 'Ganancia bruta',
-  // Payments panel
   'sd.payments': 'Pagos',
   'sd.addPayment': 'Agregar pago',
   'sd.noPayments': 'Sin pagos registrados.',
   'sd.overpaid': 'Pagado de más',
-  // Commissions panel
   'sd.commissions': 'Comisiones',
   'sd.noCommissions': 'Sin comisiones registradas.',
   'sd.pending': 'Pendiente',
   'sd.void': 'Anulado',
-  // Add payment dialog
   'sd.addPaymentDesc': 'Registra un pago de esta venta y actualiza el total pagado.',
   'sd.method': 'Método',
   'sd.amountDop': 'Monto (DOP)',
@@ -474,7 +560,6 @@ const es: Messages = {
   'sd.referencePh': '# de transferencia, código…',
   'sd.recording': 'Registrando…',
   'sd.recordPayment': 'Registrar pago',
-  // Toasts
   'sd.toastSaleCancelled': 'Venta cancelada.',
   'sd.toastRefundReasonRequired': 'El motivo del reembolso es obligatorio.',
   'sd.toastRefundedRestock': 'Venta reembolsada y stock devuelto a los lotes.',
@@ -483,6 +568,109 @@ const es: Messages = {
   'sd.toastAmountPositive': 'El monto debe ser mayor que cero.',
   'sd.toastPickAccount': 'Elige una cuenta de dinero.',
   'sd.toastPaymentRecorded': 'Pago registrado.',
+
+  // ---- Product search (ps.*) ----
+  'ps.searchPlaceholder': 'Buscar por SKU o nombre…',
+  'ps.filterByCategory': 'Filtrar por categoría…',
+  'ps.searchCategories': 'Buscar categorías…',
+  'ps.noCategory': 'No se encontró categoría.',
+  'ps.other': 'Otros',
+  'ps.searching': 'Buscando…',
+  'ps.noProducts': 'Ningún producto coincide.',
+  'ps.out': 'agotado',
+  'ps.clearCategory': 'Quitar filtro de categoría',
+
+  // ---- New sale form (ns.*) ----
+  'ns.backToSales': 'Volver a ventas',
+  'ns.pageSubtitle': 'Configura los datos, luego agrega productos, cobra y confirma.',
+  // Quick customer dialog
+  'ns.qcTitle': 'Nuevo cliente',
+  'ns.qcDesc': 'Agrega un cliente al instante. Puedes completar el resto de sus datos luego desde la página de Personas.',
+  'ns.qcName': 'Nombre',
+  'ns.qcFullNamePh': 'Nombre completo',
+  'ns.qcPhone': 'Teléfono',
+  'ns.qcPhoneHint': 'Se usa para enviar facturas por WhatsApp.',
+  'ns.qcEmail': 'Correo (opcional)',
+  'ns.qcAdding': 'Agregando…',
+  'ns.qcAddCustomer': 'Agregar cliente',
+  'ns.qcNameRequired': 'El nombre es obligatorio.',
+  'ns.qcCustomerAddedPre': 'Cliente',
+  'ns.qcCustomerAddedSuffix': 'agregado.',
+  'ns.qcCouldNotAdd': 'No se pudo agregar el cliente.',
+  // Fulfilment hints
+  'ns.fhInStore': 'El cliente compra y se lo lleva',
+  'ns.fhPickup': 'El cliente lo recoge después en este almacén',
+  'ns.fhDelivery': 'Se envía desde este almacén al cliente',
+  // Payment method extra
+  'ns.storeCredit': 'Crédito de tienda',
+  // Confirm-gate reasons
+  'ns.gateMetaFirst': 'Primero elige vendedor y almacenes',
+  'ns.gateAddProduct': 'Agrega al menos un producto al carrito',
+  'ns.gateRecordPayment': 'Registra al menos un pago',
+  'ns.gatePickAccountAll': 'Elige una cuenta para cada pago',
+  'ns.gatePaymentPositive': 'El monto del pago debe ser mayor que cero',
+  // Toasts / dual-mode words
+  'ns.saleWord': 'Venta',
+  'ns.confirmedSuffix': 'confirmada.',
+  'ns.orderWord': 'Pedido',
+  'ns.createdSuffix': 'creado.',
+  'ns.toastConfirmFailed': 'Error al confirmar la venta.',
+  // No-accounts warnings
+  'ns.noAcctTitle': 'No hay cuentas de dinero activas',
+  'ns.noAcctBody': 'Antes de confirmar una venta necesitas al menos una cuenta de dinero activa (caja, banco, etc.). Crea una en Configuración y vuelve aquí.',
+  'ns.noAcctInline': 'No hay cuentas de dinero activas. Configura al menos una antes de registrar ventas.',
+  // Sale details card
+  'ns.saleDetails': 'Detalles de la venta',
+  'ns.walkinOption': 'Mostrador (sin cliente)',
+  'ns.tierWord': 'nivel',
+  'ns.pickSeller': 'Elige un vendedor…',
+  'ns.pickSource': 'Elige de dónde sale el stock…',
+  'ns.fulfillmentWarehouse': 'Almacén de entrega',
+  'ns.pickFulfillment': 'Elige la entrega…',
+  'ns.pickSourceFirst': 'Elige el origen primero',
+  'ns.sameAsSource': 'Igual que el origen.',
+  'ns.fulfillmentMethod': 'Método de entrega',
+  // Cart card
+  'ns.cart': 'Carrito',
+  'ns.cartMetaHint': 'Configura vendedor y almacenes arriba para habilitar el carrito.',
+  'ns.cartEmpty': 'Aún no hay artículos. Busca y elige un producto arriba para agregarlo.',
+  'ns.lineDiscount': 'Descuento de línea',
+  'ns.stock': 'Stock',
+  'ns.shortBy': 'faltan',
+  'ns.stockAtAdd': 'Stock al agregar',
+  'ns.cappedAt30': ' (limitado al 30%)',
+  'ns.manualSilenced': 'Manual (auto desactivado)',
+  'ns.removeLine': 'Quitar línea',
+  'ns.saleLevelDiscount': 'Descuento de venta (DOP)',
+  'ns.lineDiscounts': 'Descuentos de línea',
+  'ns.saleDiscount': 'Descuento de venta',
+  // Payment card
+  'ns.payment': 'Pago',
+  'ns.pickShort': 'Elige…',
+  'ns.optionalParen': '(opcional)',
+  'ns.removeTender': 'Quitar pago',
+  'ns.addTender': 'Agregar pago',
+  'ns.overpayment': 'Sobrepago',
+  // Order-mode info
+  'ns.orderInfo': 'Esto es un pedido — aquí no se cobra. El dueño registra el pago cuando el cliente paga.',
+  // Footer + confirm dialog
+  'ns.saveDraft': 'Guardar borrador',
+  'ns.confirming': 'Confirmando…',
+  'ns.creating': 'Creando…',
+  'ns.confirmSale': 'Confirmar venta',
+  'ns.createOrder': 'Crear pedido',
+  'ns.confirmSaleTitle': '¿Confirmar esta venta?',
+  'ns.createOrderTitle': '¿Crear este pedido?',
+  'ns.totalWord': 'total',
+  'ns.paidWord': 'pagado',
+  'ns.unpaidOrderParen': '(pedido sin pagar).',
+  'ns.warnOverStock': 'Advertencia: una o más líneas superan el stock disponible al agregarlas. Confirmar de todos modos dejará el lote más antiguo en negativo.',
+  'ns.outstandingBalPre': 'Un saldo pendiente de',
+  'ns.outstandingBalPost': 'permanecerá tras esta venta.',
+  'ns.overpaymentOfPre': 'Un sobrepago de',
+  'ns.overpaymentOfPost': 'será registrado.',
+  'ns.confirmNoteSale': 'Esto registra la venta, consume inventario y registra pagos y comisiones de forma atómica. No se puede deshacer sin un reembolso.',
+  'ns.confirmNoteOrder': 'Esto crea un pedido sin pagar: consume inventario y deja la comisión pendiente, pero no registra pago. El dueño registra el pago después. No se puede deshacer sin un reembolso.',
 }
 
 const messages: Record<Locale, Messages> = { en, es }

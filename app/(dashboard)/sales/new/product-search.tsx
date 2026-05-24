@@ -21,17 +21,21 @@ import {
 import { formatDOP } from '@/lib/format'
 import { searchProductsForSaleAction } from '../actions'
 import type { ProductSearchResult, SaleCategoryPickerItem } from '@/lib/sales'
+import { type Locale, t } from '@/lib/i18n/dictionary'
 
 type Props = {
   warehouseId: string
   categories: SaleCategoryPickerItem[]
   onAdd: (product: ProductSearchResult) => void
+  // Optional: shared across new-sale / online-order / edit-products screens.
+  // Defaults to English so callers that don't pass it are unaffected.
+  locale?: Locale
 }
 
 const DEBOUNCE_MS = 250
 const MIN_QUERY_LEN = 2
 
-export function ProductSearch({ warehouseId, categories, onAdd }: Props) {
+export function ProductSearch({ warehouseId, categories, onAdd, locale = 'en' }: Props) {
   const [query, setQuery] = useState('')
   const [categoryId, setCategoryId] = useState<string | null>(null)
   const [results, setResults] = useState<ProductSearchResult[]>([])
@@ -55,7 +59,7 @@ export function ProductSearch({ warehouseId, categories, onAdd }: Props) {
     for (const c of categories) {
       const mainId = c.parent_id ?? c.id
       const mainName =
-        categories.find((x) => x.id === mainId)?.name ?? 'Other'
+        categories.find((x) => x.id === mainId)?.name ?? t(locale, 'ps.other')
       if (!m.has(mainId)) m.set(mainId, { name: mainName, items: [] })
       m.get(mainId)!.items.push(c)
     }
@@ -70,7 +74,7 @@ export function ProductSearch({ warehouseId, categories, onAdd }: Props) {
         }),
       }))
       .sort((a, b) => a.name.localeCompare(b.name))
-  }, [categories])
+  }, [categories, locale])
 
   const selectedCategoryName = categoryId
     ? categories.find((c) => c.id === categoryId)?.name ?? null
@@ -107,7 +111,7 @@ export function ProductSearch({ warehouseId, categories, onAdd }: Props) {
     setLoading(true)
     setError(null)
 
-    const t = setTimeout(async () => {
+    const tmr = setTimeout(async () => {
       const res = await searchProductsForSaleAction({
         query: q,
         warehouseId,
@@ -123,7 +127,7 @@ export function ProductSearch({ warehouseId, categories, onAdd }: Props) {
       }
     }, DEBOUNCE_MS)
 
-    return () => clearTimeout(t)
+    return () => clearTimeout(tmr)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query, categoryId, warehouseId])
 
@@ -151,7 +155,7 @@ export function ProductSearch({ warehouseId, categories, onAdd }: Props) {
     if (qty <= 0) {
       return (
         <Badge className="bg-rose-100 text-rose-800 hover:bg-rose-100">
-          out
+          {t(locale, 'ps.out')}
         </Badge>
       )
     }
@@ -168,7 +172,7 @@ export function ProductSearch({ warehouseId, categories, onAdd }: Props) {
   return (
     <div ref={containerRef} className="relative space-y-2">
       <Input
-        placeholder="Search by SKU or name…"
+        placeholder={t(locale, 'ps.searchPlaceholder')}
         value={query}
         onChange={(e) => {
           setQuery(e.target.value)
@@ -192,7 +196,7 @@ export function ProductSearch({ warehouseId, categories, onAdd }: Props) {
               className="flex-1 justify-between font-normal"
             >
               <span className={selectedCategoryName ? '' : 'text-muted-foreground'}>
-                {selectedCategoryName ?? 'Filter by category…'}
+                {selectedCategoryName ?? t(locale, 'ps.filterByCategory')}
               </span>
               <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
             </Button>
@@ -202,9 +206,9 @@ export function ProductSearch({ warehouseId, categories, onAdd }: Props) {
             align="start"
           >
             <Command>
-              <CommandInput placeholder="Search categories…" />
+              <CommandInput placeholder={t(locale, 'ps.searchCategories')} />
               <CommandList>
-                <CommandEmpty>No category found.</CommandEmpty>
+                <CommandEmpty>{t(locale, 'ps.noCategory')}</CommandEmpty>
                 {groups.map((g) => (
                   <CommandGroup key={g.mainId} heading={g.name}>
                     {g.items.map((c) => {
@@ -233,7 +237,7 @@ export function ProductSearch({ warehouseId, categories, onAdd }: Props) {
             variant="ghost"
             size="icon"
             onClick={clearCategory}
-            aria-label="Clear category filter"
+            aria-label={t(locale, 'ps.clearCategory')}
           >
             <X className="size-4" />
           </Button>
@@ -244,7 +248,7 @@ export function ProductSearch({ warehouseId, categories, onAdd }: Props) {
         <div className="absolute left-0 right-0 top-full z-10 mt-1 max-h-[28rem] overflow-y-auto rounded-md border bg-popover shadow-lg">
           {loading && (
             <div className="px-3 py-2 text-sm text-muted-foreground">
-              Searching…
+              {t(locale, 'ps.searching')}
             </div>
           )}
           {error && (
@@ -252,7 +256,7 @@ export function ProductSearch({ warehouseId, categories, onAdd }: Props) {
           )}
           {!loading && !error && results.length === 0 && (
             <div className="px-3 py-2 text-sm text-muted-foreground">
-              No products match.
+              {t(locale, 'ps.noProducts')}
             </div>
           )}
           {results.map((r) => (

@@ -15,14 +15,16 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { createCustomerQuick } from './customer-actions'
 import type { CustomerPickerItem } from '@/lib/sales'
+import { type Locale, t } from '@/lib/i18n/dictionary'
 
 type Props = {
   open: boolean
   onOpenChange: (open: boolean) => void
   onCreated: (customer: CustomerPickerItem) => void
+  locale: Locale
 }
 
-export function QuickCustomerDialog({ open, onOpenChange, onCreated }: Props) {
+export function QuickCustomerDialog({ open, onOpenChange, onCreated, locale }: Props) {
   const [fullName, setFullName] = useState('')
   const [phone, setPhone] = useState('')
   const [email, setEmail] = useState('')
@@ -44,7 +46,7 @@ export function QuickCustomerDialog({ open, onOpenChange, onCreated }: Props) {
   async function handleCreate() {
     const name = fullName.trim()
     if (!name) {
-      toast.error('Name is required.')
+      toast.error(t(locale, 'ns.qcNameRequired'))
       return
     }
     setSubmitting(true)
@@ -55,7 +57,7 @@ export function QuickCustomerDialog({ open, onOpenChange, onCreated }: Props) {
         email: email.trim() || null,
       })
       if (res.ok) {
-        toast.success(`Customer "${res.customer.full_name}" added.`)
+        toast.success(`${t(locale, 'ns.qcCustomerAddedPre')} "${res.customer.full_name}" ${t(locale, 'ns.qcCustomerAddedSuffix')}`)
         onCreated(res.customer)
         reset()
         onOpenChange(false)
@@ -64,7 +66,7 @@ export function QuickCustomerDialog({ open, onOpenChange, onCreated }: Props) {
         setSubmitting(false)
       }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Could not add customer.')
+      toast.error(err instanceof Error ? err.message : t(locale, 'ns.qcCouldNotAdd'))
       setSubmitting(false)
     }
   }
@@ -73,22 +75,21 @@ export function QuickCustomerDialog({ open, onOpenChange, onCreated }: Props) {
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>New customer</DialogTitle>
+          <DialogTitle>{t(locale, 'ns.qcTitle')}</DialogTitle>
           <DialogDescription>
-            Add a customer on the fly. You can fill in the rest of their
-            details later from the People page.
+            {t(locale, 'ns.qcDesc')}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-3">
           <div className="space-y-1">
             <Label className="text-xs">
-              Name <span className="text-rose-600">*</span>
+              {t(locale, 'ns.qcName')} <span className="text-rose-600">*</span>
             </Label>
             <Input
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
-              placeholder="Full name"
+              placeholder={t(locale, 'ns.qcFullNamePh')}
               autoFocus
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {
@@ -100,7 +101,7 @@ export function QuickCustomerDialog({ open, onOpenChange, onCreated }: Props) {
           </div>
 
           <div className="space-y-1">
-            <Label className="text-xs">Phone</Label>
+            <Label className="text-xs">{t(locale, 'ns.qcPhone')}</Label>
             <Input
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
@@ -108,12 +109,12 @@ export function QuickCustomerDialog({ open, onOpenChange, onCreated }: Props) {
               inputMode="tel"
             />
             <p className="text-xs text-muted-foreground">
-              Used for sending invoices by WhatsApp.
+              {t(locale, 'ns.qcPhoneHint')}
             </p>
           </div>
 
           <div className="space-y-1">
-            <Label className="text-xs">Email (optional)</Label>
+            <Label className="text-xs">{t(locale, 'ns.qcEmail')}</Label>
             <Input
               type="email"
               value={email}
@@ -130,10 +131,10 @@ export function QuickCustomerDialog({ open, onOpenChange, onCreated }: Props) {
             onClick={() => handleOpenChange(false)}
             disabled={submitting}
           >
-            Cancel
+            {t(locale, 'common.cancel')}
           </Button>
           <Button type="button" onClick={() => void handleCreate()} disabled={submitting}>
-            {submitting ? 'Adding…' : 'Add customer'}
+            {submitting ? t(locale, 'ns.qcAdding') : t(locale, 'ns.qcAddCustomer')}
           </Button>
         </DialogFooter>
       </DialogContent>
