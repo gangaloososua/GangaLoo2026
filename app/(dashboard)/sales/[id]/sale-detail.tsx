@@ -57,6 +57,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { formatDOP, formatDateTime } from '@/lib/format'
+import { type Locale, localeForRole, t, plural } from '@/lib/i18n/dictionary'
 import type {
   SaleDetail as SaleDetailType,
   SaleStatus,
@@ -73,19 +74,21 @@ const STATUS_VARIANT: Record<SaleStatus, string> = {
   cancelled: 'bg-rose-100 text-rose-800',
 }
 
-const STATUS_LABEL: Record<SaleStatus, string> = {
-  draft: 'Draft',
-  confirmed: 'Confirmed',
-  paid: 'Paid',
-  partially_paid: 'Partially paid',
-  refunded: 'Refunded',
-  cancelled: 'Cancelled',
+// Status -> dictionary key (label resolved via t() at render time).
+const STATUS_KEY: Record<SaleStatus, string> = {
+  draft: 'status.draft',
+  confirmed: 'status.confirmed',
+  paid: 'status.paid',
+  partially_paid: 'status.partiallyPaid',
+  refunded: 'status.refunded',
+  cancelled: 'status.cancelled',
 }
 
-const FULFILLMENT_LABEL: Record<string, string> = {
-  in_store: 'In-store',
-  pickup: 'Pickup',
-  delivery: 'Delivery',
+// Fulfilment method -> dictionary key.
+const FULFILLMENT_KEY: Record<string, string> = {
+  in_store: 'fulfill.in_store',
+  pickup: 'fulfill.pickup',
+  delivery: 'fulfill.delivery',
 }
 
 export function SaleDetail({
@@ -97,11 +100,12 @@ export function SaleDetail({
   moneyAccounts: MoneyAccount[]
   role: Role
 }) {
+  const locale = localeForRole(role)
   return (
     <div className="space-y-4">
-      <HeaderCard sale={sale} role={role} />
-      <ItemsCard items={sale.items} />
-      <SummaryCards sale={sale} moneyAccounts={moneyAccounts} />
+      <HeaderCard sale={sale} role={role} locale={locale} />
+      <ItemsCard items={sale.items} locale={locale} />
+      <SummaryCards sale={sale} moneyAccounts={moneyAccounts} locale={locale} />
     </div>
   )
 }
@@ -110,7 +114,7 @@ export function SaleDetail({
 // HeaderCard — invoice number, status, dates, customer, seller, warehouse
 // ---------------------------------------------------------------------------
 
-function HeaderCard({ sale, role }: { sale: SaleDetailType; role: Role }) {
+function HeaderCard({ sale, role, locale }: { sale: SaleDetailType; role: Role; locale: Locale }) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
 
@@ -143,7 +147,7 @@ function HeaderCard({ sale, role }: { sale: SaleDetailType; role: Role }) {
     startTransition(async () => {
       const res = await cancelSale(sale.id, cancelReason)
       if (res.ok) {
-        toast.success('Sale cancelled.')
+        toast.success(t(locale, 'sd.toastSaleCancelled'))
         setCancelOpen(false)
         setCancelReason('')
         router.refresh()
@@ -155,14 +159,14 @@ function HeaderCard({ sale, role }: { sale: SaleDetailType; role: Role }) {
 
   function doRefund() {
     if (!refundReason.trim()) {
-      toast.error('Refund reason is required.')
+      toast.error(t(locale, 'sd.toastRefundReasonRequired'))
       return
     }
     startTransition(async () => {
       const res = await refundSale(sale.id, refundReason, refundRestock)
       if (res.ok) {
         toast.success(
-          refundRestock ? 'Sale refunded and stock returned to lots.' : 'Sale refunded.',
+          refundRestock ? t(locale, 'sd.toastRefundedRestock') : t(locale, 'sd.toastRefunded'),
         )
         setRefundOpen(false)
         setRefundReason('')
@@ -182,38 +186,38 @@ function HeaderCard({ sale, role }: { sale: SaleDetailType; role: Role }) {
             <div className="space-y-1">
               <div className="flex items-center gap-3">
                 <CardTitle className="font-mono text-xl">
-                  {sale.invoice_number ?? '— (draft)'}
+                  {sale.invoice_number ?? t(locale, 'sd.draftPlaceholder')}
                 </CardTitle>
                 <Badge variant="secondary" className={STATUS_VARIANT[sale.status]}>
-                  {STATUS_LABEL[sale.status]}
+                  {t(locale, STATUS_KEY[sale.status])}
                 </Badge>
                 {hasAnyAction && (
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
                         <MoreVertical className="h-4 w-4" />
-                        <span className="sr-only">Actions</span>
+                        <span className="sr-only">{t(locale, 'sd.actions')}</span>
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="start">
                       <DropdownMenuItem asChild>
                         <Link href={`/sales/${sale.id}/print`} target="_blank" rel="noopener noreferrer">
                           <Printer className="mr-2 h-4 w-4" />
-                          Print receipt
+                          {t(locale, 'sd.printReceipt')}
                         </Link>
                       </DropdownMenuItem>
                       {waHref && (
                         <DropdownMenuItem asChild>
                           <a href={waHref} target="_blank" rel="noopener noreferrer">
                             <MessageCircle className="mr-2 h-4 w-4" />
-                            Send by WhatsApp
+                            {t(locale, 'sd.sendWhatsApp')}
                           </a>
                         </DropdownMenuItem>
                       )}
                       {canLogCash && (
                         <DropdownMenuItem onClick={() => setLogCashOpen(true)}>
                           <Banknote className="mr-2 h-4 w-4" />
-                          Log cash collected
+                          {t(locale, 'sd.logCashCollected')}
                         </DropdownMenuItem>
                       )}
                       {(canCancel || canRefund) && <DropdownMenuSeparator />}
@@ -221,14 +225,14 @@ function HeaderCard({ sale, role }: { sale: SaleDetailType; role: Role }) {
                         <DropdownMenuItem asChild>
                           <Link href={`/sales/${sale.id}/edit-products`}>
                             <Pencil className="mr-2 h-4 w-4" />
-                            Edit products
+                            {t(locale, 'sd.editProducts')}
                           </Link>
                         </DropdownMenuItem>
                       )}
                       {canCancel && (
                         <DropdownMenuItem onClick={() => setCancelOpen(true)}>
                           <XCircle className="mr-2 h-4 w-4" />
-                          Cancel sale
+                          {t(locale, 'sd.cancelSale')}
                         </DropdownMenuItem>
                       )}
                       {canRefund && (
@@ -237,7 +241,7 @@ function HeaderCard({ sale, role }: { sale: SaleDetailType; role: Role }) {
                           className="text-rose-700 focus:text-rose-700"
                         >
                           <RotateCcw className="mr-2 h-4 w-4" />
-                          Refund sale
+                          {t(locale, 'sd.refundSale')}
                         </DropdownMenuItem>
                       )}
                     </DropdownMenuContent>
@@ -245,23 +249,23 @@ function HeaderCard({ sale, role }: { sale: SaleDetailType; role: Role }) {
                 )}
               </div>
               <p className="text-sm text-muted-foreground">
-                Sold {formatDateTime(sale.sold_at)}
+                {t(locale, 'sd.sold')} {formatDateTime(sale.sold_at)}
                 {sale.confirmed_at && (
-                  <> · confirmed {formatDateTime(sale.confirmed_at)}</>
+                  <> · {t(locale, 'sd.confirmedAt')} {formatDateTime(sale.confirmed_at)}</>
                 )}
-                {sale.paid_at && <> · paid {formatDateTime(sale.paid_at)}</>}
+                {sale.paid_at && <> · {t(locale, 'sd.paidAt')} {formatDateTime(sale.paid_at)}</>}
               </p>
             </div>
             <div className="text-right">
               <div className="text-xs uppercase tracking-wide text-muted-foreground">
-                Total
+                {t(locale, 'sd.totalLabel')}
               </div>
               <div className="text-2xl font-semibold tabular-nums">
                 {formatDOP(sale.total_cents)}
               </div>
               {sale.paid_cents !== sale.total_cents && (
                 <div className="text-xs text-muted-foreground tabular-nums">
-                  {formatDOP(sale.paid_cents)} paid
+                  {formatDOP(sale.paid_cents)} {t(locale, 'sd.paidSuffix')}
                 </div>
               )}
             </div>
@@ -269,32 +273,32 @@ function HeaderCard({ sale, role }: { sale: SaleDetailType; role: Role }) {
         </CardHeader>
         <CardContent className="pt-0">
           <dl className="grid grid-cols-1 gap-x-6 gap-y-2 text-sm sm:grid-cols-2 lg:grid-cols-3">
-            <Field label="Customer" value={sale.customer_name ?? 'Walk-in'} />
-            <Field label="Seller" value={sale.seller_name ?? '—'} />
+            <Field label={t(locale, 'sales.col.customer')} value={sale.customer_name ?? t(locale, 'sales.walkIn')} />
+            <Field label={t(locale, 'sales.col.seller')} value={sale.seller_name ?? '—'} />
             <Field
-              label="Fulfillment"
+              label={t(locale, 'sd.fulfillment')}
               value={`${sale.fulfillment_warehouse_name} · ${
-                FULFILLMENT_LABEL[sale.fulfillment_method] ?? sale.fulfillment_method
+                t(locale, FULFILLMENT_KEY[sale.fulfillment_method] ?? '') || sale.fulfillment_method
               }`}
             />
             {sale.source_warehouse_name &&
               sale.source_warehouse_id !== sale.fulfillment_warehouse_id && (
                 <Field
-                  label="Source warehouse"
+                  label={t(locale, 'sd.sourceWarehouse')}
                   value={sale.source_warehouse_name}
                 />
               )}
             {sale.tracking_number && (
-              <Field label="Tracking" value={sale.tracking_number} />
+              <Field label={t(locale, 'sd.tracking')} value={sale.tracking_number} />
             )}
             {sale.delivery_notes && (
-              <Field label="Delivery notes" value={sale.delivery_notes} />
+              <Field label={t(locale, 'sd.deliveryNotes')} value={sale.delivery_notes} />
             )}
             {sale.refunded_at && (
               <Field
-                label="Refunded"
+                label={t(locale, 'status.refunded')}
                 value={`${formatDateTime(sale.refunded_at)} — ${
-                  sale.refund_reason ?? 'no reason given'
+                  sale.refund_reason ?? t(locale, 'sd.noReason')
                 }`}
               />
             )}
@@ -306,19 +310,18 @@ function HeaderCard({ sale, role }: { sale: SaleDetailType; role: Role }) {
       <AlertDialog open={cancelOpen} onOpenChange={setCancelOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Cancel this sale?</AlertDialogTitle>
+            <AlertDialogTitle>{t(locale, 'sd.cancelTitle')}</AlertDialogTitle>
             <AlertDialogDescription>
-              The sale will move to <strong>cancelled</strong>. Stock movements are not
-              reversed. If this sale already had stock pulled, refund it instead.
+              {t(locale, 'sd.cancelDesc')}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="space-y-2">
             <Label htmlFor="cancel-reason" className="text-sm">
-              Reason (optional)
+              {t(locale, 'sd.reasonOptional')}
             </Label>
             <Textarea
               id="cancel-reason"
-              placeholder="Operator error, duplicate entry, …"
+              placeholder={t(locale, 'sd.cancelReasonPh')}
               value={cancelReason}
               onChange={(e) => setCancelReason(e.target.value)}
               rows={3}
@@ -326,13 +329,13 @@ function HeaderCard({ sale, role }: { sale: SaleDetailType; role: Role }) {
             />
           </div>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={pending}>Keep sale</AlertDialogCancel>
+            <AlertDialogCancel disabled={pending}>{t(locale, 'sd.keepSale')}</AlertDialogCancel>
             <AlertDialogAction
               onClick={doCancel}
               disabled={pending}
               className="bg-rose-600 hover:bg-rose-700"
             >
-              {pending ? 'Cancelling…' : 'Cancel sale'}
+              {pending ? t(locale, 'sd.cancelling') : t(locale, 'sd.cancelSale')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -342,21 +345,19 @@ function HeaderCard({ sale, role }: { sale: SaleDetailType; role: Role }) {
       <Dialog open={refundOpen} onOpenChange={setRefundOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Refund this sale?</DialogTitle>
+            <DialogTitle>{t(locale, 'sd.refundTitle')}</DialogTitle>
             <DialogDescription>
-              Status moves to <strong>refunded</strong>. Audit-trail stock movements
-              are written for every consumed lot. All commissions on this sale are
-              voided (including ones already paid out, which creates a clawback debt).
+              {t(locale, 'sd.refundDesc')}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="refund-reason" className="text-sm">
-                Refund reason <span className="text-rose-600">*</span>
+                {t(locale, 'sd.refundReason')} <span className="text-rose-600">*</span>
               </Label>
               <Textarea
                 id="refund-reason"
-                placeholder="Customer returned product, wrong item, …"
+                placeholder={t(locale, 'sd.refundReasonPh')}
                 value={refundReason}
                 onChange={(e) => setRefundReason(e.target.value)}
                 rows={3}
@@ -373,8 +374,7 @@ function HeaderCard({ sale, role }: { sale: SaleDetailType; role: Role }) {
                 className="mt-0.5"
               />
               <span>
-                <strong>Add stock back to lots.</strong> Uncheck only if the items
-                were damaged or destroyed and won't return to inventory.
+                <strong>{t(locale, 'sd.restockBold')}</strong> {t(locale, 'sd.restockHint')}
               </span>
             </label>
           </div>
@@ -384,14 +384,14 @@ function HeaderCard({ sale, role }: { sale: SaleDetailType; role: Role }) {
               onClick={() => setRefundOpen(false)}
               disabled={pending}
             >
-              Cancel
+              {t(locale, 'common.cancel')}
             </Button>
             <Button
               onClick={doRefund}
               disabled={pending || !refundReason.trim()}
               className="bg-rose-600 hover:bg-rose-700 text-white"
             >
-              {pending ? 'Refunding…' : 'Refund sale'}
+              {pending ? t(locale, 'sd.refunding') : t(locale, 'sd.refundSale')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -404,6 +404,7 @@ function HeaderCard({ sale, role }: { sale: SaleDetailType; role: Role }) {
         outstandingCents={outstandingForCash}
         sellerName={sale.seller_name}
         isOnBehalf={isOwnerEquivalent(role)}
+        locale={locale}
       />
     </>
   )
@@ -416,6 +417,7 @@ function LogCashDialog({
   outstandingCents,
   sellerName,
   isOnBehalf,
+  locale,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -423,6 +425,7 @@ function LogCashDialog({
   outstandingCents: number
   sellerName: string | null
   isOnBehalf: boolean
+  locale: Locale
 }) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
@@ -442,7 +445,7 @@ function LogCashDialog({
   function doSubmit() {
     const amount = Number(amountStr)
     if (!Number.isFinite(amount) || amount <= 0) {
-      toast.error('Amount must be greater than zero.')
+      toast.error(t(locale, 'sd.toastAmountPositive'))
       return
     }
     startTransition(async () => {
@@ -452,7 +455,7 @@ function LogCashDialog({
         note: note.trim() || undefined,
       })
       if (res.ok) {
-        toast.success('Cash collection logged.')
+        toast.success(t(locale, 'sd.toastCashLogged'))
         handleOpenChange(false)
         router.refresh()
       } else {
@@ -465,17 +468,17 @@ function LogCashDialog({
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Log cash collected</DialogTitle>
+          <DialogTitle>{t(locale, 'sd.logCashCollected')}</DialogTitle>
           <DialogDescription>
             {isOnBehalf
-              ? `Records that ${sellerName ?? 'the seller'} is holding this cash for the order. It does not record a payment — the money is booked when you mark it handed in.`
-              : 'Records that you are holding this cash for the order. It does not pay the order off — the owner books it when you hand the cash in.'}
+              ? `${t(locale, 'sd.recordsThat')} ${sellerName ?? t(locale, 'sd.theSeller')} ${t(locale, 'sd.logCashHoldingTail')}`
+              : t(locale, 'sd.logCashSelf')}
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           <div className="space-y-1">
             <Label htmlFor="logcash-amount" className="text-xs">
-              Amount collected (DOP) <span className="text-rose-600">*</span>
+              {t(locale, 'sd.amountCollected')} <span className="text-rose-600">*</span>
             </Label>
             <Input
               id="logcash-amount"
@@ -487,16 +490,16 @@ function LogCashDialog({
               disabled={pending}
             />
             <p className="text-xs text-muted-foreground">
-              Outstanding on this order: {formatDOP(Math.max(outstandingCents, 0))}
+              {t(locale, 'sd.outstandingOnOrder')} {formatDOP(Math.max(outstandingCents, 0))}
             </p>
           </div>
           <div className="space-y-1">
             <Label htmlFor="logcash-note" className="text-xs">
-              Note (optional)
+              {t(locale, 'sd.noteOptional')}
             </Label>
             <Textarea
               id="logcash-note"
-              placeholder="e.g. collected at delivery"
+              placeholder={t(locale, 'sd.logCashNotePh')}
               value={note}
               onChange={(e) => setNote(e.target.value)}
               rows={2}
@@ -506,10 +509,10 @@ function LogCashDialog({
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => handleOpenChange(false)} disabled={pending}>
-            Cancel
+            {t(locale, 'common.cancel')}
           </Button>
           <Button onClick={doSubmit} disabled={pending}>
-            {pending ? 'Logging…' : 'Log collection'}
+            {pending ? t(locale, 'sd.logging') : t(locale, 'sd.logCollection')}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -532,12 +535,12 @@ function Field({ label, value }: { label: string; value: string }) {
 // ItemsCard — line items with expand-row showing FIFO lot consumption
 // ---------------------------------------------------------------------------
 
-function ItemsCard({ items }: { items: SaleDetailItem[] }) {
+function ItemsCard({ items, locale }: { items: SaleDetailItem[]; locale: Locale }) {
   if (items.length === 0) {
     return (
       <Card>
         <CardContent className="py-12 text-center text-sm text-muted-foreground">
-          This sale has no line items.
+          {t(locale, 'sd.noLineItems')}
         </CardContent>
       </Card>
     )
@@ -547,9 +550,9 @@ function ItemsCard({ items }: { items: SaleDetailItem[] }) {
     <Card>
       <CardHeader>
         <CardTitle className="text-base">
-          Items
+          {t(locale, 'sales.col.items')}
           <span className="ml-2 text-sm font-normal text-muted-foreground">
-            ({items.length} {items.length === 1 ? 'product' : 'products'})
+            ({items.length} {plural(locale, items.length, 'product.one', 'product.other')})
           </span>
         </CardTitle>
       </CardHeader>
@@ -558,17 +561,17 @@ function ItemsCard({ items }: { items: SaleDetailItem[] }) {
           <TableHeader>
             <TableRow>
               <TableHead className="w-10"></TableHead>
-              <TableHead>Product</TableHead>
-              <TableHead className="text-right">Qty</TableHead>
-              <TableHead className="text-right">Unit price</TableHead>
-              <TableHead className="text-right">Discount</TableHead>
-              <TableHead className="text-right">Line total</TableHead>
-              <TableHead className="text-right">COGS</TableHead>
+              <TableHead>{t(locale, 'sd.colProduct')}</TableHead>
+              <TableHead className="text-right">{t(locale, 'sd.colQty')}</TableHead>
+              <TableHead className="text-right">{t(locale, 'sd.colUnitPrice')}</TableHead>
+              <TableHead className="text-right">{t(locale, 'sd.colDiscount')}</TableHead>
+              <TableHead className="text-right">{t(locale, 'sd.colLineTotal')}</TableHead>
+              <TableHead className="text-right">{t(locale, 'sd.colCogs')}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {items.map((item) => (
-              <ItemRow key={item.id} item={item} />
+              <ItemRow key={item.id} item={item} locale={locale} />
             ))}
           </TableBody>
         </Table>
@@ -577,7 +580,7 @@ function ItemsCard({ items }: { items: SaleDetailItem[] }) {
   )
 }
 
-function ItemRow({ item }: { item: SaleDetailItem }) {
+function ItemRow({ item, locale }: { item: SaleDetailItem; locale: Locale }) {
   const [open, setOpen] = useState(false)
   const hasTrail = item.lot_consumption.length > 0
 
@@ -627,15 +630,15 @@ function ItemRow({ item }: { item: SaleDetailItem }) {
           <TableCell colSpan={7} className="py-3">
             <div className="ml-10 space-y-1">
               <div className="text-xs uppercase tracking-wide text-muted-foreground">
-                FIFO lot consumption
+                {t(locale, 'sd.fifoConsumption')}
               </div>
               <table className="w-full text-sm">
                 <thead>
                   <tr className="text-xs text-muted-foreground">
-                    <th className="py-1 text-left font-normal">Lot</th>
-                    <th className="py-1 text-right font-normal">Qty</th>
-                    <th className="py-1 text-right font-normal">Unit cost</th>
-                    <th className="py-1 text-right font-normal">Subtotal cost</th>
+                    <th className="py-1 text-left font-normal">{t(locale, 'sd.lot')}</th>
+                    <th className="py-1 text-right font-normal">{t(locale, 'sd.colQty')}</th>
+                    <th className="py-1 text-right font-normal">{t(locale, 'sd.unitCost')}</th>
+                    <th className="py-1 text-right font-normal">{t(locale, 'sd.subtotalCost')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -668,42 +671,37 @@ function ItemRow({ item }: { item: SaleDetailItem }) {
 }
 
 // ---------------------------------------------------------------------------
-// SummaryCards — totals breakdown + small placeholders for payments/commissions
-// (richer panels arrive in 9.3)
-// ---------------------------------------------------------------------------
-
-// ---------------------------------------------------------------------------
 // TotalsCard — totals breakdown + outstanding balance
 // ---------------------------------------------------------------------------
 
-function TotalsCard({ sale }: { sale: SaleDetailType }) {
+function TotalsCard({ sale, locale }: { sale: SaleDetailType; locale: Locale }) {
   const outstanding = sale.total_cents - sale.paid_cents
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">Totals</CardTitle>
+        <CardTitle className="text-base">{t(locale, 'sd.totals')}</CardTitle>
       </CardHeader>
       <CardContent>
         <dl className="space-y-1 text-sm">
-          <Row label="Subtotal" value={formatDOP(sale.subtotal_cents)} />
+          <Row label={t(locale, 'sd.subtotal')} value={formatDOP(sale.subtotal_cents)} />
           {sale.discount_cents > 0 && (
             <Row
-              label="Discount"
+              label={t(locale, 'sd.colDiscount')}
               value={`-${formatDOP(sale.discount_cents)}`}
               tone="negative"
             />
           )}
           {sale.tax_cents > 0 && (
-            <Row label="Tax" value={formatDOP(sale.tax_cents)} />
+            <Row label={t(locale, 'sd.tax')} value={formatDOP(sale.tax_cents)} />
           )}
           {sale.shipping_cents > 0 && (
-            <Row label="Shipping" value={formatDOP(sale.shipping_cents)} />
+            <Row label={t(locale, 'sd.shipping')} value={formatDOP(sale.shipping_cents)} />
           )}
-          <Row label="Total" value={formatDOP(sale.total_cents)} bold />
-          <Row label="Paid" value={formatDOP(sale.paid_cents)} />
+          <Row label={t(locale, 'sales.col.total')} value={formatDOP(sale.total_cents)} bold />
+          <Row label={t(locale, 'sales.col.paid')} value={formatDOP(sale.paid_cents)} />
           {outstanding > 0 && (
             <Row
-              label="Outstanding"
+              label={t(locale, 'sd.outstanding')}
               value={formatDOP(outstanding)}
               tone="negative"
               bold
@@ -711,14 +709,14 @@ function TotalsCard({ sale }: { sale: SaleDetailType }) {
           )}
           {sale.cogs_cents != null && (
             <Row
-              label="COGS"
+              label={t(locale, 'sd.colCogs')}
               value={formatDOP(sale.cogs_cents)}
               tone="muted"
             />
           )}
           {sale.gross_profit_cents != null && (
             <Row
-              label="Gross profit"
+              label={t(locale, 'sd.grossProfit')}
               value={formatDOP(sale.gross_profit_cents)}
               tone="muted"
             />
@@ -730,8 +728,7 @@ function TotalsCard({ sale }: { sale: SaleDetailType }) {
 }
 
 // ---------------------------------------------------------------------------
-// PaymentsPanel — payments list + outstanding line + "Add payment" placeholder
-// (real action wires up in 9.5)
+// PaymentsPanel — payments list + outstanding line + "Add payment"
 // ---------------------------------------------------------------------------
 
 const METHOD_ICON: Record<string, typeof Banknote> = {
@@ -744,22 +741,25 @@ const METHOD_ICON: Record<string, typeof Banknote> = {
   mixed: Wallet,
 }
 
-const METHOD_LABEL: Record<string, string> = {
-  cash: 'Cash',
-  card: 'Card',
-  transfer: 'Transfer',
-  paypal: 'PayPal',
-  stripe: 'Stripe',
-  credit: 'Credit',
-  mixed: 'Mixed',
+// Payment method -> dictionary key.
+const METHOD_KEY: Record<string, string> = {
+  cash: 'method.cash',
+  card: 'method.card',
+  transfer: 'method.transfer',
+  paypal: 'method.paypal',
+  stripe: 'method.stripe',
+  credit: 'method.credit',
+  mixed: 'method.mixed',
 }
 
 function PaymentsPanel({
   sale,
   moneyAccounts,
+  locale,
 }: {
   sale: SaleDetailType
   moneyAccounts: MoneyAccount[]
+  locale: Locale
 }) {
   const outstanding = sale.total_cents - sale.paid_cents
   const isCancelled = sale.status === 'cancelled' || sale.status === 'refunded'
@@ -778,7 +778,7 @@ function PaymentsPanel({
     <Card>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
         <CardTitle className="text-base">
-          Payments
+          {t(locale, 'sd.payments')}
           <span className="ml-2 text-sm font-normal text-muted-foreground">
             ({sale.payments.length})
           </span>
@@ -786,13 +786,13 @@ function PaymentsPanel({
         {canAddPayment && (
           <Button size="sm" variant="outline" onClick={() => setAddOpen(true)}>
             <Plus className="mr-1 h-3.5 w-3.5" />
-            Add payment
+            {t(locale, 'sd.addPayment')}
           </Button>
         )}
       </CardHeader>
       <CardContent>
         {sale.payments.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No payments recorded.</p>
+          <p className="text-sm text-muted-foreground">{t(locale, 'sd.noPayments')}</p>
         ) : (
           <ul className="divide-y">
             {sale.payments.map((p) => {
@@ -805,7 +805,7 @@ function PaymentsPanel({
                     </div>
                     <div>
                       <div className="text-sm font-medium">
-                        {METHOD_LABEL[p.method] ?? p.method}
+                        {t(locale, METHOD_KEY[p.method] ?? '') || p.method}
                       </div>
                       <div className="text-xs text-muted-foreground">
                         {p.money_account_name} . {formatDateTime(p.paid_at)}
@@ -825,18 +825,18 @@ function PaymentsPanel({
         {sale.payments.length > 0 && (
           <div className="mt-3 border-t pt-3 text-sm">
             <div className="flex justify-between">
-              <dt className="text-muted-foreground">Paid</dt>
+              <dt className="text-muted-foreground">{t(locale, 'sales.col.paid')}</dt>
               <dd className="tabular-nums">{formatDOP(sale.paid_cents)}</dd>
             </div>
             {outstanding > 0 && (
               <div className="flex justify-between font-medium text-rose-700">
-                <dt>Outstanding</dt>
+                <dt>{t(locale, 'sd.outstanding')}</dt>
                 <dd className="tabular-nums">{formatDOP(outstanding)}</dd>
               </div>
             )}
             {outstanding < 0 && (
               <div className="flex justify-between font-medium text-amber-700">
-                <dt>Overpaid</dt>
+                <dt>{t(locale, 'sd.overpaid')}</dt>
                 <dd className="tabular-nums">{formatDOP(-outstanding)}</dd>
               </div>
             )}
@@ -849,6 +849,7 @@ function PaymentsPanel({
         saleId={sale.id}
         suggestedAmountCents={suggestedAmountCents}
         moneyAccounts={moneyAccounts}
+        locale={locale}
       />
     </Card>
   )
@@ -869,7 +870,7 @@ type CommissionsByEarner = {
   rows: number
 }
 
-function CommissionsPanel({ sale }: { sale: SaleDetailType }) {
+function CommissionsPanel({ sale, locale }: { sale: SaleDetailType; locale: Locale }) {
   const grouped = new Map<string, CommissionsByEarner>()
   for (const c of sale.commissions) {
     let g = grouped.get(c.earner_id)
@@ -902,26 +903,28 @@ function CommissionsPanel({ sale }: { sale: SaleDetailType }) {
     <Card>
       <CardHeader>
         <CardTitle className="text-base">
-          Commissions
+          {t(locale, 'sd.commissions')}
           <span className="ml-2 text-sm font-normal text-muted-foreground">
-            ({sale.commissions.length} {sale.commissions.length === 1 ? 'row' : 'rows'})
+            ({sale.commissions.length} {plural(locale, sale.commissions.length, 'row.one', 'row.other')})
           </span>
         </CardTitle>
       </CardHeader>
       <CardContent>
         {earners.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No commissions recorded.</p>
+          <p className="text-sm text-muted-foreground">{t(locale, 'sd.noCommissions')}</p>
         ) : (
           <ul className="divide-y">
             {earners.map((g) => {
-              const rolesLabel = Array.from(g.roles).join(' + ')
+              const rolesLabel = Array.from(g.roles)
+                .map((r) => t(locale, r === 'seller' ? 'role.seller' : 'role.distributor'))
+                .join(' + ')
               return (
                 <li key={g.earner_id} className="py-2">
                   <div className="flex items-center justify-between">
                     <div>
                       <div className="text-sm font-medium">{g.earner_name}</div>
                       <div className="text-xs capitalize text-muted-foreground">
-                        {rolesLabel} . {g.rows} {g.rows === 1 ? 'line' : 'lines'}
+                        {rolesLabel} . {g.rows} {plural(locale, g.rows, 'line.one', 'line.other')}
                       </div>
                     </div>
                     <div className="text-right tabular-nums text-sm font-medium">
@@ -932,17 +935,17 @@ function CommissionsPanel({ sale }: { sale: SaleDetailType }) {
                     <div className="mt-1 flex gap-3 text-xs">
                       {g.paid_cents > 0 && (
                         <span className="text-emerald-700">
-                          Paid {formatDOP(g.paid_cents)}
+                          {t(locale, 'sales.col.paid')} {formatDOP(g.paid_cents)}
                         </span>
                       )}
                       {g.pending_cents > 0 && (
                         <span className="text-amber-700">
-                          Pending {formatDOP(g.pending_cents)}
+                          {t(locale, 'sd.pending')} {formatDOP(g.pending_cents)}
                         </span>
                       )}
                       {g.void_cents > 0 && (
                         <span className="text-muted-foreground">
-                          Void {formatDOP(g.void_cents)}
+                          {t(locale, 'sd.void')} {formatDOP(g.void_cents)}
                         </span>
                       )}
                     </div>
@@ -964,15 +967,17 @@ function CommissionsPanel({ sale }: { sale: SaleDetailType }) {
 function SummaryCards({
   sale,
   moneyAccounts,
+  locale,
 }: {
   sale: SaleDetailType
   moneyAccounts: MoneyAccount[]
+  locale: Locale
 }) {
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-      <TotalsCard sale={sale} />
-      <PaymentsPanel sale={sale} moneyAccounts={moneyAccounts} />
-      <CommissionsPanel sale={sale} />
+      <TotalsCard sale={sale} locale={locale} />
+      <PaymentsPanel sale={sale} moneyAccounts={moneyAccounts} locale={locale} />
+      <CommissionsPanel sale={sale} locale={locale} />
     </div>
   )
 }
@@ -1017,26 +1022,28 @@ function Row({
     </div>
   )
 }
+
 // ---------------------------------------------------------------------------
 // AddPaymentDialog — records a payment against a sale
 // ---------------------------------------------------------------------------
 
-const PAYMENT_METHODS: Array<{ value: string; label: string }> = [
-  { value: 'cash', label: 'Cash' },
-  { value: 'card', label: 'Card' },
-  { value: 'transfer', label: 'Transfer' },
-  { value: 'paypal', label: 'PayPal' },
-  { value: 'stripe', label: 'Stripe' },
-  { value: 'credit', label: 'Credit' },
-  { value: 'mixed', label: 'Mixed' },
+const PAYMENT_METHODS: Array<{ value: string; labelKey: string }> = [
+  { value: 'cash', labelKey: 'method.cash' },
+  { value: 'card', labelKey: 'method.card' },
+  { value: 'transfer', labelKey: 'method.transfer' },
+  { value: 'paypal', labelKey: 'method.paypal' },
+  { value: 'stripe', labelKey: 'method.stripe' },
+  { value: 'credit', labelKey: 'method.credit' },
+  { value: 'mixed', labelKey: 'method.mixed' },
 ]
 
-const ACCOUNT_KIND_LABEL: Record<MoneyAccount['kind'], string> = {
-  bank: 'Bank',
-  cash: 'Cash',
-  card: 'Card',
-  digital: 'Digital',
-  credit_line: 'Credit line',
+// Account kind -> dictionary key.
+const ACCOUNT_KIND_KEY: Record<MoneyAccount['kind'], string> = {
+  bank: 'acctKind.bank',
+  cash: 'acctKind.cash',
+  card: 'acctKind.card',
+  digital: 'acctKind.digital',
+  credit_line: 'acctKind.credit_line',
 }
 
 function AddPaymentDialog({
@@ -1045,12 +1052,14 @@ function AddPaymentDialog({
   saleId,
   suggestedAmountCents,
   moneyAccounts,
+  locale,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   saleId: string
   suggestedAmountCents: number
   moneyAccounts: MoneyAccount[]
+  locale: Locale
 }) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
@@ -1098,11 +1107,11 @@ function AddPaymentDialog({
   function doSubmit() {
     const amount = Number(amountStr)
     if (!Number.isFinite(amount) || amount <= 0) {
-      toast.error('Amount must be greater than zero.')
+      toast.error(t(locale, 'sd.toastAmountPositive'))
       return
     }
     if (!accountId) {
-      toast.error('Pick a money account.')
+      toast.error(t(locale, 'sd.toastPickAccount'))
       return
     }
     const amountCents = Math.round(amount * 100)
@@ -1124,7 +1133,7 @@ function AddPaymentDialog({
         reference: reference.trim() || undefined,
       })
       if (res.ok) {
-        toast.success('Payment recorded.')
+        toast.success(t(locale, 'sd.toastPaymentRecorded'))
         handleOpenChange(false)
         router.refresh()
       } else {
@@ -1137,16 +1146,16 @@ function AddPaymentDialog({
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Add payment</DialogTitle>
+          <DialogTitle>{t(locale, 'sd.addPayment')}</DialogTitle>
           <DialogDescription>
-            Records a payment against this sale and updates the paid total.
+            {t(locale, 'sd.addPaymentDesc')}
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
               <Label htmlFor="pay-method" className="text-xs">
-                Method
+                {t(locale, 'sd.method')}
               </Label>
               <Select value={method} onValueChange={setMethod}>
                 <SelectTrigger id="pay-method">
@@ -1155,7 +1164,7 @@ function AddPaymentDialog({
                 <SelectContent>
                   {PAYMENT_METHODS.map((m) => (
                     <SelectItem key={m.value} value={m.value}>
-                      {m.label}
+                      {t(locale, m.labelKey)}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -1163,7 +1172,7 @@ function AddPaymentDialog({
             </div>
             <div className="space-y-1">
               <Label htmlFor="pay-amount" className="text-xs">
-                Amount (DOP) <span className="text-rose-600">*</span>
+                {t(locale, 'sd.amountDop')} <span className="text-rose-600">*</span>
               </Label>
               <Input
                 id="pay-amount"
@@ -1178,18 +1187,18 @@ function AddPaymentDialog({
           </div>
           <div className="space-y-1">
             <Label htmlFor="pay-account" className="text-xs">
-              Account <span className="text-rose-600">*</span>
+              {t(locale, 'sd.account')} <span className="text-rose-600">*</span>
             </Label>
             <Select value={accountId} onValueChange={setAccountId}>
               <SelectTrigger id="pay-account">
-                <SelectValue placeholder="Pick an account…" />
+                <SelectValue placeholder={t(locale, 'sd.pickAccount')} />
               </SelectTrigger>
               <SelectContent>
                 {kindOrder
                   .filter((k) => grouped[k]?.length)
                   .map((k) => (
                     <SelectGroup key={k}>
-                      <SelectLabel>{ACCOUNT_KIND_LABEL[k]}</SelectLabel>
+                      <SelectLabel>{t(locale, ACCOUNT_KIND_KEY[k])}</SelectLabel>
                       {grouped[k].map((a) => (
                         <SelectItem key={a.id} value={a.id}>
                           {a.name}
@@ -1203,7 +1212,7 @@ function AddPaymentDialog({
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
               <Label htmlFor="pay-date" className="text-xs">
-                Date
+                {t(locale, 'sd.date')}
               </Label>
               <Input
                 id="pay-date"
@@ -1215,11 +1224,11 @@ function AddPaymentDialog({
             </div>
             <div className="space-y-1">
               <Label htmlFor="pay-ref" className="text-xs">
-                Reference
+                {t(locale, 'sd.reference')}
               </Label>
               <Input
                 id="pay-ref"
-                placeholder="Transfer #, auth code…"
+                placeholder={t(locale, 'sd.referencePh')}
                 value={reference}
                 onChange={(e) => setReference(e.target.value)}
                 disabled={pending}
@@ -1233,10 +1242,10 @@ function AddPaymentDialog({
             onClick={() => handleOpenChange(false)}
             disabled={pending}
           >
-            Cancel
+            {t(locale, 'common.cancel')}
           </Button>
           <Button onClick={doSubmit} disabled={pending}>
-            {pending ? 'Recording…' : 'Record payment'}
+            {pending ? t(locale, 'sd.recording') : t(locale, 'sd.recordPayment')}
           </Button>
         </DialogFooter>
       </DialogContent>
