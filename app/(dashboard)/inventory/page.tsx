@@ -15,6 +15,7 @@ import { StockOnHandTable } from './stock-on-hand-table'
 import { MovementsLedger } from './movements-ledger'
 import { InventoryDashboard } from './inventory-dashboard'
 import { AdjustmentForm } from './adjustment-form'
+import { localeForRole, t } from '@/lib/i18n/dictionary'
 
 export const dynamic = 'force-dynamic'
 
@@ -37,6 +38,7 @@ export default async function InventoryPage({
 
   if (!isOwner) {
     // Sellers / distributors: current stock on hand only, no costs, no history.
+    const locale = localeForRole(caller.role)
     const [stock, sellerWarehouses, sellerCategories] = await Promise.all([
       fetchStockOnHand(),
       listWarehousesForFilter(),
@@ -45,15 +47,16 @@ export default async function InventoryPage({
     return (
       <div className="space-y-4">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Inventory</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">{t(locale, 'inv.title')}</h1>
           <p className="text-sm text-muted-foreground">
-            Current stock on hand across all warehouses.
+            {t(locale, 'inv.sellerSubtitle')}
           </p>
         </div>
         <StockOnHandTable
           rows={stock}
           warehouses={sellerWarehouses}
           categories={sellerCategories.filter((c) => c.parentId === null)}
+          locale={locale}
         />
       </div>
     )

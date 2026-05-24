@@ -258,7 +258,6 @@ const en: Messages = {
   // ---- New sale form (ns.*) ----
   'ns.backToSales': 'Back to sales',
   'ns.pageSubtitle': 'Set the meta, then add products, take payment, and confirm.',
-  // Quick customer dialog
   'ns.qcTitle': 'New customer',
   'ns.qcDesc': 'Add a customer on the fly. You can fill in the rest of their details later from the People page.',
   'ns.qcName': 'Name',
@@ -272,29 +271,23 @@ const en: Messages = {
   'ns.qcCustomerAddedPre': 'Customer',
   'ns.qcCustomerAddedSuffix': 'added.',
   'ns.qcCouldNotAdd': 'Could not add customer.',
-  // Fulfilment hints
   'ns.fhInStore': 'Customer buys and walks out with it',
   'ns.fhPickup': 'Customer collects later from this warehouse',
   'ns.fhDelivery': 'Sent from this warehouse to the customer',
-  // Payment method extra
   'ns.storeCredit': 'Store credit',
-  // Confirm-gate reasons
   'ns.gateMetaFirst': 'Set seller and warehouses first',
   'ns.gateAddProduct': 'Add at least one product to the cart',
   'ns.gateRecordPayment': 'Record at least one payment',
   'ns.gatePickAccountAll': 'Pick an account for every payment row',
   'ns.gatePaymentPositive': 'Payment amount must be greater than zero',
-  // Toasts / dual-mode words
   'ns.saleWord': 'Sale',
   'ns.confirmedSuffix': 'confirmed.',
   'ns.orderWord': 'Order',
   'ns.createdSuffix': 'created.',
   'ns.toastConfirmFailed': 'Confirm sale failed.',
-  // No-accounts warnings
   'ns.noAcctTitle': 'No active money accounts',
   'ns.noAcctBody': 'Before you can confirm a sale you need at least one active money account (cash drawer, bank, etc). Set one up in Settings, then come back here.',
   'ns.noAcctInline': 'No active money accounts exist. Configure at least one before ringing up sales.',
-  // Sale details card
   'ns.saleDetails': 'Sale details',
   'ns.walkinOption': 'Walk-in (no customer)',
   'ns.tierWord': 'tier',
@@ -305,7 +298,6 @@ const en: Messages = {
   'ns.pickSourceFirst': 'Pick source first',
   'ns.sameAsSource': 'Same as source.',
   'ns.fulfillmentMethod': 'Fulfillment method',
-  // Cart card
   'ns.cart': 'Cart',
   'ns.cartMetaHint': 'Set seller and warehouses above to enable the cart.',
   'ns.cartEmpty': 'No items yet. Search and pick a product above to add it.',
@@ -319,16 +311,13 @@ const en: Messages = {
   'ns.saleLevelDiscount': 'Sale-level discount (DOP)',
   'ns.lineDiscounts': 'Line discounts',
   'ns.saleDiscount': 'Sale discount',
-  // Payment card
   'ns.payment': 'Payment',
   'ns.pickShort': 'Pick…',
   'ns.optionalParen': '(optional)',
   'ns.removeTender': 'Remove tender',
   'ns.addTender': 'Add tender',
   'ns.overpayment': 'Overpayment',
-  // Order-mode info
   'ns.orderInfo': 'This is an order — no payment is taken here. The owner records payment once the customer settles up.',
-  // Footer + confirm dialog
   'ns.saveDraft': 'Save draft',
   'ns.confirming': 'Confirming…',
   'ns.creating': 'Creating…',
@@ -346,6 +335,25 @@ const en: Messages = {
   'ns.overpaymentOfPost': 'will be recorded.',
   'ns.confirmNoteSale': 'This writes the sale, consumes inventory, and records payments + commissions atomically. It cannot be undone without a refund.',
   'ns.confirmNoteOrder': 'This creates an unpaid order: it consumes inventory and sets the commission pending, but records no payment. The owner records payment later. It cannot be undone without a refund.',
+
+  // ---- Inventory (inv.*) — seller-facing stock-on-hand view ----
+  'inv.title': 'Inventory',
+  'inv.sellerSubtitle': 'Current stock on hand across all warehouses.',
+  'inv.warehouse': 'Warehouse',
+  'inv.allWarehouses': 'All warehouses',
+  'inv.category': 'Category',
+  'inv.allCategories': 'All categories',
+  'inv.uncategorized': '(uncategorized)',
+  'inv.lowBelow': 'Low below',
+  'inv.showOut': 'Show out of stock',
+  'inv.printCountSheet': 'Print count sheet',
+  'inv.nothingMatches': 'Nothing matches this filter.',
+  'inv.inStock': 'in stock',
+  'inv.low': 'low',
+  'inv.out': 'out',
+  'inv.units': 'units',
+  'inv.product': 'Product',
+  'inv.total': 'Total',
 }
 
 const es: Messages = {
@@ -583,7 +591,6 @@ const es: Messages = {
   // ---- New sale form (ns.*) ----
   'ns.backToSales': 'Volver a ventas',
   'ns.pageSubtitle': 'Configura los datos, luego agrega productos, cobra y confirma.',
-  // Quick customer dialog
   'ns.qcTitle': 'Nuevo cliente',
   'ns.qcDesc': 'Agrega un cliente al instante. Puedes completar el resto de sus datos luego desde la página de Personas.',
   'ns.qcName': 'Nombre',
@@ -597,29 +604,23 @@ const es: Messages = {
   'ns.qcCustomerAddedPre': 'Cliente',
   'ns.qcCustomerAddedSuffix': 'agregado.',
   'ns.qcCouldNotAdd': 'No se pudo agregar el cliente.',
-  // Fulfilment hints
   'ns.fhInStore': 'El cliente compra y se lo lleva',
   'ns.fhPickup': 'El cliente lo recoge después en este almacén',
   'ns.fhDelivery': 'Se envía desde este almacén al cliente',
-  // Payment method extra
   'ns.storeCredit': 'Crédito de tienda',
-  // Confirm-gate reasons
   'ns.gateMetaFirst': 'Primero elige vendedor y almacenes',
   'ns.gateAddProduct': 'Agrega al menos un producto al carrito',
   'ns.gateRecordPayment': 'Registra al menos un pago',
   'ns.gatePickAccountAll': 'Elige una cuenta para cada pago',
   'ns.gatePaymentPositive': 'El monto del pago debe ser mayor que cero',
-  // Toasts / dual-mode words
   'ns.saleWord': 'Venta',
   'ns.confirmedSuffix': 'confirmada.',
   'ns.orderWord': 'Pedido',
   'ns.createdSuffix': 'creado.',
   'ns.toastConfirmFailed': 'Error al confirmar la venta.',
-  // No-accounts warnings
   'ns.noAcctTitle': 'No hay cuentas de dinero activas',
   'ns.noAcctBody': 'Antes de confirmar una venta necesitas al menos una cuenta de dinero activa (caja, banco, etc.). Crea una en Configuración y vuelve aquí.',
   'ns.noAcctInline': 'No hay cuentas de dinero activas. Configura al menos una antes de registrar ventas.',
-  // Sale details card
   'ns.saleDetails': 'Detalles de la venta',
   'ns.walkinOption': 'Mostrador (sin cliente)',
   'ns.tierWord': 'nivel',
@@ -630,7 +631,6 @@ const es: Messages = {
   'ns.pickSourceFirst': 'Elige el origen primero',
   'ns.sameAsSource': 'Igual que el origen.',
   'ns.fulfillmentMethod': 'Método de entrega',
-  // Cart card
   'ns.cart': 'Carrito',
   'ns.cartMetaHint': 'Configura vendedor y almacenes arriba para habilitar el carrito.',
   'ns.cartEmpty': 'Aún no hay artículos. Busca y elige un producto arriba para agregarlo.',
@@ -644,16 +644,13 @@ const es: Messages = {
   'ns.saleLevelDiscount': 'Descuento de venta (DOP)',
   'ns.lineDiscounts': 'Descuentos de línea',
   'ns.saleDiscount': 'Descuento de venta',
-  // Payment card
   'ns.payment': 'Pago',
   'ns.pickShort': 'Elige…',
   'ns.optionalParen': '(opcional)',
   'ns.removeTender': 'Quitar pago',
   'ns.addTender': 'Agregar pago',
   'ns.overpayment': 'Sobrepago',
-  // Order-mode info
   'ns.orderInfo': 'Esto es un pedido — aquí no se cobra. El dueño registra el pago cuando el cliente paga.',
-  // Footer + confirm dialog
   'ns.saveDraft': 'Guardar borrador',
   'ns.confirming': 'Confirmando…',
   'ns.creating': 'Creando…',
@@ -671,6 +668,25 @@ const es: Messages = {
   'ns.overpaymentOfPost': 'será registrado.',
   'ns.confirmNoteSale': 'Esto registra la venta, consume inventario y registra pagos y comisiones de forma atómica. No se puede deshacer sin un reembolso.',
   'ns.confirmNoteOrder': 'Esto crea un pedido sin pagar: consume inventario y deja la comisión pendiente, pero no registra pago. El dueño registra el pago después. No se puede deshacer sin un reembolso.',
+
+  // ---- Inventory (inv.*) ----
+  'inv.title': 'Inventario',
+  'inv.sellerSubtitle': 'Stock actual en todos los almacenes.',
+  'inv.warehouse': 'Almacén',
+  'inv.allWarehouses': 'Todos los almacenes',
+  'inv.category': 'Categoría',
+  'inv.allCategories': 'Todas las categorías',
+  'inv.uncategorized': '(sin categoría)',
+  'inv.lowBelow': 'Bajo si menos de',
+  'inv.showOut': 'Mostrar agotados',
+  'inv.printCountSheet': 'Imprimir hoja de conteo',
+  'inv.nothingMatches': 'Nada coincide con este filtro.',
+  'inv.inStock': 'en stock',
+  'inv.low': 'bajo',
+  'inv.out': 'agotado',
+  'inv.units': 'unidades',
+  'inv.product': 'Producto',
+  'inv.total': 'Total',
 }
 
 const messages: Record<Locale, Messages> = { en, es }

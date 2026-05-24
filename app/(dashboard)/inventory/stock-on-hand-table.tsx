@@ -13,6 +13,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import type { StockOnHandRow } from '@/lib/inventory'
+import { type Locale, t } from '@/lib/i18n/dictionary'
 
 type WarehouseOption = { id: string; name: string }
 type CategoryOption = { id: string; name: string }
@@ -22,6 +23,9 @@ type Props = {
   warehouses?: WarehouseOption[]
   categories?: CategoryOption[]
   enableHistoryLink?: boolean
+  // Optional: shared with the owner's Stock-on-hand tab. Defaults to English
+  // so callers that don't pass it are unaffected.
+  locale?: Locale
 }
 
 const selectClass =
@@ -54,6 +58,7 @@ export function StockOnHandTable({
   warehouses,
   categories,
   enableHistoryLink = false,
+  locale = 'en',
 }: Props) {
   const [warehouseId, setWarehouseId] = useState('')
   const [categoryId, setCategoryId] = useState('')
@@ -185,13 +190,13 @@ export function StockOnHandTable({
       {showFilters ? (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 lg:items-end">
           <div className="space-y-1">
-            <Label className="text-xs">Warehouse</Label>
+            <Label className="text-xs">{t(locale, 'inv.warehouse')}</Label>
             <select
               value={warehouseId}
               onChange={(e) => setWarehouseId(e.target.value)}
               className={selectClass}
             >
-              <option value="">All warehouses</option>
+              <option value="">{t(locale, 'inv.allWarehouses')}</option>
               {warehouses!.map((w) => (
                 <option key={w.id} value={w.id}>
                   {w.name}
@@ -201,24 +206,24 @@ export function StockOnHandTable({
           </div>
           {categories && categories.length > 0 ? (
             <div className="space-y-1">
-              <Label className="text-xs">Category</Label>
+              <Label className="text-xs">{t(locale, 'inv.category')}</Label>
               <select
                 value={categoryId}
                 onChange={(e) => setCategoryId(e.target.value)}
                 className={selectClass}
               >
-                <option value="">All categories</option>
+                <option value="">{t(locale, 'inv.allCategories')}</option>
                 {categories.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.name}
                   </option>
                 ))}
-                <option value="__uncategorized__">(uncategorized)</option>
+                <option value="__uncategorized__">{t(locale, 'inv.uncategorized')}</option>
               </select>
             </div>
           ) : null}
           <div className="space-y-1">
-            <Label className="text-xs">Low below</Label>
+            <Label className="text-xs">{t(locale, 'inv.lowBelow')}</Label>
             <Input
               type="number"
               min={1}
@@ -233,7 +238,7 @@ export function StockOnHandTable({
               checked={showOut}
               onChange={(e) => setShowOut(e.target.checked)}
             />
-            Show out of stock
+            {t(locale, 'inv.showOut')}
           </label>
           {enableHistoryLink ? (
             <Link
@@ -248,20 +253,21 @@ export function StockOnHandTable({
               target="_blank"
               className="inline-flex h-9 items-center rounded-md border px-3 text-sm hover:bg-accent"
             >
-              Print count sheet
+              {t(locale, 'inv.printCountSheet')}
             </Link>
           ) : null}
         </div>
       ) : null}
 
       {groups.length === 0 || columnWarehouses.length === 0 ? (
-        <p className="text-sm text-muted-foreground">Nothing matches this filter.</p>
+        <p className="text-sm text-muted-foreground">{t(locale, 'inv.nothingMatches')}</p>
       ) : (
         <>
           <p className="text-sm text-muted-foreground">
-            <span className="text-foreground">{fmtInt(counts.inStock)}</span> in
-            stock · <span className="text-amber-600">{fmtInt(counts.low)}</span>{' '}
-            low · <span className="text-rose-600">{fmtInt(counts.out)}</span> out
+            <span className="text-foreground">{fmtInt(counts.inStock)}</span>{' '}
+            {t(locale, 'inv.inStock')} · <span className="text-amber-600">{fmtInt(counts.low)}</span>{' '}
+            {t(locale, 'inv.low')} · <span className="text-rose-600">{fmtInt(counts.out)}</span>{' '}
+            {t(locale, 'inv.out')}
           </p>
           <div className="space-y-6">
             {groups.map((g) => (
@@ -269,21 +275,21 @@ export function StockOnHandTable({
                 <div className="flex items-baseline justify-between">
                   <h3 className="text-sm font-medium">{g.categoryName}</h3>
                   <span className="text-xs text-muted-foreground tabular-nums">
-                    {fmtInt(g.subtotal)} units
+                    {fmtInt(g.subtotal)} {t(locale, 'inv.units')}
                   </span>
                 </div>
                 <div className="rounded-md border">
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Product</TableHead>
+                        <TableHead>{t(locale, 'inv.product')}</TableHead>
                         {columnWarehouses.map((w) => (
                           <TableHead key={w} className="text-right">
                             {w}
                           </TableHead>
                         ))}
                         {showTotalCol ? (
-                          <TableHead className="text-right">Total</TableHead>
+                          <TableHead className="text-right">{t(locale, 'inv.total')}</TableHead>
                         ) : null}
                       </TableRow>
                     </TableHeader>
