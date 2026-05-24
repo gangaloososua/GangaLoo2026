@@ -45,16 +45,22 @@ const inputStyle: CSSProperties = {
 export function CheckoutView({
   warehouseSlug,
   warehouseName,
+  initialName = '',
+  initialPhone = '',
+  initialEmail = '',
 }: {
   warehouseSlug: string
   warehouseName: string
+  initialName?: string
+  initialPhone?: string
+  initialEmail?: string
 }) {
   const [locale, setLocale] = useState<Locale>('es')
   const cart = useCart(warehouseSlug)
 
-  const [name, setName] = useState('')
-  const [phone, setPhone] = useState('')
-  const [email, setEmail] = useState('')
+  const [name, setName] = useState(initialName)
+  const [phone, setPhone] = useState(initialPhone)
+  const [email, setEmail] = useState(initialEmail)
   const [method, setMethod] = useState<'pickup' | 'delivery'>('pickup')
   const [address, setAddress] = useState('')
   const [city, setCity] = useState('')
