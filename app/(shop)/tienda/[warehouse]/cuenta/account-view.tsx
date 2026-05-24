@@ -41,6 +41,9 @@ const T = {
     err_CREDENTIALS_REQUIRED: 'Escribe tu correo y contraseña.',
     err_BAD_LOGIN: 'Correo o contraseña incorrectos.',
     err_GENERIC: 'Algo salió mal. Inténtalo de nuevo.',
+    orders: 'Mis pedidos',
+    ordersEmpty: 'Aún no tienes pedidos.',
+    total: 'Total',
   },
   en: {
     back: 'Back',
@@ -66,8 +69,75 @@ const T = {
     err_CREDENTIALS_REQUIRED: 'Please enter your email and password.',
     err_BAD_LOGIN: 'Wrong email or password.',
     err_GENERIC: 'Something went wrong. Please try again.',
+    orders: 'My orders',
+    ordersEmpty: 'You have no orders yet.',
+    total: 'Total',
   },
 } as const
+
+export type AccountOrderItem = {
+  name: string
+  qty: number
+  unit_price_cents: number
+  line_total_cents: number
+}
+
+export type AccountOrder = {
+  invoice_number: string
+  status: string
+  tracking_status: string | null
+  fulfillment_method: string | null
+  sold_at: string
+  subtotal_cents: number
+  shipping_cents: number
+  discount_cents: number
+  total_cents: number
+  items: AccountOrderItem[]
+}
+
+const STATUS_LABEL: Record<Locale, Record<string, string>> = {
+  es: {
+    draft: 'Pendiente de confirmación',
+    confirmed: 'Confirmado',
+    dispatched: 'Enviado',
+    delivered: 'Entregado',
+    cancelled: 'Cancelado',
+  },
+  en: {
+    draft: 'Awaiting confirmation',
+    confirmed: 'Confirmed',
+    dispatched: 'Dispatched',
+    delivered: 'Delivered',
+    cancelled: 'Cancelled',
+  },
+}
+
+const STATUS_STYLE: Record<string, CSSProperties> = {
+  draft: { background: '#fff4e0', color: '#9a6700' },
+  confirmed: { background: '#e8f5ed', color: '#1a7f4b' },
+  dispatched: { background: '#e6f0fb', color: NAVY },
+  delivered: { background: '#e8f5ed', color: '#1a7f4b' },
+  cancelled: { background: '#fdeaea', color: RED },
+}
+
+const FULFILL_LABEL: Record<Locale, Record<string, string>> = {
+  es: { pickup: 'Recoger en tienda', delivery: 'Entrega a domicilio' },
+  en: { pickup: 'Store pickup', delivery: 'Home delivery' },
+}
+
+function money(cents: number) {
+  return 'RD$ ' + Math.round((cents ?? 0) / 100).toLocaleString('en-US')
+}
+
+function formatDate(iso: string, locale: Locale) {
+  const d = new Date(iso)
+  if (isNaN(d.getTime())) return ''
+  return d.toLocaleDateString(locale === 'es' ? 'es-DO' : 'en-US', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  })
+}
 
 const inputStyle: CSSProperties = {
   width: '100%',
@@ -93,6 +163,7 @@ export function AccountView({
   warehouseName,
   loggedIn,
   profile,
+  orders = [],
 }: {
   warehouseSlug: string
   warehouseName: string
@@ -103,6 +174,7 @@ export function AccountView({
     phone?: string | null
     role?: string | null
   } | null
+  orders?: AccountOrder[]
 }) {
   const router = useRouter()
   const [locale, setLocale] = useState<Locale>('es')
@@ -168,6 +240,7 @@ export function AccountView({
 
       <main className="mx-auto w-full max-w-[560px] px-4 py-6">
         {loggedIn ? (
+          <>
           <div className="rounded-2xl bg-white p-6" style={{ border: '1px solid #eceef2' }}>
             <h1 className="text-[20px] font-semibold" style={{ color: NAVY }}>{t.account}</h1>
             <p className="mt-1 text-[14px]" style={{ color: MUTED }}>
@@ -184,6 +257,45 @@ export function AccountView({
               </button>
             </div>
           </div>
+
+          <section className="mt-6">
+            <h2 className="px-1 text-[16px] font-semibold" style={{ color: NAVY }}>{t.orders}</h2>
+            {orders.length === 0 ? (
+              <p className="mt-2 px-1 text-[13px]" style={{ color: MUTED }}>{t.ordersEmpty}</p>
+            ) : (
+              <div className="mt-3 flex flex-col gap-3">
+                {orders.map((o) => {
+                  const label = STATUS_LABEL[locale][o.status] ?? o.status
+                  const badge = STATUS_STYLE[o.status] ?? { background: '#f0f2f6', color: INK }
+                  const fulfill = o.fulfillment_method ? FULFILL_LABEL[locale][o.fulfillment_method] : ''
+                  return (
+                    <div key={o.invoice_number} className="rounded-2xl bg-white p-4" style={{ border: '1px solid #eceef2' }}>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[14px] font-semibold" style={{ color: NAVY }}>{o.invoice_number}</span>
+                        <span className="rounded-full px-3 py-1 text-[11px] font-semibold" style={badge}>{label}</span>
+                      </div>
+                      <p className="mt-1 text-[12px]" style={{ color: MUTED }}>
+                        {formatDate(o.sold_at, locale)}{fulfill ? ` · ${fulfill}` : ''}
+                      </p>
+                      <div className="mt-3 flex flex-col gap-1">
+                        {o.items.map((it, i) => (
+                          <div key={i} className="flex items-baseline justify-between gap-3 text-[13px]">
+                            <span style={{ color: INK }}>{it.qty} × {it.name}</span>
+                            <span style={{ color: MUTED, whiteSpace: 'nowrap' }}>{money(it.line_total_cents)}</span>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="mt-3 flex justify-between border-t pt-2 text-[14px] font-semibold" style={{ borderColor: '#eceef2', color: NAVY }}>
+                        <span>{t.total}</span>
+                        <span>{money(o.total_cents)}</span>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </section>
+          </>
         ) : (
           <div className="rounded-2xl bg-white p-6" style={{ border: '1px solid #eceef2' }}>
             <div className="mb-4 flex gap-2">
