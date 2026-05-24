@@ -125,6 +125,7 @@ export function StorePage({ catalog }: { catalog: StoreCatalog }) {
 
   const shown = filtered.slice(0, visible)
   const cartHref = `/tienda/${warehouse.slug}/carrito`
+  const accountHref = `/tienda/${warehouse.slug}/cuenta`
 
   return (
     <div style={{ background: '#f7f8fa', color: INK, minHeight: '100vh', paddingBottom: 76 }}>
@@ -149,6 +150,9 @@ export function StorePage({ catalog }: { catalog: StoreCatalog }) {
                 <button onClick={() => setLocale('es')} className="px-2.5 py-1 transition" style={locale === 'es' ? { background: '#fff', color: NAVY } : { color: '#cdd8ee' }}>ES</button>
                 <button onClick={() => setLocale('en')} className="px-2.5 py-1 transition" style={locale === 'en' ? { background: '#fff', color: NAVY } : { color: '#cdd8ee' }}>EN</button>
               </div>
+              <Link href={accountHref} aria-label={ts(locale, 'shop.nav.account')} className="opacity-90">
+                <Icon d={ICON.user} />
+              </Link>
               <Link href={cartHref} aria-label={ts(locale, 'shop.nav.cart')} className="relative">
                 <Icon d={ICON.cart} />
                 <span className={`absolute -right-2 -top-2 flex h-[17px] min-w-[17px] items-center justify-center rounded-full px-1 text-[10px] font-semibold text-white ${bump ? 'gl-pop' : ''}`} style={{ background: RED }}>{cart.count}</span>
@@ -241,7 +245,7 @@ export function StorePage({ catalog }: { catalog: StoreCatalog }) {
         <NavItem href="#" d={ICON.home} label={ts(locale, 'shop.nav.home')} active />
         <NavItem href="#" d={ICON.search} label={ts(locale, 'shop.nav.search')} />
         <NavItem href={cartHref} d={ICON.cart} label={ts(locale, 'shop.nav.cart')} badge={cart.count} />
-        <NavItem href="#" d={ICON.user} label={ts(locale, 'shop.nav.account')} />
+        <NavItem href={accountHref} d={ICON.user} label={ts(locale, 'shop.nav.account')} />
       </nav>
     </div>
   )

@@ -1,7 +1,7 @@
-// Loads ONE product for a warehouse store: effective price (warehouse override
-// if any), stock in that warehouse, full image gallery, primary category, and a
-// description if the products table has one (column name auto-detected, so this
-// never breaks if the column is absent or named in Spanish).
+// Loads ONE product for a warehouse store from the SAFE public views (store_*),
+// so customer browsers never touch costs/commissions. Effective price (warehouse
+// override if any), stock in that warehouse, image gallery, primary category,
+// and a description if present.
 
 import { createClient } from '@/lib/supabase/server'
 import type { StoreWarehouse } from './catalog'
@@ -46,7 +46,7 @@ export async function fetchStoreProduct(
   const supabase = await createClient()
 
   const { data: product, error } = await supabase
-    .from('products')
+    .from('store_products')
     .select('*')
     .eq('slug', productSlug)
     .eq('is_active', true)
@@ -57,7 +57,7 @@ export async function fetchStoreProduct(
   if (!product) return null
 
   const { data: setting } = await supabase
-    .from('product_warehouse_settings')
+    .from('store_product_settings')
     .select('is_visible, price_override_cents')
     .eq('product_id', product.id)
     .eq('warehouse_id', warehouse.id)
@@ -70,7 +70,7 @@ export async function fetchStoreProduct(
   const isOffer = override != null && override < base
 
   const { data: stockRow } = await supabase
-    .from('v_inventory_current')
+    .from('store_inventory')
     .select('qty_on_hand')
     .eq('product_id', product.id)
     .eq('warehouse_id', warehouse.id)
@@ -78,7 +78,7 @@ export async function fetchStoreProduct(
   const stock = Number(stockRow?.qty_on_hand ?? 0) || 0
 
   const { data: imgRows } = await supabase
-    .from('product_images')
+    .from('store_product_images')
     .select('url, alt_text, display_order')
     .eq('product_id', product.id)
     .order('display_order', { ascending: true })
@@ -94,7 +94,7 @@ export async function fetchStoreProduct(
 
   let category: { id: string; name: string } | null = null
   const { data: pcl } = await supabase
-    .from('product_categories')
+    .from('store_product_categories')
     .select('category_id')
     .eq('product_id', product.id)
     .eq('is_primary', true)
@@ -102,7 +102,7 @@ export async function fetchStoreProduct(
     .maybeSingle()
   if (pcl?.category_id) {
     const { data: cat } = await supabase
-      .from('categories')
+      .from('store_categories')
       .select('id, name')
       .eq('id', pcl.category_id)
       .maybeSingle()

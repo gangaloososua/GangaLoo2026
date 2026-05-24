@@ -1,14 +1,9 @@
 // Storefront catalog layer for the public online shop.
 //
-// Each warehouse is its OWN store. A product appears in a store when it is
-// active + visible_in_store globally AND not explicitly hidden for that
-// warehouse (product_warehouse_settings.is_visible). Price is the warehouse
-// override if one exists, otherwise the base price — an override that is LOWER
-// than the base price is treated as an "offer" for that store.
-//
-// Reads only existing tables/views:
-//   products, product_categories, categories,
-//   product_warehouse_settings, v_inventory_current, warehouses
+// Reads only the SAFE public views (store_*), never the raw tables, so customer
+// browsers never touch costs, commissions, or inventory value:
+//   store_products, store_product_categories, store_categories,
+//   store_product_settings, store_inventory, store_warehouses
 
 import { createClient } from '@/lib/supabase/server'
 
@@ -43,7 +38,6 @@ export type StoreCatalog = {
 }
 
 function cleanName(raw: string): string {
-  // Strip a leading "1-" / "2 - " style prefix used in admin names.
   return raw.replace(/^\s*\d+\s*[-–—]\s*/, '').trim()
 }
 
@@ -61,7 +55,7 @@ export async function resolveStoreWarehouse(
 ): Promise<StoreWarehouse | null> {
   const supabase = await createClient()
   const { data, error } = await supabase
-    .from('warehouses')
+    .from('store_warehouses')
     .select('id, name')
     .eq('is_active', true)
   if (error) throw error
@@ -87,7 +81,7 @@ export async function fetchStoreCatalog(
   const supabase = await createClient()
 
   const { data: products, error } = await supabase
-    .from('products')
+    .from('store_products')
     .select('id, sku, name, slug, price_cents, primary_image_url')
     .eq('is_active', true)
     .eq('visible_in_store', true)
@@ -100,7 +94,7 @@ export async function fetchStoreCatalog(
   const ids = products.map((p) => p.id)
 
   const { data: whSettings } = await supabase
-    .from('product_warehouse_settings')
+    .from('store_product_settings')
     .select('product_id, is_visible, price_override_cents')
     .eq('warehouse_id', warehouse.id)
     .in('product_id', ids)
@@ -116,7 +110,7 @@ export async function fetchStoreCatalog(
   }
 
   const { data: stockRows } = await supabase
-    .from('v_inventory_current')
+    .from('store_inventory')
     .select('product_id, qty_on_hand')
     .eq('warehouse_id', warehouse.id)
     .in('product_id', ids)
@@ -126,7 +120,7 @@ export async function fetchStoreCatalog(
   }
 
   const { data: primaryLinks } = await supabase
-    .from('product_categories')
+    .from('store_product_categories')
     .select('product_id, category_id')
     .in('product_id', ids)
     .eq('is_primary', true)
@@ -134,7 +128,7 @@ export async function fetchStoreCatalog(
   const catNameById = new Map<string, string>()
   if (catIds.length > 0) {
     const { data: cats } = await supabase
-      .from('categories')
+      .from('store_categories')
       .select('id, name')
       .in('id', catIds)
     for (const c of cats ?? []) catNameById.set(c.id, c.name)

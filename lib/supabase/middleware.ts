@@ -1,6 +1,12 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
+// Paths that do NOT require a logged-in user.
+//   /login, /auth  → admin authentication
+//   /tienda        → public customer storefront (browse, cart, checkout,
+//                    and the customer account/login page at /tienda/.../cuenta)
+const PUBLIC_PREFIXES = ['/login', '/auth', '/tienda']
+
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
 
@@ -25,17 +31,18 @@ export async function updateSession(request: NextRequest) {
     }
   )
 
-  // IMPORTANT: must run getUser() to refresh the session token
+  // IMPORTANT: must run getUser() to refresh the session token.
+  // This still runs for public paths so customer sessions stay fresh.
   const {
     data: { user },
   } = await supabase.auth.getUser()
 
-  // Redirect unauthenticated users away from protected pages
-  if (
-    !user &&
-    !request.nextUrl.pathname.startsWith('/login') &&
-    !request.nextUrl.pathname.startsWith('/auth')
-  ) {
+  const isPublic = PUBLIC_PREFIXES.some((p) =>
+    request.nextUrl.pathname.startsWith(p)
+  )
+
+  // Redirect unauthenticated users away from protected (admin) pages only.
+  if (!user && !isPublic) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     return NextResponse.redirect(url)
