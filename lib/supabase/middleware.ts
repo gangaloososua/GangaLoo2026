@@ -7,6 +7,10 @@ import { NextResponse, type NextRequest } from 'next/server'
 //                    and the customer account/login page at /tienda/.../cuenta)
 const PUBLIC_PREFIXES = ['/login', '/auth', '/tienda']
 
+// Where to send a logged-in CUSTOMER who strays toward an admin page.
+// (Replace with the "choose your store" landing once it exists in Step 4.)
+const CUSTOMER_HOME = '/tienda/maranatha'
+
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
 
@@ -46,6 +50,22 @@ export async function updateSession(request: NextRequest) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     return NextResponse.redirect(url)
+  }
+
+  // Outer door: a logged-in CUSTOMER belongs in the store, never the admin.
+  // (Admin pages and admin RPCs also re-check the role — this is the first,
+  // outermost line of defense.) Staff roles (owner/admin/seller/etc.) pass
+  // through untouched. We only do the role lookup for a logged-in user who is
+  // heading to a non-public (admin) path, so storefront traffic is unaffected.
+  if (user && !isPublic) {
+    const { data: prof } = await supabase.rpc('get_my_customer_profile')
+    const role = (prof as { role?: string | null } | null)?.role
+    if (role === 'customer') {
+      const url = request.nextUrl.clone()
+      url.pathname = CUSTOMER_HOME
+      url.search = ''
+      return NextResponse.redirect(url)
+    }
   }
 
   return supabaseResponse
