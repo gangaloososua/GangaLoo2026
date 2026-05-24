@@ -136,26 +136,27 @@ export async function fetchStoreCatalog(
     stockByProduct.set(r.product_id, Number(r.qty_on_hand) || 0)
   }
 
-  // Active, non-expired featured deals (daily/weekly) for this store. The
-  // store_offers view already filters to live deals and computes the price.
+  // Active, non-expired online deal promotions (daily/weekly) for this store.
+  // store_promotions exposes only featured promotions in their live window;
+  // warehouse_id is null for "all stores" or a specific store id.
   const { data: dealRows } = await supabase
-    .from('store_offers')
-    .select('product_id, deal_slot, ends_at, deal_price_cents, priority')
-    .eq('warehouse_id', warehouse.id)
+    .from('store_promotions')
+    .select('product_id, warehouse_id, deal_slot, delta_percent, ends_at, priority')
+    .or(`warehouse_id.is.null,warehouse_id.eq.${warehouse.id}`)
     .in('product_id', ids)
   const dealByProduct = new Map<
     string,
-    { slot: 'daily' | 'weekly'; price: number; endsAt: string | null; priority: number }
+    { slot: 'daily' | 'weekly'; percent: number; endsAt: string | null; priority: number }
   >()
   for (const d of dealRows ?? []) {
-    if (d.deal_price_cents == null) continue
+    if (d.delta_percent == null) continue
     if (d.deal_slot !== 'daily' && d.deal_slot !== 'weekly') continue
     const prev = dealByProduct.get(d.product_id)
     const priority = Number(d.priority) || 0
     if (!prev || priority > prev.priority) {
       dealByProduct.set(d.product_id, {
         slot: d.deal_slot,
-        price: d.deal_price_cents,
+        percent: Number(d.delta_percent) || 0,
         endsAt: d.ends_at,
         priority,
       })
@@ -193,11 +194,16 @@ export async function fetchStoreCatalog(
     // is set, otherwise the base price.
     const storeNormal = override != null ? override : base
     const deal = dealByProduct.get(p.id)
+    // A featured deal's price: percent off the normal store price, with the
+    // same 30% maximum discount cap as the in-person promotion rules.
+    const dealPrice = deal
+      ? Math.round(storeNormal * Math.max(0.7, 1 - deal.percent / 100))
+      : null
     // The "was" price to compare against and strike through:
     //  - on a featured deal: the normal store price (so % off is honest)
     //  - on a plain override offer: the base list price
     const compareAt = deal ? storeNormal : base
-    const eff = deal ? deal.price : storeNormal
+    const eff = deal && dealPrice != null ? dealPrice : storeNormal
     const isOffer = eff < compareAt
 
     rows.push({
