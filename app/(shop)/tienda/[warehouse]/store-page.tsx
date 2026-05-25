@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { formatDOP } from '@/lib/format'
 import { ts, type Locale } from '@/lib/i18n/shop'
 import { useCart } from '@/lib/store/cart'
-import type { StoreCatalog, StoreProduct, StoreDeal } from '@/lib/store/catalog'
+import type { StoreCatalog, StoreProduct, StoreDeal, StoreWarehouse } from '@/lib/store/catalog'
 
 const NAVY = '#0A2A66'
 const RED = '#CE1126'
@@ -155,12 +155,13 @@ function DealSection({ deal, locale, storeSlug, onAdd }: { deal: StoreDeal; loca
   )
 }
 
-export function StorePage({ catalog }: { catalog: StoreCatalog }) {
+export function StorePage({ catalog, stores = [] }: { catalog: StoreCatalog; stores?: StoreWarehouse[] }) {
   const [locale, setLocale] = useState<Locale>('es')
   const [activeCat, setActiveCat] = useState<string>('all')
   const [query, setQuery] = useState('')
   const [visible, setVisible] = useState(PAGE)
   const [bump, setBump] = useState(false)
+  const [storeMenu, setStoreMenu] = useState(false)
 
   const { warehouse, products, offers, categories, dailyDeal, weeklyDeal } = catalog
   const cart = useCart(warehouse.slug)
@@ -234,10 +235,48 @@ export function StorePage({ catalog }: { catalog: StoreCatalog }) {
           </div>
 
           <div className="mt-3 flex items-center gap-2">
-            <div className="flex items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1.5 text-[12px]" style={{ background: 'rgba(255,255,255,.14)', border: '1px solid rgba(255,255,255,.25)' }}>
-              <Icon d={ICON.warehouse} size={15} />
-              <span>{warehouse.name}</span>
-              <Icon d={ICON.chevron} size={15} />
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setStoreMenu((v) => !v)}
+                aria-label={locale === 'es' ? 'Cambiar de tienda' : 'Change store'}
+                aria-expanded={storeMenu}
+                className="flex items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1.5 text-[12px] text-white transition active:scale-95"
+                style={{ background: 'rgba(255,255,255,.14)', border: '1px solid rgba(255,255,255,.25)' }}
+              >
+                <Icon d={ICON.warehouse} size={15} />
+                <span>{warehouse.name}</span>
+                <Icon d={ICON.chevron} size={15} />
+              </button>
+              {storeMenu && (
+                <>
+                  <button
+                    type="button"
+                    aria-hidden="true"
+                    onClick={() => setStoreMenu(false)}
+                    className="fixed inset-0 z-40 cursor-default"
+                    style={{ background: 'transparent' }}
+                  />
+                  <div className="absolute left-0 top-full z-50 mt-1 min-w-[180px] overflow-hidden rounded-xl bg-white py-1 shadow-lg" style={{ border: '1px solid #eceef2' }}>
+                    {(stores.length > 0 ? stores : [warehouse]).map((s) => {
+                      const current = s.slug === warehouse.slug
+                      return (
+                        <Link
+                          key={s.id}
+                          href={`/tienda/${s.slug}`}
+                          onClick={() => setStoreMenu(false)}
+                          className="flex items-center gap-2 px-3 py-2.5 text-[13px]"
+                          style={{ color: current ? NAVY : INK, background: current ? '#f0f4fb' : '#fff', fontWeight: current ? 600 : 400 }}
+                        >
+                          <Icon d={ICON.warehouse} size={15} />
+                          <span className="flex-1">{s.name}</span>
+                          {current && <Icon d="M5 12l4 4 10-10" size={15} />}
+                        </Link>
+                      )
+                    })}
+                  </div>
+                </>
+              )}
             </div>
             <div className="flex flex-1 items-center gap-2 rounded-full bg-white px-3 py-2 text-[12px]">
               <Icon d={ICON.search} size={15} />

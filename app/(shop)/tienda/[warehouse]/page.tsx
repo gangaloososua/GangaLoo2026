@@ -4,7 +4,11 @@
 // loads that warehouse's catalog, and renders the client store UI.
 
 import { notFound } from 'next/navigation'
-import { resolveStoreWarehouse, fetchStoreCatalog } from '@/lib/store/catalog'
+import {
+  resolveStoreWarehouse,
+  fetchStoreCatalog,
+  listStoreWarehouses,
+} from '@/lib/store/catalog'
 import { StorePage } from './store-page'
 
 export const dynamic = 'force-dynamic'
@@ -18,6 +22,9 @@ export default async function WarehouseStorePage({
   const warehouse = await resolveStoreWarehouse(slug)
   if (!warehouse) notFound()
 
-  const catalog = await fetchStoreCatalog(warehouse)
-  return <StorePage catalog={catalog} />
+  const [catalog, stores] = await Promise.all([
+    fetchStoreCatalog(warehouse),
+    listStoreWarehouses(),
+  ])
+  return <StorePage catalog={catalog} stores={stores} />
 }
