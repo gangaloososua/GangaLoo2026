@@ -1,13 +1,13 @@
 'use client'
 
-import { useState, type CSSProperties } from 'react'
+import { useState, useEffect, type CSSProperties } from 'react'
 import Link from 'next/link'
 import { formatDOP } from '@/lib/format'
 import { ts, type Locale } from '@/lib/i18n/shop'
 import { useCart } from '@/lib/store/cart'
 import type { StoreWarehouse } from '@/lib/store/catalog'
 import type { DeliveryFees } from '@/lib/store-config-types'
-import { placeOnlineOrder } from './actions'
+import { placeOnlineOrder, getOrderQuote } from './actions'
 
 const NAVY = '#0A2A66'
 const RED = '#CE1126'
@@ -62,6 +62,7 @@ const CT = {
     bankAccountType: 'Tipo',
     chooseStoreError: 'Elige la tienda donde vas a recoger.',
     payment: 'Pago',
+    memberDiscount: 'Descuento socio',
   },
   en: {
     fulfillTitle: 'Fulfillment',
@@ -86,6 +87,7 @@ const CT = {
     bankAccountType: 'Type',
     chooseStoreError: 'Choose the store where you will collect.',
     payment: 'Payment',
+    memberDiscount: 'Member discount',
   },
 } as const
 
@@ -153,6 +155,11 @@ export function CheckoutView({
   const [placedTotal, setPlacedTotal] = useState(0)
   const [placedShipping, setPlacedShipping] = useState(0)
   const [placedPayment, setPlacedPayment] = useState<Payment>('cash')
+  const [memberDiscountCents, setMemberDiscountCents] = useState(0)
+  const [tierName, setTierName] = useState('')
+  const [placedMemberDiscount, setPlacedMemberDiscount] = useState(0)
+  const [placedSubtotalBefore, setPlacedSubtotalBefore] = useState(0)
+  const [placedTierName, setPlacedTierName] = useState('')
 
   const storeHref = `/tienda/${warehouseSlug}`
   const otherStores = stores.filter((s) => s.id !== warehouseId)
@@ -173,7 +180,27 @@ export function CheckoutView({
     return 0
   }
   const fee = previewFee()
-  const grandTotal = cart.subtotalCents + fee
+  const grandTotal = cart.subtotalCents - memberDiscountCents + fee
+
+  // Fetch an accurate member-discount preview from the server (tier is
+  // resolved from the logged-in session; guests get none). Item pricing
+  // doesn't depend on fulfillment/payment, so this only needs to run once.
+  useEffect(() => {
+    let active = true
+    if (cart.items.length === 0) return
+    getOrderQuote({
+      warehouseSlug,
+      items: cart.items.map((i) => ({ product_id: i.id, qty: i.qty })),
+    }).then((q) => {
+      if (!active) return
+      if (q.ok) {
+        setMemberDiscountCents(q.memberDiscountCents)
+        setTierName(q.tierName)
+      }
+    })
+    return () => { active = false }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [warehouseSlug])
 
   // Auto-detect Local vs National from the typed city, unless the customer has
   // manually changed the dropdown.
@@ -230,6 +257,9 @@ export function CheckoutView({
       setPlacedTotal(res.totalCents)
       setPlacedShipping(res.shippingCents)
       setPlacedPayment(res.paymentMethod)
+      setPlacedMemberDiscount(res.memberDiscountCents)
+      setPlacedSubtotalBefore(res.subtotalBeforeCents)
+      setPlacedTierName(res.tierName)
       cart.clear()
       if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' })
     } else {
@@ -275,6 +305,9 @@ export function CheckoutView({
               <p><span style={{ color: MUTED }}>{ts(locale, 'shop.phone')}:</span> {phone}</p>
               <p><span style={{ color: MUTED }}>{ts(locale, 'shop.fulfillment')}:</span> {fulfillLabel()}</p>
               <p><span style={{ color: MUTED }}>{tx.payment}:</span> {placedPayment === 'transfer' ? tx.payTransfer : tx.payCash}</p>
+              {placedMemberDiscount > 0 && (
+                <p><span style={{ color: MUTED }}>{tx.memberDiscount}{placedTierName ? ` (${placedTierName})` : ''}:</span> <span style={{ color: '#1d9e75' }}>-{price(placedMemberDiscount)}</span></p>
+              )}
               <p className="mt-1"><span style={{ color: MUTED }}>{tx.deliveryFee}:</span> {placedShipping > 0 ? price(placedShipping) : tx.free}</p>
               <p className="mt-1"><span style={{ color: MUTED }}>{ts(locale, 'shop.total')}:</span> <span style={{ color: NAVY, fontWeight: 600 }}>{price(placedTotal)}</span></p>
             </div>
@@ -417,6 +450,12 @@ export function CheckoutView({
                 <span style={{ color: MUTED }}>{ts(locale, 'shop.subtotal')}</span>
                 <span style={{ color: INK }}>{price(cart.subtotalCents)}</span>
               </div>
+              {memberDiscountCents > 0 && (
+                <div className="mt-1 flex items-center justify-between text-[13px]">
+                  <span style={{ color: MUTED }}>{tx.memberDiscount}{tierName ? ` (${tierName})` : ''}</span>
+                  <span style={{ color: '#1d9e75' }}>-{price(memberDiscountCents)}</span>
+                </div>
+              )}
               <div className="mt-1 flex items-center justify-between text-[13px]">
                 <span style={{ color: MUTED }}>{tx.deliveryFee}</span>
                 <span style={{ color: INK }}>{fee > 0 ? price(fee) : tx.free}</span>
