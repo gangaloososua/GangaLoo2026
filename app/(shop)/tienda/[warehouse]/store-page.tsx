@@ -35,6 +35,9 @@ const ICON = {
   warehouse: 'M3 9l9-5 9 5v11H3zM7 20v-6h10v6',
   chevron: 'M6 9l6 6 6-6',
   clock: 'M12 7v5l3 2M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18',
+  share: 'M4 12v8h16v-8M12 15V4M8 8l4-4 4 4',
+  chat: 'M4 5h16v10H8l-4 4z',
+  link: 'M10 13a5 5 0 0 0 7 0l2-2a5 5 0 0 0-7-7l-1 1M14 11a5 5 0 0 0-7 0l-2 2a5 5 0 0 0 7 7l1-1',
 }
 
 function ProductCard({
@@ -43,12 +46,14 @@ function ProductCard({
   delay,
   storeSlug,
   onAdd,
+  onShare,
 }: {
   p: StoreProduct
   locale: Locale
   delay: number
   storeSlug: string
   onAdd: (p: StoreProduct) => void
+  onShare: (p: StoreProduct) => void
 }) {
   const out = p.stock <= 0
   return (
@@ -84,6 +89,16 @@ function ProductCard({
           </div>
         </div>
       </Link>
+
+      <button
+        type="button"
+        onClick={(e) => { e.preventDefault(); e.stopPropagation(); onShare(p) }}
+        aria-label={locale === 'es' ? 'Compartir' : 'Share'}
+        className="absolute bottom-3 left-3 flex h-9 w-9 items-center justify-center rounded-full bg-white transition active:scale-95"
+        style={{ border: '1px solid #eceef2', color: NAVY }}
+      >
+        <Icon d={ICON.share} size={15} />
+      </button>
 
       <button
         type="button"
@@ -140,7 +155,7 @@ function Countdown({ endsAt, onExpire, locale, accent }: { endsAt: string; onExp
   )
 }
 
-function DealSection({ deal, locale, storeSlug, onAdd }: { deal: StoreDeal; locale: Locale; storeSlug: string; onAdd: (p: StoreProduct) => void }) {
+function DealSection({ deal, locale, storeSlug, onAdd, onShare }: { deal: StoreDeal; locale: Locale; storeSlug: string; onAdd: (p: StoreProduct) => void; onShare: (p: StoreProduct) => void }) {
   const [hidden, setHidden] = useState(false)
   const onExpire = useCallback(() => setHidden(true), [])
   if (hidden || deal.products.length === 0) return null
@@ -153,7 +168,7 @@ function DealSection({ deal, locale, storeSlug, onAdd }: { deal: StoreDeal; loca
       </div>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
         {deal.products.slice(0, 8).map((p, i) => (
-          <ProductCard key={p.id} p={p} locale={locale} delay={i * 35} storeSlug={storeSlug} onAdd={onAdd} />
+          <ProductCard key={p.id} p={p} locale={locale} delay={i * 35} storeSlug={storeSlug} onAdd={onAdd} onShare={onShare} />
         ))}
       </div>
     </section>
@@ -168,6 +183,8 @@ export function StorePage({ catalog, stores = [] }: { catalog: StoreCatalog; sto
   const [bump, setBump] = useState(false)
   const [storeMenu, setStoreMenu] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [shareProduct, setShareProduct] = useState<StoreProduct | null>(null)
+  const [shareCopied, setShareCopied] = useState(false)
 
   const { warehouse, products, offers, categories, dailyDeal, weeklyDeal } = catalog
   const cart = useCart(warehouse.slug)
@@ -176,6 +193,40 @@ export function StorePage({ catalog, stores = [] }: { catalog: StoreCatalog; sto
     cart.add(warehouse.slug, { id: p.id, slug: p.slug, name: p.name, imageUrl: p.imageUrl, priceCents: p.priceCents })
     setBump(true)
     window.setTimeout(() => setBump(false), 350)
+  }
+
+  const productUrl = (p: StoreProduct) =>
+    `${window.location.origin}/tienda/${warehouse.slug}/${p.slug}`
+  const shareMsg = (p: StoreProduct) => `${p.name} · ${price(p.priceCents)}`
+
+  const handleShare = async (p: StoreProduct) => {
+    const isMobile = typeof navigator !== 'undefined' && /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
+    if (isMobile && typeof navigator !== 'undefined' && navigator.share) {
+      try {
+        await navigator.share({ title: p.name, text: shareMsg(p), url: productUrl(p) })
+        return
+      } catch (e) {
+        if ((e as Error)?.name === 'AbortError') return
+      }
+    }
+    setShareCopied(false)
+    setShareProduct(p)
+  }
+  const shareWhatsApp = () => {
+    if (!shareProduct) return
+    const msg = `${shareMsg(shareProduct)}\n${productUrl(shareProduct)}`
+    window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank')
+    setShareProduct(null)
+  }
+  const shareCopyLink = async () => {
+    if (!shareProduct) return
+    try {
+      await navigator.clipboard.writeText(productUrl(shareProduct))
+      setShareCopied(true)
+      window.setTimeout(() => setShareCopied(false), 1500)
+    } catch {
+      /* clipboard blocked — ignore */
+    }
   }
 
   const selectCat = (id: string) => {
@@ -339,10 +390,10 @@ export function StorePage({ catalog, stores = [] }: { catalog: StoreCatalog; sto
       </section>
 
       {!searching && activeCat === 'all' && dailyDeal && (
-        <DealSection deal={dailyDeal} locale={locale} storeSlug={warehouse.slug} onAdd={handleAdd} />
+        <DealSection deal={dailyDeal} locale={locale} storeSlug={warehouse.slug} onAdd={handleAdd} onShare={handleShare} />
       )}
       {!searching && activeCat === 'all' && weeklyDeal && (
-        <DealSection deal={weeklyDeal} locale={locale} storeSlug={warehouse.slug} onAdd={handleAdd} />
+        <DealSection deal={weeklyDeal} locale={locale} storeSlug={warehouse.slug} onAdd={handleAdd} onShare={handleShare} />
       )}
 
       {!searching && categories.length > 0 && (
@@ -362,7 +413,7 @@ export function StorePage({ catalog, stores = [] }: { catalog: StoreCatalog; sto
           </div>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
             {offers.slice(0, 8).map((p, i) => (
-              <ProductCard key={p.id} p={p} locale={locale} delay={i * 35} storeSlug={warehouse.slug} onAdd={handleAdd} />
+              <ProductCard key={p.id} p={p} locale={locale} delay={i * 35} storeSlug={warehouse.slug} onAdd={handleAdd} onShare={handleShare} />
             ))}
           </div>
         </section>
@@ -381,7 +432,7 @@ export function StorePage({ catalog, stores = [] }: { catalog: StoreCatalog; sto
           <>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
               {shown.map((p, i) => (
-                <ProductCard key={p.id} p={p} locale={locale} delay={Math.min(i % PAGE, 12) * 35} storeSlug={warehouse.slug} onAdd={handleAdd} />
+                <ProductCard key={p.id} p={p} locale={locale} delay={Math.min(i % PAGE, 12) * 35} storeSlug={warehouse.slug} onAdd={handleAdd} onShare={handleShare} />
               ))}
             </div>
             {visible < filtered.length && (
@@ -442,6 +493,36 @@ export function StorePage({ catalog, stores = [] }: { catalog: StoreCatalog; sto
                 <button type="button" onClick={() => setLocale('en')} className="px-3 py-1 transition" style={locale === 'en' ? { background: NAVY, color: '#fff' } : { color: NAVY }}>EN</button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {shareProduct && (
+        <div className="fixed inset-0 z-[60] flex items-end justify-center sm:items-center">
+          <button
+            type="button"
+            aria-hidden="true"
+            onClick={() => setShareProduct(null)}
+            className="absolute inset-0"
+            style={{ background: 'rgba(10,16,28,.45)' }}
+          />
+          <div className="relative z-10 w-full max-w-[360px] rounded-t-2xl bg-white p-4 shadow-2xl sm:rounded-2xl" style={{ border: '1px solid #eceef2' }}>
+            <div className="mb-3 flex items-start justify-between gap-3">
+              <div>
+                <p className="text-[11px] uppercase tracking-wide" style={{ color: MUTED }}>{locale === 'es' ? 'Compartir' : 'Share'}</p>
+                <p className="text-[14px] font-semibold" style={{ color: INK }}>{shareProduct.name}</p>
+              </div>
+              <button type="button" onClick={() => setShareProduct(null)} aria-label={locale === 'es' ? 'Cerrar' : 'Close'} style={{ color: '#7c8aa3' }}>
+                <Icon d="M6 6l12 12M18 6L6 18" size={20} />
+              </button>
+            </div>
+            <button type="button" onClick={shareWhatsApp} className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-[14px]" style={{ border: '1px solid #eceef2', color: INK }}>
+              <span style={{ color: '#25D366' }}><Icon d={ICON.chat} size={20} /></span> WhatsApp
+            </button>
+            <button type="button" onClick={shareCopyLink} className="mt-2 flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-[14px]" style={{ border: '1px solid #eceef2', color: INK }}>
+              <span style={{ color: shareCopied ? '#1d9e75' : NAVY }}><Icon d={shareCopied ? 'M5 12l4 4 10-10' : ICON.link} size={20} /></span>
+              {shareCopied ? (locale === 'es' ? '¡Copiado!' : 'Copied!') : (locale === 'es' ? 'Copiar enlace' : 'Copy link')}
+            </button>
           </div>
         </div>
       )}

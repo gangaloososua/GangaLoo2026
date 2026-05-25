@@ -31,6 +31,9 @@ const ICON = {
   plus: 'M12 5v14M5 12h14',
   minus: 'M5 12h14',
   check: 'M5 12l4 4 10-10',
+  share: 'M4 12v8h16v-8M12 15V4M8 8l4-4 4 4',
+  chat: 'M4 5h16v10H8l-4 4z',
+  link: 'M10 13a5 5 0 0 0 7 0l2-2a5 5 0 0 0-7-7l-1 1M14 11a5 5 0 0 0-7 0l-2 2a5 5 0 0 0 7 7l1-1',
 }
 
 export function ProductView({
@@ -44,6 +47,8 @@ export function ProductView({
   const [active, setActive] = useState(0)
   const [qty, setQty] = useState(1)
   const [bump, setBump] = useState(false)
+  const [shareOpen, setShareOpen] = useState(false)
+  const [copied, setCopied] = useState(false)
   const cart = useCart(warehouse.slug)
 
   const out = product.stock <= 0
@@ -58,6 +63,40 @@ export function ProductView({
     )
     setBump(true)
     window.setTimeout(() => setBump(false), 350)
+  }
+
+  const shareText = `${product.name} · ${price(product.priceCents)}`
+  const doShare = async () => {
+    // Only use the OS share sheet on real mobile devices. Desktop browsers
+    // often advertise navigator.share but then fail to present a sheet, so we
+    // skip it there and use our own WhatsApp / Copy-link menu instead.
+    const isMobile =
+      typeof navigator !== 'undefined' &&
+      /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
+    if (isMobile && typeof navigator !== 'undefined' && navigator.share) {
+      try {
+        await navigator.share({ title: product.name, text: shareText, url: window.location.href })
+        return
+      } catch (e) {
+        if ((e as Error)?.name === 'AbortError') return // user cancelled
+        // otherwise fall through to our own menu
+      }
+    }
+    setShareOpen((v) => !v)
+  }
+  const shareWhatsApp = () => {
+    const msg = `${shareText}\n${window.location.href}`
+    window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank')
+    setShareOpen(false)
+  }
+  const copyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href)
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 1500)
+    } catch {
+      /* clipboard blocked — ignore */
+    }
   }
 
   return (
@@ -134,6 +173,37 @@ export function ProductView({
           <p className="mt-3 text-[13px]" style={{ color: out ? RED : '#1d9e75' }}>
             {out ? ts(locale, 'shop.out') : `${ts(locale, 'shop.inStock')}: ${product.stock} ${ts(locale, 'shop.units')}`}
           </p>
+
+          <div className="relative mt-4">
+            <button
+              type="button"
+              onClick={doShare}
+              className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-[13px] font-medium transition active:scale-95"
+              style={{ border: '1px solid #d7dde6', color: NAVY, background: '#fff' }}
+            >
+              <Icon d={ICON.share} size={16} /> {locale === 'es' ? 'Compartir' : 'Share'}
+            </button>
+            {shareOpen && (
+              <>
+                <button
+                  type="button"
+                  aria-hidden="true"
+                  onClick={() => setShareOpen(false)}
+                  className="fixed inset-0 z-10 cursor-default"
+                  style={{ background: 'transparent' }}
+                />
+                <div className="absolute left-0 z-20 mt-2 flex w-56 flex-col overflow-hidden rounded-xl bg-white py-1 shadow-lg" style={{ border: '1px solid #eceef2' }}>
+                  <button type="button" onClick={shareWhatsApp} className="flex items-center gap-2 px-3 py-2.5 text-left text-[13px]" style={{ color: INK }}>
+                    <span style={{ color: '#25D366' }}><Icon d={ICON.chat} size={18} /></span> WhatsApp
+                  </button>
+                  <button type="button" onClick={copyLink} className="flex items-center gap-2 px-3 py-2.5 text-left text-[13px]" style={{ color: INK }}>
+                    <span style={{ color: copied ? '#1d9e75' : NAVY }}><Icon d={copied ? ICON.check : ICON.link} size={18} /></span>
+                    {copied ? (locale === 'es' ? '¡Copiado!' : 'Copied!') : (locale === 'es' ? 'Copiar enlace' : 'Copy link')}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
 
           <div className="mt-5 flex items-center gap-3">
             <div className="flex items-center rounded-full" style={{ border: '1px solid #d7dde6' }}>
