@@ -1,5 +1,4 @@
 'use client'
-
 import Link from 'next/link'
 import { usePathname, useSearchParams } from 'next/navigation'
 import { navItems } from '@/lib/nav'
@@ -9,14 +8,11 @@ import { logout } from '@/app/actions'
 import { LogOut } from 'lucide-react'
 import type { Role } from '@/lib/auth/roles'
 import { localeForRole, t } from '@/lib/i18n/dictionary'
-
 export function Sidebar({ role }: { role: Role }) {
   const pathname = usePathname()
   const sp = useSearchParams()
-
   const locale = localeForRole(role)
   const visibleItems = navItems.filter((item) => item.roles.includes(role))
-
   function isActive(href: string): boolean {
     const [hrefPath, hrefQuery] = href.split('?')
     if (hrefPath !== pathname) {
@@ -38,7 +34,6 @@ export function Sidebar({ role }: { role: Role }) {
     }
     return true
   }
-
   return (
     <aside className="flex h-screen w-60 flex-col border-r bg-background">
       <div className="flex h-16 items-center px-6">
@@ -51,6 +46,8 @@ export function Sidebar({ role }: { role: Role }) {
         {visibleItems.map((item) => {
           const active = isActive(item.href)
           const Icon = item.icon
+          // Round 37d: inline i18n label wins; otherwise use the shared dictionary.
+          const label = item.i18n ? item.i18n[locale] : t(locale, 'nav.' + item.label)
           return (
             <Link
               key={item.href}
@@ -62,7 +59,7 @@ export function Sidebar({ role }: { role: Role }) {
               }`}
             >
               <Icon className="h-4 w-4" />
-              {t(locale, 'nav.' + item.label)}
+              {label}
             </Link>
           )
         })}
