@@ -423,6 +423,22 @@ export type ConfirmPosResult =
   | { ok: true; sale_id: string; invoice_number: string }
   | { ok: false; error: string }
 
+// Loyalty: fetch a customer's current tier (name + discount %) for the POS till.
+// Replaces the old manual club_tier. Returns 0% for walk-ins / staff / no tier.
+export async function getCustomerTier(
+  customerId: string,
+): Promise<{ tierName: string; discountPct: number }> {
+  await requireAdminCaller()
+  if (!customerId) return { tierName: '', discountPct: 0 }
+  const supabase = await createClient()
+  const { data, error } = await supabase.rpc('get_customer_tier', {
+    p_customer_id: customerId,
+  })
+  if (error || !data) return { tierName: '', discountPct: 0 }
+  const r = data as { tier_name?: string; discount_pct?: number }
+  return { tierName: r.tier_name ?? '', discountPct: Number(r.discount_pct ?? 0) }
+}
+
 export async function confirmPosSale(
   input: ConfirmPosInput
 ): Promise<ConfirmPosResult> {

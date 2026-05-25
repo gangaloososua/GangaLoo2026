@@ -28,7 +28,7 @@ import { Badge } from '@/components/ui/badge'
 import { Plus, Trash2 } from 'lucide-react'
 import { formatDOP } from '@/lib/format'
 import { ProductSearch } from './product-search'
-import { confirmPosSale } from '../actions'
+import { confirmPosSale, getCustomerTier } from '../actions'
 import { QuickCustomerDialog } from './quick-customer-dialog'
 import type {
   CustomerPickerItem,
@@ -172,6 +172,10 @@ export function NewSaleForm({
   locale,
 }: Props) {
   const [customerId, setCustomerId] = useState<string>(WALKIN)
+  // Loyalty tier (spend-based), fetched when the customer changes. Replaces
+  // the old manual club_tier for both pricing rules and the discount.
+  const [tierPct, setTierPct] = useState(0)
+  const [tierName, setTierName] = useState('')
   const [sellerId, setSellerId] = useState<string>(defaultSellerId ?? '')
   const [sourceWarehouseId, setSourceWarehouseId] = useState<string>('')
   const [fulfillmentWarehouseId, setFulfillmentWarehouseId] = useState<string>('')
@@ -200,10 +204,9 @@ export function NewSaleForm({
   // Round 16.4: customer id usable by the resolver (NULL for walk-in).
   const resolverCustomerId = customerId === WALKIN ? null : customerId
   // Round 17: customer's club_tier for tier-based discount rules.
-  const resolverClubTier =
-    customerId === WALKIN
-      ? null
-      : allCustomers.find((c) => c.id === customerId)?.club_tier ?? null
+  // Loyalty replaces club_tier: do NOT feed club_tier into the resolver, so
+  // old tier-gated discount rules no longer fire (the loyalty % covers it).
+  const resolverClubTier = null
 
   function onSourceWarehouseChange(id: string) {
     setSourceWarehouseId(id)
@@ -338,19 +341,46 @@ export function NewSaleForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [customerId])
 
+  // Fetch the selected customer's loyalty tier (walk-in => none).
+  useEffect(() => {
+    let active = true
+    if (customerId === WALKIN) {
+      setTierPct(0)
+      setTierName('')
+      return
+    }
+    getCustomerTier(customerId).then((r) => {
+      if (!active) return
+      setTierPct(r.discountPct)
+      setTierName(r.tierName)
+    })
+    return () => {
+      active = false
+    }
+  }, [customerId])
+
   // === totals ===
 
   const totals = useMemo(() => {
     let subtotal = 0
     let lineDiscounts = 0
+    let loyaltyDiscount = 0
     for (const l of lines) {
-      subtotal += l.unit_price_cents * l.qty
+      const gross = l.unit_price_cents * l.qty
+      subtotal += gross
       lineDiscounts += l.line_discount_cents
+      // Loyalty stacks on top of any rule discount, but total per line is
+      // capped at 30% of gross (matches online and the in-person promo cap).
+      if (tierPct > 0) {
+        const cap = Math.floor(gross * 0.3)
+        const desired = Math.round((gross * tierPct) / 100)
+        loyaltyDiscount += Math.max(0, Math.min(cap - l.line_discount_cents, desired))
+      }
     }
-    const afterLineDiscounts = subtotal - lineDiscounts
+    const afterLineDiscounts = subtotal - lineDiscounts - loyaltyDiscount
     const grandTotal = Math.max(0, afterLineDiscounts - saleDiscountCents)
-    return { subtotal, lineDiscounts, grandTotal }
-  }, [lines, saleDiscountCents])
+    return { subtotal, lineDiscounts, loyaltyDiscount, grandTotal }
+  }, [lines, saleDiscountCents, tierPct])
 
   // === payment ops ===
 
@@ -441,11 +471,16 @@ export function NewSaleForm({
         fulfillment_warehouse_id: fulfillmentWarehouseId,
         fulfillment_method: fulfillmentMethod,
         discount_cents: saleDiscountCents,
-        items: lines.map((l) => ({
+        items: lines.map((l) => {
+          const gross = l.unit_price_cents * l.qty
+          const cap = Math.floor(gross * 0.3)
+          const desired = tierPct > 0 ? Math.round((gross * tierPct) / 100) : 0
+          const loyalty = Math.max(0, Math.min(cap - l.line_discount_cents, desired))
+          return {
           product_id: l.product_id,
           qty: l.qty,
           unit_price_cents: l.unit_price_cents,
-          discount_cents: l.line_discount_cents,
+          discount_cents: l.line_discount_cents + loyalty,
           // 16.6: send the resolver's breakdown so the RPC writes
           // per-rule audit rows. Manual lines have empty breakdown.
           discount_breakdown: l.discount_breakdown.map((b) => ({
@@ -455,7 +490,8 @@ export function NewSaleForm({
             amount_cents: b.amountCents,
             cap_hit: b.capHit,
           })),
-        })),
+          }
+        }),
         // Order mode (sellers/distributors): no payment - the owner records
         // it later. The RPC creates a confirmed, unpaid order and posts
         // nothing to the ledger.
@@ -537,10 +573,10 @@ export function NewSaleForm({
                   setCustomerId(c.id)
                 }}
               />
-              {chosenCustomer?.club_tier && chosenCustomer.club_tier !== 'none' && (
+              {tierPct > 0 && tierName && (
                 <p className="text-xs">
-                  <Badge variant="secondary" className="capitalize">
-                    {chosenCustomer.club_tier} {t(locale, 'ns.tierWord')}
+                  <Badge variant="secondary">
+                    {tierName} · {tierPct}%
                   </Badge>
                 </p>
               )}
@@ -837,6 +873,17 @@ export function NewSaleForm({
                         </span>
                         <span className="tabular-nums">
                           −{formatDOP(totals.lineDiscounts)}
+                        </span>
+                      </div>
+                    )}
+                    {totals.loyaltyDiscount > 0 && (
+                      <div className="flex justify-between sm:justify-end sm:gap-6">
+                        <span className="text-muted-foreground">
+                          {locale === 'es' ? 'Descuento socio' : 'Member discount'}
+                          {tierName ? ` (${tierName} ${tierPct}%)` : ''}
+                        </span>
+                        <span className="tabular-nums">
+                          −{formatDOP(totals.loyaltyDiscount)}
                         </span>
                       </div>
                     )}
