@@ -15,6 +15,18 @@ export type { DeliveryFees, WarehousePickupFee }
 export { STORE_INFO_DEFAULTS }
 export { DELIVERY_FEES_KEY, DELIVERY_FEES_DEFAULTS }
 
+export type StoreBankInfo = {
+  name: string
+  account: string
+  accountName: string
+  accountType: string
+}
+
+export type StorePublicConfig = {
+  deliveryFees: DeliveryFees
+  bankInfo: StoreBankInfo
+}
+
 function detectType(value: unknown): ConfigValueType | null {
   if (typeof value === 'string') return 'string'
   if (typeof value === 'number') return 'number'
@@ -75,19 +87,11 @@ export async function fetchStoreInfo(): Promise<StoreInfo> {
 // ---------------------------------------------------------------------------
 // Delivery & pickup fees
 // ---------------------------------------------------------------------------
-// Reads the single 'delivery_fees' store_config row (a JSON blob) and
-// returns a typed DeliveryFees. Missing key or any malformed field falls
-// back to DELIVERY_FEES_DEFAULTS so the order flow never crashes on bad
-// data — worst case it charges no fee until the owner saves real numbers.
-export async function fetchDeliveryFees(): Promise<DeliveryFees> {
-  const supabase = await createClient()
-  const { data, error } = await supabase
-    .from('store_config')
-    .select('value')
-    .eq('key', DELIVERY_FEES_KEY)
-    .maybeSingle()
-  if (error) throw error
-  const v = (data?.value ?? null) as Partial<DeliveryFees> | null
+// Validates a raw delivery_fees blob into a typed DeliveryFees. Missing key or
+// any malformed field falls back to DELIVERY_FEES_DEFAULTS so the order flow
+// never crashes on bad data — worst case it charges no fee until the owner
+// saves real numbers.
+function parseDeliveryFees(v: Partial<DeliveryFees> | null | undefined): DeliveryFees {
   if (!v || typeof v !== 'object') return DELIVERY_FEES_DEFAULTS
   const num = (x: unknown): number =>
     typeof x === 'number' && Number.isFinite(x) && x >= 0 ? Math.round(x) : 0
@@ -95,17 +99,19 @@ export async function fetchDeliveryFees(): Promise<DeliveryFees> {
     ? v.localCities.filter((c): c is string => typeof c === 'string')
     : []
   const pickups = Array.isArray(v.warehousePickupFees)
-    ? v.warehousePickupFees.filter(
-        (p): p is WarehousePickupFee =>
-          !!p &&
-          typeof p === 'object' &&
-          typeof (p as WarehousePickupFee).fromWarehouseId === 'string' &&
-          typeof (p as WarehousePickupFee).toWarehouseId === 'string',
-      ).map((p) => ({
-        fromWarehouseId: p.fromWarehouseId,
-        toWarehouseId: p.toWarehouseId,
-        feeCents: num(p.feeCents),
-      }))
+    ? v.warehousePickupFees
+        .filter(
+          (p): p is WarehousePickupFee =>
+            !!p &&
+            typeof p === 'object' &&
+            typeof (p as WarehousePickupFee).fromWarehouseId === 'string' &&
+            typeof (p as WarehousePickupFee).toWarehouseId === 'string',
+        )
+        .map((p) => ({
+          fromWarehouseId: p.fromWarehouseId,
+          toWarehouseId: p.toWarehouseId,
+          feeCents: num(p.feeCents),
+        }))
     : []
   return {
     localDeliveryCents: num(v.localDeliveryCents),
@@ -113,4 +119,31 @@ export async function fetchDeliveryFees(): Promise<DeliveryFees> {
     localCities: cities,
     warehousePickupFees: pickups,
   }
+}
+
+// One safe round-trip for the PUBLIC storefront: delivery fees + bank transfer
+// details. Read via the SECURITY DEFINER get_store_public_config() RPC so
+// anonymous/customer sessions can read these specific values without direct
+// (RLS-blocked) access to store_config. Used by the checkout page.
+export async function fetchStorePublicConfig(): Promise<StorePublicConfig> {
+  const supabase = await createClient()
+  const { data, error } = await supabase.rpc('get_store_public_config')
+  if (error) throw error
+  const obj = (data ?? {}) as Record<string, unknown>
+  const str = (x: unknown): string => (typeof x === 'string' ? x : '')
+  return {
+    deliveryFees: parseDeliveryFees(obj.delivery_fees as Partial<DeliveryFees> | null),
+    bankInfo: {
+      name: str(obj.bankName),
+      account: str(obj.bankAccount),
+      accountName: str(obj.bankAccountName),
+      accountType: str(obj.bankAccountType),
+    },
+  }
+}
+
+// Kept for any other callers; now RLS-safe via the public-config RPC.
+export async function fetchDeliveryFees(): Promise<DeliveryFees> {
+  const { deliveryFees } = await fetchStorePublicConfig()
+  return deliveryFees
 }

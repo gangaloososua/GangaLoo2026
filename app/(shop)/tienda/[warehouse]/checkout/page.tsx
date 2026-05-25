@@ -1,10 +1,21 @@
 // Checkout page for a warehouse store. Reached at /tienda/<warehouse>/checkout
-// Collects the customer's details and fulfillment choice and reviews the order.
+// Collects the customer's details, fulfillment choice (pickup here / pickup at
+// another store / delivery) and payment method, and reviews the order.
 // A logged-in customer's name/phone/email are pre-filled, and place_storefront_order
 // attaches the order to their account (by auth.uid()).
+//
+// Delivery/pickup fees + bank-transfer details come from the public-config RPC
+// (get_store_public_config), which is SECURITY DEFINER so anonymous customers
+// can read those specific values without RLS-blocked access to store_config.
+// The authoritative fee is recomputed server-side inside place_storefront_order.
 
 import { notFound } from 'next/navigation'
-import { resolveStoreWarehouse } from '@/lib/store/catalog'
+import {
+  resolveStoreWarehouse,
+  listStoreWarehouses,
+  type StoreWarehouse,
+} from '@/lib/store/catalog'
+import { fetchStorePublicConfig } from '@/lib/store-config'
 import { createClient } from '@/lib/supabase/server'
 import { CheckoutView } from './checkout-view'
 
@@ -36,10 +47,17 @@ export default async function CheckoutPage({
     profile = (data as ProfileShape) ?? null
   }
 
+  const { deliveryFees, bankInfo } = await fetchStorePublicConfig()
+  const allStores: StoreWarehouse[] = await listStoreWarehouses()
+
   return (
     <CheckoutView
+      warehouseId={warehouse.id}
       warehouseSlug={warehouse.slug}
       warehouseName={warehouse.name}
+      stores={allStores}
+      deliveryFees={deliveryFees}
+      bankInfo={bankInfo}
       initialName={profile?.full_name ?? ''}
       initialPhone={profile?.phone ?? ''}
       initialEmail={profile?.email ?? ''}
