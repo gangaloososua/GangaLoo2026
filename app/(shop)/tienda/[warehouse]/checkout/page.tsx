@@ -47,7 +47,7 @@ export default async function CheckoutPage({
     profile = (data as ProfileShape) ?? null
   }
 
-  const { deliveryFees, bankInfo } = await fetchStorePublicConfig()
+  const { deliveryFees, bankInfo, paymentConfig } = await fetchStorePublicConfig()
   const allStores: StoreWarehouse[] = await listStoreWarehouses()
 
   return (
@@ -58,6 +58,7 @@ export default async function CheckoutPage({
       stores={allStores}
       deliveryFees={deliveryFees}
       bankInfo={bankInfo}
+      paymentConfig={paymentConfig}
       initialName={profile?.full_name ?? ''}
       initialPhone={profile?.phone ?? ''}
       initialEmail={profile?.email ?? ''}

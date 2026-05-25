@@ -63,6 +63,11 @@ const CT = {
     chooseStoreError: 'Elige la tienda donde vas a recoger.',
     payment: 'Pago',
     memberDiscount: 'Descuento socio',
+    surcharge: 'Recargo',
+    payCard: 'Tarjeta (Stripe)',
+    payCardSub: 'Pago con tarjeta en línea',
+    payPaypalSub: 'Paga con tu cuenta PayPal',
+    payOnlineSoon: 'Pago en línea (en pruebas)',
   },
   en: {
     fulfillTitle: 'Fulfillment',
@@ -88,6 +93,11 @@ const CT = {
     chooseStoreError: 'Choose the store where you will collect.',
     payment: 'Payment',
     memberDiscount: 'Member discount',
+    surcharge: 'Surcharge',
+    payCard: 'Card (Stripe)',
+    payCardSub: 'Pay by card online',
+    payPaypalSub: 'Pay with your PayPal account',
+    payOnlineSoon: 'Online payment (testing)',
   },
 } as const
 
@@ -104,7 +114,7 @@ const inputStyle: CSSProperties = {
 
 type Method = 'pickup' | 'pickup_other' | 'delivery'
 type Region = 'local' | 'national'
-type Payment = 'cash' | 'transfer'
+type Payment = 'cash' | 'transfer' | 'stripe' | 'paypal'
 
 function norm(s: string): string {
   return s
@@ -121,6 +131,7 @@ export function CheckoutView({
   stores,
   deliveryFees,
   bankInfo,
+  paymentConfig,
   initialName = '',
   initialPhone = '',
   initialEmail = '',
@@ -131,6 +142,14 @@ export function CheckoutView({
   stores: StoreWarehouse[]
   deliveryFees: DeliveryFees
   bankInfo: { name: string; account: string; accountName: string; accountType: string }
+  paymentConfig: {
+    enabled: boolean
+    stripePct: number
+    stripeFixed: number
+    paypalPct: number
+    paypalFixed: number
+    paypalName: string
+  }
   initialName?: string
   initialPhone?: string
   initialEmail?: string
@@ -160,6 +179,8 @@ export function CheckoutView({
   const [placedMemberDiscount, setPlacedMemberDiscount] = useState(0)
   const [placedSubtotalBefore, setPlacedSubtotalBefore] = useState(0)
   const [placedTierName, setPlacedTierName] = useState('')
+  const [placedSurcharge, setPlacedSurcharge] = useState(0)
+  const [placedAmountDue, setPlacedAmountDue] = useState(0)
 
   const storeHref = `/tienda/${warehouseSlug}`
   const otherStores = stores.filter((s) => s.id !== warehouseId)
@@ -180,7 +201,19 @@ export function CheckoutView({
     return 0
   }
   const fee = previewFee()
-  const grandTotal = cart.subtotalCents - memberDiscountCents + fee
+  // Card surcharge (Stripe/PayPal), previewed from config; server is authoritative.
+  const surchargeRate =
+    payment === 'stripe'
+      ? { pct: paymentConfig.stripePct, fixed: paymentConfig.stripeFixed }
+      : payment === 'paypal'
+        ? { pct: paymentConfig.paypalPct, fixed: paymentConfig.paypalFixed }
+        : { pct: 0, fixed: 0 }
+  const baseForSurcharge = cart.subtotalCents - memberDiscountCents + fee
+  const surcharge =
+    surchargeRate.pct > 0 || surchargeRate.fixed > 0
+      ? Math.round((baseForSurcharge * surchargeRate.pct) / 100) + Math.round(surchargeRate.fixed * 100)
+      : 0
+  const grandTotal = baseForSurcharge + surcharge
 
   // Fetch an accurate member-discount preview from the server (tier is
   // resolved from the logged-in session; guests get none). Item pricing
@@ -260,6 +293,8 @@ export function CheckoutView({
       setPlacedMemberDiscount(res.memberDiscountCents)
       setPlacedSubtotalBefore(res.subtotalBeforeCents)
       setPlacedTierName(res.tierName)
+      setPlacedSurcharge(res.paymentFeeCents)
+      setPlacedAmountDue(res.amountDueCents)
       cart.clear()
       if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' })
     } else {
@@ -304,12 +339,15 @@ export function CheckoutView({
               <p><span style={{ color: MUTED }}>{ts(locale, 'shop.name')}:</span> {name}</p>
               <p><span style={{ color: MUTED }}>{ts(locale, 'shop.phone')}:</span> {phone}</p>
               <p><span style={{ color: MUTED }}>{ts(locale, 'shop.fulfillment')}:</span> {fulfillLabel()}</p>
-              <p><span style={{ color: MUTED }}>{tx.payment}:</span> {placedPayment === 'transfer' ? tx.payTransfer : tx.payCash}</p>
+              <p><span style={{ color: MUTED }}>{tx.payment}:</span> {placedPayment === 'transfer' ? tx.payTransfer : placedPayment === 'stripe' ? tx.payCard : placedPayment === 'paypal' ? (paymentConfig.paypalName || 'PayPal') : tx.payCash}</p>
+              {placedSurcharge > 0 && (
+                <p><span style={{ color: MUTED }}>{tx.surcharge}:</span> {price(placedSurcharge)}</p>
+              )}
               {placedMemberDiscount > 0 && (
                 <p><span style={{ color: MUTED }}>{tx.memberDiscount}{placedTierName ? ` (${placedTierName})` : ''}:</span> <span style={{ color: '#1d9e75' }}>-{price(placedMemberDiscount)}</span></p>
               )}
               <p className="mt-1"><span style={{ color: MUTED }}>{tx.deliveryFee}:</span> {placedShipping > 0 ? price(placedShipping) : tx.free}</p>
-              <p className="mt-1"><span style={{ color: MUTED }}>{ts(locale, 'shop.total')}:</span> <span style={{ color: NAVY, fontWeight: 600 }}>{price(placedTotal)}</span></p>
+              <p className="mt-1"><span style={{ color: MUTED }}>{ts(locale, 'shop.total')}:</span> <span style={{ color: NAVY, fontWeight: 600 }}>{price(placedSurcharge > 0 ? placedAmountDue : placedTotal)}</span></p>
             </div>
             {placedPayment === 'transfer' && bankInfo.account && (
               <div className="mx-auto mt-3 max-w-sm rounded-xl p-3 text-left text-[13px]" style={{ background: '#fff', border: `1px solid ${NAVY}` }}>
@@ -424,6 +462,24 @@ export function CheckoutView({
                     <span className="block text-[11px]" style={{ color: MUTED }}>{tx.payTransferSub}</span>
                   </span>
                 </button>
+                {paymentConfig.enabled && paymentConfig.stripePct >= 0 && (
+                  <button onClick={() => setPayment('stripe')} className="flex items-center gap-3 rounded-xl px-3 py-3 text-left text-[13px] transition" style={optionStyle(payment === 'stripe')}>
+                    <Icon d={ICON.cash} size={18} />
+                    <span className="flex-1">
+                      <span className="block font-medium">{tx.payCard}{paymentConfig.stripePct > 0 ? ` (+${paymentConfig.stripePct}%)` : ''}</span>
+                      <span className="block text-[11px]" style={{ color: MUTED }}>{tx.payCardSub}</span>
+                    </span>
+                  </button>
+                )}
+                {paymentConfig.enabled && (
+                  <button onClick={() => setPayment('paypal')} className="flex items-center gap-3 rounded-xl px-3 py-3 text-left text-[13px] transition" style={optionStyle(payment === 'paypal')}>
+                    <Icon d={ICON.bank} size={18} />
+                    <span className="flex-1">
+                      <span className="block font-medium">{paymentConfig.paypalName || 'PayPal'}{paymentConfig.paypalPct > 0 ? ` (+${paymentConfig.paypalPct}%)` : ''}</span>
+                      <span className="block text-[11px]" style={{ color: MUTED }}>{tx.payPaypalSub}</span>
+                    </span>
+                  </button>
+                )}
               </div>
               {payment === 'transfer' && bankInfo.account && (
                 <div className="mt-3 rounded-xl p-3 text-[13px]" style={{ background: '#f7f8fa' }}>
@@ -460,6 +516,12 @@ export function CheckoutView({
                 <span style={{ color: MUTED }}>{tx.deliveryFee}</span>
                 <span style={{ color: INK }}>{fee > 0 ? price(fee) : tx.free}</span>
               </div>
+              {surcharge > 0 && (
+                <div className="mt-1 flex items-center justify-between text-[13px]">
+                  <span style={{ color: MUTED }}>{tx.surcharge}{surchargeRate.pct > 0 ? ` (${surchargeRate.pct}%)` : ''}</span>
+                  <span style={{ color: INK }}>{price(surcharge)}</span>
+                </div>
+              )}
               <div className="mt-2 flex items-center justify-between border-t pt-2" style={{ borderColor: '#eceef2' }}>
                 <span className="text-[14px]" style={{ color: MUTED }}>{ts(locale, 'shop.total')}</span>
                 <span className="text-[18px] font-semibold" style={{ color: NAVY }}>{price(grandTotal)}</span>

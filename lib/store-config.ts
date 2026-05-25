@@ -22,9 +22,19 @@ export type StoreBankInfo = {
   accountType: string
 }
 
+export type PaymentConfig = {
+  enabled: boolean
+  stripePct: number
+  stripeFixed: number
+  paypalPct: number
+  paypalFixed: number
+  paypalName: string
+}
+
 export type StorePublicConfig = {
   deliveryFees: DeliveryFees
   bankInfo: StoreBankInfo
+  paymentConfig: PaymentConfig
 }
 
 function detectType(value: unknown): ConfigValueType | null {
@@ -131,6 +141,11 @@ export async function fetchStorePublicConfig(): Promise<StorePublicConfig> {
   if (error) throw error
   const obj = (data ?? {}) as Record<string, unknown>
   const str = (x: unknown): string => (typeof x === 'string' ? x : '')
+  const numv = (x: unknown): number => {
+    if (typeof x === 'number' && Number.isFinite(x)) return x
+    if (typeof x === 'string' && x.trim() !== '' && Number.isFinite(Number(x))) return Number(x)
+    return 0
+  }
   return {
     deliveryFees: parseDeliveryFees(obj.delivery_fees as Partial<DeliveryFees> | null),
     bankInfo: {
@@ -138,6 +153,14 @@ export async function fetchStorePublicConfig(): Promise<StorePublicConfig> {
       account: str(obj.bankAccount),
       accountName: str(obj.bankAccountName),
       accountType: str(obj.bankAccountType),
+    },
+    paymentConfig: {
+      enabled: numv(obj.online_pay_enabled) === 1,
+      stripePct: numv(obj.stripe_fee_pct),
+      stripeFixed: numv(obj.stripe_fee_fixed),
+      paypalPct: numv(obj.paypal_fee_pct),
+      paypalFixed: numv(obj.paypal_fee_fixed),
+      paypalName: str(obj.paypal_name) || 'PayPal',
     },
   }
 }

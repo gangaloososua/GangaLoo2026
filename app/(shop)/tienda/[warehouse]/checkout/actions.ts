@@ -15,7 +15,7 @@ export type PlaceOrderInput = {
   fulfillment: 'pickup' | 'delivery'
   pickupWarehouseId?: string
   deliveryRegion?: 'local' | 'national'
-  paymentMethod: 'cash' | 'transfer'
+  paymentMethod: 'cash' | 'transfer' | 'stripe' | 'paypal'
   shippingAddress?: string
   shippingCity?: string
   items: { product_id: string; qty: number }[]
@@ -29,8 +29,10 @@ export type PlaceOrderResult =
       subtotalBeforeCents: number
       memberDiscountCents: number
       shippingCents: number
+      paymentFeeCents: number
       totalCents: number
-      paymentMethod: 'cash' | 'transfer'
+      amountDueCents: number
+      paymentMethod: 'cash' | 'transfer' | 'stripe' | 'paypal'
       tierName: string
       tierDiscountPct: number
     }
@@ -80,7 +82,9 @@ export async function placeOnlineOrder(
       subtotal_before_cents?: number
       member_discount_cents?: number
       shipping_cents?: number
+      payment_fee_cents?: number
       total_cents?: number
+      amount_due_cents?: number
       payment_method?: string
       tier_name?: string
       tier_discount_pct?: number
@@ -96,8 +100,13 @@ export async function placeOnlineOrder(
       subtotalBeforeCents: res.subtotal_before_cents ?? res.subtotal_cents ?? 0,
       memberDiscountCents: res.member_discount_cents ?? 0,
       shippingCents: res.shipping_cents ?? 0,
+      paymentFeeCents: res.payment_fee_cents ?? 0,
       totalCents: res.total_cents ?? 0,
-      paymentMethod: res.payment_method === 'transfer' ? 'transfer' : 'cash',
+      amountDueCents: res.amount_due_cents ?? (res.total_cents ?? 0) + (res.payment_fee_cents ?? 0),
+      paymentMethod:
+        res.payment_method === 'transfer' || res.payment_method === 'stripe' || res.payment_method === 'paypal'
+          ? res.payment_method
+          : 'cash',
       tierName: res.tier_name ?? '',
       tierDiscountPct: Number(res.tier_discount_pct ?? 0),
     }
