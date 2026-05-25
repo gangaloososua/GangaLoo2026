@@ -44,6 +44,12 @@ const T = {
     orders: 'Mis pedidos',
     ordersEmpty: 'Aún no tienes pedidos.',
     total: 'Total',
+    loyaltyTitle: 'Mi nivel',
+    pointsLabel: 'puntos',
+    noTier: 'Aún no tienes nivel. ¡Sigue comprando!',
+    toNext: 'para',
+    topTier: '¡Nivel máximo alcanzado!',
+    tierBenefit: 'de descuento en cada compra',
   },
   en: {
     back: 'Back',
@@ -72,6 +78,12 @@ const T = {
     orders: 'My orders',
     ordersEmpty: 'You have no orders yet.',
     total: 'Total',
+    loyaltyTitle: 'My tier',
+    pointsLabel: 'points',
+    noTier: 'No tier yet. Keep shopping!',
+    toNext: 'to',
+    topTier: 'Top tier reached!',
+    tierBenefit: 'off every purchase',
   },
 } as const
 
@@ -80,6 +92,23 @@ export type AccountOrderItem = {
   qty: number
   unit_price_cents: number
   line_total_cents: number
+}
+
+export type CustomerTier = {
+  tier_index: number
+  tier_name: string
+  discount_pct: number
+  points: number
+  next_points: number | null
+  points_to_next: number | null
+} | null
+
+const TIER_NAMES = ['Bronze', 'Silver', 'Gold', 'Platinum'] as const
+const TIER_COLOR: Record<string, string> = {
+  Bronze: '#b3702f',
+  Silver: '#8a939f',
+  Gold: '#c79a2e',
+  Platinum: '#4b5a6b',
 }
 
 export type AccountOrder = {
@@ -158,12 +187,63 @@ function Icon({ d, size = 22 }: { d: string; size?: number }) {
   )
 }
 
+function TierCard({
+  tier,
+  t,
+}: {
+  tier: NonNullable<CustomerTier>
+  t: (typeof T)[Locale]
+}) {
+  const hasTier = tier.tier_index > 0
+  const color = hasTier ? (TIER_COLOR[tier.tier_name] ?? NAVY) : '#9aa5b3'
+  const nextName = TIER_NAMES[tier.tier_index] // index 0->Bronze ... 3->Platinum, 4->undefined
+  const isMax = tier.next_points == null
+  const pct = tier.next_points && tier.next_points > 0
+    ? Math.min(100, Math.round((tier.points / tier.next_points) * 100))
+    : 100
+
+  return (
+    <div className="mt-6 rounded-2xl bg-white p-6" style={{ border: '1px solid #eceef2' }}>
+      <h2 className="text-[16px] font-semibold" style={{ color: NAVY }}>{t.loyaltyTitle}</h2>
+      {hasTier ? (
+        <div className="mt-3 flex items-center gap-3">
+          <span className="rounded-full px-3 py-1 text-[13px] font-semibold text-white" style={{ background: color }}>{tier.tier_name}</span>
+          <span className="text-[13px]" style={{ color: INK }}>{tier.discount_pct}% {t.tierBenefit}</span>
+        </div>
+      ) : (
+        <p className="mt-2 text-[13px]" style={{ color: MUTED }}>{t.noTier}</p>
+      )}
+
+      <p className="mt-3 text-[13px]" style={{ color: MUTED }}>
+        <span style={{ color: NAVY, fontWeight: 600 }}>{tier.points.toLocaleString('en-US')}</span> {t.pointsLabel}
+      </p>
+
+      {!isMax && (
+        <>
+          <div className="mt-2 h-2 w-full overflow-hidden rounded-full" style={{ background: '#eef1f5' }}>
+            <div className="h-full rounded-full" style={{ width: `${pct}%`, background: color === '#9aa5b3' ? NAVY : color }} />
+          </div>
+          {tier.points_to_next != null && nextName && (
+            <p className="mt-2 text-[12px]" style={{ color: MUTED }}>
+              {tier.points_to_next.toLocaleString('en-US')} {t.pointsLabel} {t.toNext} <span style={{ color: TIER_COLOR[nextName] ?? NAVY, fontWeight: 600 }}>{nextName}</span>
+            </p>
+          )}
+        </>
+      )}
+      {isMax && (
+        <p className="mt-2 text-[12px] font-semibold" style={{ color }}>{t.topTier}</p>
+      )}
+    </div>
+  )
+}
+
 export function AccountView({
   warehouseSlug,
   warehouseName,
   loggedIn,
   profile,
   orders = [],
+  tier = null,
 }: {
   warehouseSlug: string
   warehouseName: string
@@ -175,6 +255,7 @@ export function AccountView({
     role?: string | null
   } | null
   orders?: AccountOrder[]
+  tier?: CustomerTier
 }) {
   const router = useRouter()
   const [locale, setLocale] = useState<Locale>('es')
@@ -257,6 +338,8 @@ export function AccountView({
               </button>
             </div>
           </div>
+
+          {tier ? <TierCard tier={tier} t={t} /> : null}
 
           <section className="mt-6">
             <h2 className="px-1 text-[16px] font-semibold" style={{ color: NAVY }}>{t.orders}</h2>

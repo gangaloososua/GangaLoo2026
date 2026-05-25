@@ -1,6 +1,6 @@
 import { resolveStoreWarehouse } from '@/lib/store/catalog'
 import { createClient } from '@/lib/supabase/server'
-import { AccountView, type AccountOrder } from './account-view'
+import { AccountView, type AccountOrder, type CustomerTier } from './account-view'
 
 export const dynamic = 'force-dynamic'
 
@@ -26,11 +26,14 @@ export default async function Page({
 
   let profile: ProfileShape = null
   let orders: AccountOrder[] = []
+  let tier: CustomerTier | null = null
   if (user) {
     const { data } = await supabase.rpc('get_my_customer_profile')
     profile = (data as ProfileShape) ?? null
     const { data: ord } = await supabase.rpc('get_my_orders')
     orders = (ord as AccountOrder[]) ?? []
+    const { data: t } = await supabase.rpc('get_my_customer_tier')
+    tier = (t as CustomerTier) ?? null
   }
 
   return (
@@ -40,6 +43,7 @@ export default async function Page({
       loggedIn={!!user}
       profile={profile}
       orders={orders}
+      tier={tier}
     />
   )
 }
