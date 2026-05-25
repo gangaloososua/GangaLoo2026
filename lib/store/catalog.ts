@@ -47,6 +47,20 @@ export type StoreCatalog = {
   weeklyDeal: StoreDeal | null
 }
 
+export type StoreLandingDeal = {
+  productId: string
+  name: string
+  slug: string
+  imageUrl: string | null
+  normalCents: number
+  dealCents: number
+  percent: number
+}
+
+export type StoreWithDeals = StoreWarehouse & {
+  deals: StoreLandingDeal[]
+}
+
 function cleanName(raw: string): string {
   return raw.replace(/^\s*\d+\s*[-–—]\s*/, '').trim()
 }
@@ -58,6 +72,101 @@ function slugify(s: string): string {
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
+}
+
+export async function listStoreWarehouses(): Promise<StoreWarehouse[]> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('store_warehouses')
+    .select('id, name')
+    .eq('is_active', true)
+  if (error) throw error
+  return (data ?? [])
+    .map((w) => ({
+      id: w.id,
+      name: cleanName(w.name),
+      rawName: w.name,
+      slug: slugify(cleanName(w.name)),
+    }))
+    .sort((a, b) => a.rawName.localeCompare(b.rawName))
+}
+
+// For the /tienda landing page: every active store with its live featured
+// deals (daily/weekly promotions). Reads only safe store_* views. Deal price =
+// percent off the normal store price, capped at 30% (matches checkout).
+export async function listStoreWarehousesWithDeals(): Promise<StoreWithDeals[]> {
+  const supabase = await createClient()
+  const stores = await listStoreWarehouses()
+  if (stores.length === 0) return []
+
+  // All active online deal promotions across stores.
+  const { data: promos } = await supabase
+    .from('store_promotions')
+    .select('product_id, warehouse_id, delta_percent, priority')
+
+  // Resolve the product details + per-store normal prices we need.
+  const productIds = [...new Set((promos ?? []).map((p) => p.product_id))]
+  const nameById = new Map<string, { name: string; slug: string; base: number; img: string | null }>()
+  if (productIds.length > 0) {
+    const { data: prods } = await supabase
+      .from('store_products')
+      .select('id, name, slug, price_cents, primary_image_url')
+      .in('id', productIds)
+      .eq('is_active', true)
+      .eq('visible_in_store', true)
+    for (const p of prods ?? []) {
+      nameById.set(p.id, { name: p.name, slug: p.slug, base: p.price_cents, img: p.primary_image_url })
+    }
+  }
+
+  return Promise.all(
+    stores.map(async (store) => {
+      const relevant = (promos ?? []).filter(
+        (p) => p.warehouse_id == null || p.warehouse_id === store.id,
+      )
+      if (relevant.length === 0) return { ...store, deals: [] }
+
+      // Per-store price overrides for the deal products in this store.
+      const ids = [...new Set(relevant.map((r) => r.product_id))]
+      const { data: settings } = await supabase
+        .from('store_product_settings')
+        .select('product_id, is_visible, price_override_cents')
+        .eq('warehouse_id', store.id)
+        .in('product_id', ids)
+      const settingByProduct = new Map(
+        (settings ?? []).map((s) => [s.product_id, s]),
+      )
+
+      const seen = new Set<string>()
+      const deals: StoreLandingDeal[] = []
+      // Highest priority first so the best deal wins per product.
+      const sorted = [...relevant].sort(
+        (a, b) => (Number(b.priority) || 0) - (Number(a.priority) || 0),
+      )
+      for (const r of sorted) {
+        if (seen.has(r.product_id)) continue
+        const prod = nameById.get(r.product_id)
+        if (!prod) continue
+        const setting = settingByProduct.get(r.product_id)
+        if (setting && setting.is_visible === false) continue
+        const normal = setting?.price_override_cents ?? prod.base
+        const pct = Number(r.delta_percent) || 0
+        const dealCents = Math.round(normal * Math.max(0.7, 1 - pct / 100))
+        if (dealCents >= normal) continue
+        seen.add(r.product_id)
+        deals.push({
+          productId: r.product_id,
+          name: prod.name,
+          slug: prod.slug,
+          imageUrl: prod.img,
+          normalCents: normal,
+          dealCents,
+          percent: Math.round((1 - dealCents / normal) * 100),
+        })
+      }
+      return { ...store, deals: deals.slice(0, 4) }
+    }),
+  )
 }
 
 export async function resolveStoreWarehouse(

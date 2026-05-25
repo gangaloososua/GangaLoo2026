@@ -8,8 +8,8 @@ import { NextResponse, type NextRequest } from 'next/server'
 const PUBLIC_PREFIXES = ['/login', '/auth', '/tienda']
 
 // Where to send a logged-in CUSTOMER who strays toward an admin page.
-// (Replace with the "choose your store" landing once it exists in Step 4.)
-const CUSTOMER_HOME = '/tienda/maranatha'
+// The /tienda landing lets them pick a store.
+const CUSTOMER_HOME = '/tienda'
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
