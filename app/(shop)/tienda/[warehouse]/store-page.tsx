@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { formatDOP } from '@/lib/format'
 import { ts, type Locale } from '@/lib/i18n/shop'
@@ -326,12 +326,12 @@ export function StorePage({ catalog, stores = [] }: { catalog: StoreCatalog; sto
       )}
 
       {!searching && categories.length > 0 && (
-        <div className="gl-chips mx-auto flex w-full max-w-[1100px] gap-2 overflow-x-auto px-4 pb-5">
-          <Chip label={ts(locale, 'shop.all')} active={activeCat === 'all'} onClick={() => selectCat('all')} />
-          {categories.map((c) => (
-            <Chip key={c.id} label={c.name} active={activeCat === c.id} onClick={() => selectCat(c.id)} />
-          ))}
-        </div>
+        <CategoryBar
+          categories={categories}
+          activeCat={activeCat}
+          allLabel={ts(locale, 'shop.all')}
+          onSelect={selectCat}
+        />
       )}
 
       {!searching && offers.length > 0 && activeCat === 'all' && (
@@ -383,6 +383,78 @@ export function StorePage({ catalog, stores = [] }: { catalog: StoreCatalog; sto
         <NavItem href={cartHref} d={ICON.cart} label={ts(locale, 'shop.nav.cart')} badge={cart.count} />
         <NavItem href={accountHref} d={ICON.user} label={ts(locale, 'shop.nav.account')} />
       </nav>
+    </div>
+  )
+}
+
+function CategoryBar({
+  categories,
+  activeCat,
+  allLabel,
+  onSelect,
+}: {
+  categories: { id: string; name: string }[]
+  activeCat: string
+  allLabel: string
+  onSelect: (id: string) => void
+}) {
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const [canLeft, setCanLeft] = useState(false)
+  const [canRight, setCanRight] = useState(false)
+  const [isDesktop, setIsDesktop] = useState(false)
+
+  const update = useCallback(() => {
+    const el = scrollRef.current
+    if (!el) return
+    setCanLeft(el.scrollLeft > 4)
+    setCanRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 4)
+    setIsDesktop(window.innerWidth >= 640)
+  }, [])
+
+  useEffect(() => {
+    // Run after paint so the row has its real width, then again on the next
+    // frame as a safety net for late layout/font loading.
+    update()
+    const raf = requestAnimationFrame(update)
+    const el = scrollRef.current
+    if (!el) return
+    el.addEventListener('scroll', update, { passive: true })
+    window.addEventListener('resize', update)
+    return () => {
+      cancelAnimationFrame(raf)
+      el.removeEventListener('scroll', update)
+      window.removeEventListener('resize', update)
+    }
+  }, [update, categories])
+
+  const nudge = (dir: -1 | 1) => {
+    const el = scrollRef.current
+    if (!el) return
+    el.scrollBy({ left: dir * Math.max(200, el.clientWidth * 0.7), behavior: 'smooth' })
+  }
+
+  // Explicit flex (no `hidden`/`sm:flex` combo, which can leave display:none
+  // winning on desktop). We gate desktop-only via the isDesktop state instead.
+  const arrowBtn = 'absolute top-1/2 z-10 flex -translate-y-1/2 h-8 w-8 items-center justify-center rounded-full bg-white shadow-md transition active:scale-90'
+
+  return (
+    <div className="relative mx-auto w-full max-w-[1100px] px-4 pb-5">
+      {isDesktop && canLeft && (
+        <button type="button" onClick={() => nudge(-1)} aria-label="prev" className={arrowBtn} style={{ left: 8, border: '1px solid #eceef2', color: NAVY }}>
+          <Icon d="M15 6l-6 6 6 6" size={18} />
+        </button>
+      )}
+      <div ref={scrollRef} className="gl-chips flex gap-2 overflow-x-auto scroll-smooth">
+        <Chip label={allLabel} active={activeCat === 'all'} onClick={() => onSelect('all')} />
+        {categories.map((c) => (
+          <Chip key={c.id} label={c.name} active={activeCat === c.id} onClick={() => onSelect(c.id)} />
+        ))}
+      </div>
+      {isDesktop && canRight && (
+        <button type="button" onClick={() => nudge(1)} aria-label="next" className={arrowBtn} style={{ right: 8, border: '1px solid #eceef2', color: NAVY }}>
+          <Icon d="M9 6l6 6-6 6" size={18} />
+        </button>
+      )}
     </div>
   )
 }
