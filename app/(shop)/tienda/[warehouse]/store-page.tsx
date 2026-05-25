@@ -158,6 +158,7 @@ function DealSection({ deal, locale, storeSlug, onAdd }: { deal: StoreDeal; loca
 export function StorePage({ catalog }: { catalog: StoreCatalog }) {
   const [locale, setLocale] = useState<Locale>('es')
   const [activeCat, setActiveCat] = useState<string>('all')
+  const [query, setQuery] = useState('')
   const [visible, setVisible] = useState(PAGE)
   const [bump, setBump] = useState(false)
 
@@ -175,10 +176,25 @@ export function StorePage({ catalog }: { catalog: StoreCatalog }) {
     setVisible(PAGE)
   }
 
+  const onQuery = (v: string) => {
+    setQuery(v)
+    setVisible(PAGE)
+  }
+
+  const trimmedQuery = query.trim().toLowerCase()
+  const searching = trimmedQuery.length > 0
+
   const filtered = useMemo(() => {
+    // When searching, look across ALL products (ignore the category chips).
+    if (searching) {
+      return products.filter((p) => {
+        const hay = `${p.name} ${p.sku} ${p.category?.name ?? ''}`.toLowerCase()
+        return hay.includes(trimmedQuery)
+      })
+    }
     if (activeCat === 'all') return products
     return products.filter((p) => p.category?.id === activeCat)
-  }, [activeCat, products])
+  }, [searching, trimmedQuery, activeCat, products])
 
   const shown = filtered.slice(0, visible)
   const cartHref = `/tienda/${warehouse.slug}/carrito`
@@ -223,9 +239,23 @@ export function StorePage({ catalog }: { catalog: StoreCatalog }) {
               <span>{warehouse.name}</span>
               <Icon d={ICON.chevron} size={15} />
             </div>
-            <div className="flex flex-1 items-center gap-2 rounded-full bg-white px-3 py-2 text-[12px]" style={{ color: '#7c8aa3' }}>
+            <div className="flex flex-1 items-center gap-2 rounded-full bg-white px-3 py-2 text-[12px]">
               <Icon d={ICON.search} size={15} />
-              <span>{ts(locale, 'shop.search')}</span>
+              <input
+                id="store-search"
+                value={query}
+                onChange={(e) => onQuery(e.target.value)}
+                placeholder={ts(locale, 'shop.search')}
+                className="w-full bg-transparent outline-none"
+                style={{ color: INK }}
+                inputMode="search"
+                autoComplete="off"
+              />
+              {query && (
+                <button type="button" onClick={() => onQuery('')} aria-label="clear" style={{ color: '#7c8aa3' }}>
+                  <Icon d="M6 6l12 12M18 6L6 18" size={15} />
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -249,14 +279,14 @@ export function StorePage({ catalog }: { catalog: StoreCatalog }) {
         </a>
       </section>
 
-      {activeCat === 'all' && dailyDeal && (
+      {!searching && activeCat === 'all' && dailyDeal && (
         <DealSection deal={dailyDeal} locale={locale} storeSlug={warehouse.slug} onAdd={handleAdd} />
       )}
-      {activeCat === 'all' && weeklyDeal && (
+      {!searching && activeCat === 'all' && weeklyDeal && (
         <DealSection deal={weeklyDeal} locale={locale} storeSlug={warehouse.slug} onAdd={handleAdd} />
       )}
 
-      {categories.length > 0 && (
+      {!searching && categories.length > 0 && (
         <div className="gl-chips mx-auto flex w-full max-w-[1100px] gap-2 overflow-x-auto px-4 pb-5">
           <Chip label={ts(locale, 'shop.all')} active={activeCat === 'all'} onClick={() => selectCat('all')} />
           {categories.map((c) => (
@@ -265,7 +295,7 @@ export function StorePage({ catalog }: { catalog: StoreCatalog }) {
         </div>
       )}
 
-      {offers.length > 0 && activeCat === 'all' && (
+      {!searching && offers.length > 0 && activeCat === 'all' && (
         <section className="mx-auto w-full max-w-[1100px] px-4 pb-7">
           <div className="mb-3 flex items-center gap-2">
             <h2 className="text-[16px] font-semibold" style={{ color: NAVY }}>{ts(locale, 'shop.offers')} {warehouse.name}</h2>
@@ -281,7 +311,10 @@ export function StorePage({ catalog }: { catalog: StoreCatalog }) {
 
       <section id="productos" className="mx-auto w-full max-w-[1100px] px-4 pb-10">
         <h2 className="mb-3 text-[16px] font-semibold" style={{ color: NAVY }}>
-          {ts(locale, 'shop.allProducts')} <span style={{ color: MUTED, fontWeight: 400 }}>· {filtered.length}</span>
+          {searching
+            ? `${locale === 'es' ? 'Resultados' : 'Results'} "${query.trim()}"`
+            : ts(locale, 'shop.allProducts')}{' '}
+          <span style={{ color: MUTED, fontWeight: 400 }}>· {filtered.length}</span>
         </h2>
         {filtered.length === 0 ? (
           <p className="py-12 text-center text-[14px]" style={{ color: MUTED }}>{ts(locale, 'shop.empty')}</p>
