@@ -71,8 +71,12 @@ function ProductCard({
           {p.isOffer && (
             <span className="absolute left-2 top-2 rounded-full px-2 py-1 text-[11px] font-semibold text-white" style={{ background: RED }}>-{p.offerPercent}%</span>
           )}
-          {out && (
+          {out ? (
             <span className="absolute right-2 top-2 rounded-full px-2 py-1 text-[11px] font-medium" style={{ background: 'rgba(22,24,29,.78)', color: '#fff' }}>{ts(locale, 'shop.out')}</span>
+          ) : p.stock <= 1 ? (
+            <span className="absolute right-2 top-2 rounded-full px-2 py-1 text-[11px] font-semibold" style={{ background: '#b45309', color: '#fff' }}>{locale === 'es' ? '\u00DAltimas' : 'Only'} {p.stock}</span>
+          ) : (
+            <span className="absolute right-2 top-2 rounded-full px-2 py-1 text-[11px] font-semibold" style={{ background: '#1e9e54', color: '#fff' }}>{locale === 'es' ? 'Disponible' : 'Available'}</span>
           )}
         </div>
 
