@@ -21,17 +21,15 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import type { Role } from '@/lib/auth/roles'
-
 export type NavItem = {
   label: string
   href: string
   icon: LucideIcon
   roles: Role[]
 }
-
 const ALL: Role[] = ['owner', 'admin', 'seller', 'distributor']
 const OWNER_ONLY: Role[] = ['owner', 'admin']
-
+const OWNER_AND_DISTRIBUTOR: Role[] = ['owner', 'admin', 'distributor']
 export const navItems: NavItem[] = [
   { label: 'Dashboard',        href: '/',                     icon: LayoutDashboard, roles: ALL },
   { label: 'Sales',            href: '/sales',                icon: ShoppingCart,    roles: ALL },
@@ -40,7 +38,7 @@ export const navItems: NavItem[] = [
   { label: 'Inventory',        href: '/inventory',            icon: Boxes,           roles: ALL },
   { label: 'Categories',       href: '/categories',           icon: Tags,            roles: OWNER_ONLY },
   { label: 'Warehouses',       href: '/warehouses',           icon: Warehouse,       roles: OWNER_ONLY },
-  { label: 'Transfers',        href: '/transfers',            icon: ArrowRightLeft,  roles: OWNER_ONLY },
+  { label: 'Transfers',        href: '/transfers',            icon: ArrowRightLeft,  roles: OWNER_AND_DISTRIBUTOR },
   { label: 'Purchases',        href: '/purchases',            icon: PackagePlus,     roles: OWNER_ONLY },
   { label: 'Courier Payments', href: '/courier-payments',     icon: Receipt,         roles: OWNER_ONLY },
   { label: 'Money Accounts',   href: '/money-accounts',       icon: Wallet,          roles: OWNER_ONLY },

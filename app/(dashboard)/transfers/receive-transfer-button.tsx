@@ -1,8 +1,7 @@
 'use client'
-
 // Round 26d — receive-transfer button + confirm dialog.
 // Calls receiveTransfer (RPC enforces owner/admin or destination distributor).
-
+// Round 36a — locale-aware (Spanish for the destination distributor).
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
@@ -19,25 +18,27 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { receiveTransfer } from './actions'
-
+import { tt } from '@/lib/i18n/transfers-i18n'
+import type { Locale } from '@/lib/i18n/dictionary'
 export function ReceiveTransferButton({
   transferId,
   toWarehouseName,
   size = 'sm',
+  locale = 'en',
 }: {
   transferId: string
   toWarehouseName: string
   size?: 'sm' | 'default'
+  locale?: Locale
 }) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [pending, startTransition] = useTransition()
-
   function doReceive() {
     startTransition(async () => {
       const res = await receiveTransfer(transferId)
       if (res.ok) {
-        toast.success('Transfer received — stock added to the destination.')
+        toast.success(tt(locale, 'tr.recv.toastDone'))
         setOpen(false)
         router.refresh()
       } else {
@@ -45,24 +46,22 @@ export function ReceiveTransferButton({
       }
     })
   }
-
   return (
     <>
       <Button type="button" size={size} variant="outline" onClick={() => setOpen(true)}>
         <PackageCheck className="mr-1 h-4 w-4" />
-        Receive
+        {tt(locale, 'tr.recv.button')}
       </Button>
       <AlertDialog open={open} onOpenChange={setOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Receive this transfer?</AlertDialogTitle>
+            <AlertDialogTitle>{tt(locale, 'tr.recv.title')}</AlertDialogTitle>
             <AlertDialogDescription>
-              This confirms the stock arrived at {toWarehouseName} and adds it to that
-              warehouse&apos;s inventory at the same cost it left with. It can&apos;t be undone.
+              {tt(locale, 'tr.recv.bodyPre')} {toWarehouseName} {tt(locale, 'tr.recv.bodyPost')}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={pending}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel disabled={pending}>{tt(locale, 'tr.recv.cancel')}</AlertDialogCancel>
             <AlertDialogAction
               disabled={pending}
               onClick={(e) => {
@@ -70,7 +69,7 @@ export function ReceiveTransferButton({
                 doReceive()
               }}
             >
-              {pending ? 'Receiving…' : 'Receive'}
+              {pending ? tt(locale, 'tr.recv.doing') : tt(locale, 'tr.recv.button')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
