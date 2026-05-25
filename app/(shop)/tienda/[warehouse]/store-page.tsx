@@ -104,6 +104,11 @@ const DEAL_T = {
   en: { daily: 'Deal of the Day', weekly: 'Deal of the Week', endsIn: 'Ends in' },
 } as const
 
+const MENU_T = {
+  es: { home: 'Inicio', account: 'Mi cuenta', cart: 'Carrito', stores: 'Todas las tiendas', browse: 'Explorar por categoría', lang: 'Idioma' },
+  en: { home: 'Home', account: 'My account', cart: 'Cart', stores: 'All stores', browse: 'Browse by category', lang: 'Language' },
+} as const
+
 function Countdown({ endsAt, onExpire, locale, accent }: { endsAt: string; onExpire: () => void; locale: Locale; accent: string }) {
   const [now, setNow] = useState<number | null>(null)
   useEffect(() => {
@@ -162,6 +167,7 @@ export function StorePage({ catalog, stores = [] }: { catalog: StoreCatalog; sto
   const [visible, setVisible] = useState(PAGE)
   const [bump, setBump] = useState(false)
   const [storeMenu, setStoreMenu] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
 
   const { warehouse, products, offers, categories, dailyDeal, weeklyDeal } = catalog
   const cart = useCart(warehouse.slug)
@@ -180,6 +186,18 @@ export function StorePage({ catalog, stores = [] }: { catalog: StoreCatalog; sto
   const onQuery = (v: string) => {
     setQuery(v)
     setVisible(PAGE)
+  }
+
+  // Pick a category from the slide-out menu: clear any search so the category
+  // filter actually shows, close the drawer, then scroll down to the products.
+  const jumpToCategory = (id: string) => {
+    setQuery('')
+    setActiveCat(id)
+    setVisible(PAGE)
+    setMenuOpen(false)
+    window.setTimeout(() => {
+      document.getElementById('productos')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }, 60)
   }
 
   const trimmedQuery = query.trim().toLowerCase()
@@ -210,13 +228,15 @@ export function StorePage({ catalog, stores = [] }: { catalog: StoreCatalog; sto
         .gl-chips { scrollbar-width: none }
         @keyframes glpop { 0% { transform: scale(1) } 50% { transform: scale(1.3) } 100% { transform: scale(1) } }
         .gl-pop { animation: glpop .35s ease }
+        @keyframes gldrawer { from { transform: translateX(-100%) } to { transform: none } }
+        .gl-drawer { animation: gldrawer .22s ease both }
       `}</style>
 
       <header className="sticky top-0 z-30" style={{ background: NAVY, color: '#fff' }}>
         <div className="mx-auto w-full max-w-[1100px] px-4 pt-3 pb-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <button aria-label="menu" className="opacity-90"><Icon d={ICON.menu} /></button>
+              <button type="button" aria-label="menu" onClick={() => setMenuOpen(true)} className="opacity-90 transition active:scale-90"><Icon d={ICON.menu} /></button>
               <span className="text-[20px] font-semibold tracking-wide">GangaLoo</span>
             </div>
             <div className="flex items-center gap-4">
@@ -377,6 +397,55 @@ export function StorePage({ catalog, stores = [] }: { catalog: StoreCatalog; sto
 
       <footer className="mx-auto w-full max-w-[1100px] px-4 pb-8 text-center text-[12px]" style={{ color: MUTED }}>{ts(locale, 'shop.footer')}</footer>
 
+      {menuOpen && (
+        <div className="fixed inset-0 z-[60]">
+          <button
+            type="button"
+            aria-label={locale === 'es' ? 'Cerrar menú' : 'Close menu'}
+            onClick={() => setMenuOpen(false)}
+            className="absolute inset-0"
+            style={{ background: 'rgba(10,16,28,.45)' }}
+          />
+          <div className="gl-drawer absolute left-0 top-0 flex h-full w-[82%] max-w-[320px] flex-col bg-white shadow-2xl">
+            <div className="flex items-center justify-between px-4 py-4" style={{ background: NAVY, color: '#fff' }}>
+              <span className="text-[18px] font-semibold tracking-wide">GangaLoo</span>
+              <button type="button" aria-label={locale === 'es' ? 'Cerrar' : 'Close'} onClick={() => setMenuOpen(false)} className="opacity-90 transition active:scale-90">
+                <Icon d="M6 6l12 12M18 6L6 18" size={22} />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto py-2">
+              <MenuLink href={`/tienda/${warehouse.slug}`} d={ICON.home} label={MENU_T[locale].home} onClose={() => setMenuOpen(false)} />
+              <MenuLink href={accountHref} d={ICON.user} label={MENU_T[locale].account} onClose={() => setMenuOpen(false)} />
+              <MenuLink href={cartHref} d={ICON.cart} label={MENU_T[locale].cart} badge={cart.count} onClose={() => setMenuOpen(false)} />
+              <MenuLink href="/tienda" d={ICON.warehouse} label={MENU_T[locale].stores} onClose={() => setMenuOpen(false)} />
+
+              {categories.length > 0 && (
+                <>
+                  <p className="px-4 pb-1 pt-4 text-[11px] font-semibold uppercase tracking-wide" style={{ color: MUTED }}>{MENU_T[locale].browse}</p>
+                  <button type="button" onClick={() => jumpToCategory('all')} className="flex w-full items-center px-4 py-2.5 text-left text-[13px]" style={{ color: activeCat === 'all' ? NAVY : INK, fontWeight: activeCat === 'all' ? 600 : 400, background: activeCat === 'all' ? '#f0f4fb' : 'transparent' }}>
+                    {ts(locale, 'shop.all')}
+                  </button>
+                  {categories.map((c) => (
+                    <button key={c.id} type="button" onClick={() => jumpToCategory(c.id)} className="flex w-full items-center px-4 py-2.5 text-left text-[13px]" style={{ color: activeCat === c.id ? NAVY : INK, fontWeight: activeCat === c.id ? 600 : 400, background: activeCat === c.id ? '#f0f4fb' : 'transparent' }}>
+                      {c.name}
+                    </button>
+                  ))}
+                </>
+              )}
+            </div>
+
+            <div className="flex items-center justify-between border-t px-4 py-3" style={{ borderColor: '#eceef2' }}>
+              <span className="text-[12px]" style={{ color: MUTED }}>{MENU_T[locale].lang}</span>
+              <div className="flex overflow-hidden rounded-full text-[11px]" style={{ border: `1px solid ${NAVY}` }}>
+                <button type="button" onClick={() => setLocale('es')} className="px-3 py-1 transition" style={locale === 'es' ? { background: NAVY, color: '#fff' } : { color: NAVY }}>ES</button>
+                <button type="button" onClick={() => setLocale('en')} className="px-3 py-1 transition" style={locale === 'en' ? { background: NAVY, color: '#fff' } : { color: NAVY }}>EN</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <nav className="fixed inset-x-0 bottom-0 z-30 flex justify-around border-t bg-white py-2 sm:hidden" style={{ borderColor: '#e6e9ee', color: NAVY }}>
         <NavItem href="#" d={ICON.home} label={ts(locale, 'shop.nav.home')} active />
         <NavItem href="#" d={ICON.search} label={ts(locale, 'shop.nav.search')} />
@@ -475,6 +544,18 @@ function NavItem({ href, d, label, active, badge }: { href: string; d: string; l
         <span className="absolute right-3 top-[-4px] flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[9px] font-semibold text-white" style={{ background: RED }}>{badge}</span>
       )}
       <span>{label}</span>
+    </Link>
+  )
+}
+
+function MenuLink({ href, d, label, badge, onClose }: { href: string; d: string; label: string; badge?: number; onClose: () => void }) {
+  return (
+    <Link href={href} onClick={onClose} className="flex items-center gap-3 px-4 py-3 text-[14px]" style={{ color: INK }}>
+      <span style={{ color: NAVY }}><Icon d={d} size={20} /></span>
+      <span className="flex-1">{label}</span>
+      {badge != null && badge > 0 && (
+        <span className="flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[11px] font-semibold text-white" style={{ background: RED }}>{badge}</span>
+      )}
     </Link>
   )
 }
