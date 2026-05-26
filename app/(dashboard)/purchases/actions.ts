@@ -518,3 +518,45 @@ export async function paySupplierForReceived(
   return { ok: true }
 }
 
+
+// ---------------------------------------------------------------------------
+// completePaymentRecord (round-38e)
+// ---------------------------------------------------------------------------
+// For HALF-PAID migrated orders (have dop_paid_total + rate, but no paid_at_dop
+// / account). Fills ONLY the missing account + date so the order reads as paid.
+// Does NOT recompute amounts or landed cost.
+// ---------------------------------------------------------------------------
+
+export type CompletePaymentRecordInput = {
+  orderId: string
+  supplierPaymentAccountId: string
+  paidAtDop: string // ISO
+  officialRateAtPayment?: number | null
+  categoryId?: string | null
+}
+
+export async function completePaymentRecord(
+  input: CompletePaymentRecordInput,
+): Promise<ActionResult> {
+  await requireOwner()
+
+  if (!input.orderId) return { ok: false, error: 'Order id is required.' }
+  if (!input.supplierPaymentAccountId)
+    return { ok: false, error: 'Pick the account the supplier was paid from.' }
+  if (!input.paidAtDop) return { ok: false, error: 'Payment date is required.' }
+
+  const supabase = await createClient()
+  const { error } = await supabase.rpc('complete_payment_record', {
+    p_purchase_order_id: input.orderId,
+    p_supplier_payment_account_id: input.supplierPaymentAccountId,
+    p_paid_at_dop: input.paidAtDop,
+    p_official_rate_at_payment: input.officialRateAtPayment ?? null,
+    p_category_id: input.categoryId ?? null,
+  })
+  if (error) return { ok: false, error: error.message }
+
+  revalidatePath(`/purchases/${input.orderId}`)
+  revalidatePath('/purchases')
+  return { ok: true }
+}
+

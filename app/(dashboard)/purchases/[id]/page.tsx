@@ -245,7 +245,7 @@ export default async function PurchaseDetailPage({
         </div>
         <div className="flex flex-col items-end gap-2">
           <StatusBadge status={stored} />
-          <PurchaseActionsBar orderId={order.id} status={stored} items={items} lotTrail={lotTrail} moneyAccounts={moneyAccounts} categories={expenseCategories} usdShipping={order.usd_shipping} usdTax={order.usd_tax} usdDiscount={order.usd_discount} alreadyPaid={order.dop_paid_total != null} />
+          <PurchaseActionsBar orderId={order.id} status={stored} items={items} lotTrail={lotTrail} moneyAccounts={moneyAccounts} categories={expenseCategories} usdShipping={order.usd_shipping} usdTax={order.usd_tax} usdDiscount={order.usd_discount} alreadyPaid={order.dop_paid_total != null} halfPaid={order.dop_paid_total != null && order.dop_paid_total > 0 && order.paid_at_dop == null} />
         </div>
       </div>
 

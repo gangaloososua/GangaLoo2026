@@ -46,6 +46,7 @@ import {
   correctSupplierPayment,
   editPendingPurchaseCosts,
   paySupplierForReceived,
+  completePaymentRecord,
 } from '../actions'
 import type {
   PurchaseStatus,
@@ -68,6 +69,8 @@ type Props = {
   usdDiscount?: number
   // round-38c: is a supplier payment already recorded? (drives late-pay button)
   alreadyPaid?: boolean
+  // round-38e: half-paid migrated order (has amount+rate but no paid date/account)
+  halfPaid?: boolean
 }
 
 function alreadyReceivedQty(lineId: string, lotTrail: Map<string, LotTrailEntry[]>): number {
@@ -122,11 +125,12 @@ export function PurchaseActionsBar({
   usdTax,
   usdDiscount,
   alreadyPaid,
+  halfPaid,
 }: Props) {
   const router = useRouter()
 
   const [busyAction, setBusyAction] =
-    useState<null | 'complete' | 'lost' | 'received' | 'cancelled' | 'paid' | 'correcting' | 'editing'>(null)
+    useState<null | 'complete' | 'lost' | 'received' | 'cancelled' | 'paid' | 'correcting' | 'editing' | 'completingpay'>(null)
   const [completeOpen, setCompleteOpen] = useState(false)
   const [lostOpen, setLostOpen] = useState(false)
   const [receiveOpen, setReceiveOpen] = useState(false)
@@ -134,6 +138,7 @@ export function PurchaseActionsBar({
   const [payOpen, setPayOpen] = useState(false)
   const [correctOpen, setCorrectOpen] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
+  const [cprOpen, setCprOpen] = useState(false)
 
   const catBlocks = useMemo(() => buildExpenseBlocks(categories), [categories])
 
@@ -230,6 +235,13 @@ export function PurchaseActionsBar({
   const [editShipping, setEditShipping] = useState<string>(String(usdShipping ?? 0))
   const [editTax,      setEditTax]      = useState<string>(String(usdTax ?? 0))
   const [editDiscount, setEditDiscount] = useState<string>(String(usdDiscount ?? 0))
+
+  // ---- Complete payment record dialog state (round-38e) ----
+  const [cprAccount, setCprAccount] = useState<string>('')
+  const [cprCategory, setCprCategory] = useState<string>('')
+  const [cprAt, setCprAt] = useState<string>(toLocalDatetimeInputValue(new Date()))
+
+  const cprValid = cprAccount.length > 0 && cprAt.length > 0
 
   const editValid =
     Number(editShipping) >= 0 &&
@@ -345,6 +357,20 @@ export function PurchaseActionsBar({
     setEditOpen(false); setBusyAction(null); router.refresh()
   }
 
+  async function handleCompletePayment() {
+    if (!cprValid) return
+    setBusyAction('completingpay')
+    const res = await completePaymentRecord({
+      orderId,
+      supplierPaymentAccountId: cprAccount,
+      paidAtDop: new Date(cprAt).toISOString(),
+      categoryId: cprCategory || null,
+    })
+    if (!res.ok) { toast.error(res.error); setBusyAction(null); return }
+    toast.success('Payment record completed.')
+    setCprOpen(false); setBusyAction(null); router.refresh()
+  }
+
   // ---- Visibility ----
   const canReceive  = status === 'paid_supplier' || status === 'received'
   const canComplete = status === 'received'
@@ -352,7 +378,11 @@ export function PurchaseActionsBar({
   const canCancel   = status === 'pending' || status === 'paid_supplier'
   const canPay      = status === 'pending'
   // round-38c: completed/received orders that were never paid can record payment too.
-  const canPayLate  = (status === 'received' || status === 'complete') && !alreadyPaid
+  // Truly-unpaid received/complete orders (no amount at all). Half-paid orders
+  // (amount but no date) use Complete payment instead.
+  const canPayLate  = (status === 'received' || status === 'complete') && !alreadyPaid && !halfPaid
+  // round-38e: half-paid order just needs its date+account completed.
+  const canCompletePay = halfPaid === true
   const canCorrect  = status === 'paid_supplier' && !hasReceipts
   const canEdit     = status === 'pending'
 
@@ -440,6 +470,96 @@ export function PurchaseActionsBar({
                 onClick={(e) => { e.preventDefault(); void handleEditCosts() }}
               >
                 {busyAction === 'editing' ? 'Saving...' : 'Save costs'}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
+
+      {/* Complete payment record (round-38e) - half-paid migrated orders */}
+      {canCompletePay && (
+        <AlertDialog open={cprOpen} onOpenChange={setCprOpen}>
+          <AlertDialogTrigger asChild>
+            <Button type="button" variant="default" size="sm">
+              <Banknote className="mr-1.5 h-4 w-4" />
+              Complete payment
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent className="max-w-xl">
+            <AlertDialogHeader>
+              <AlertDialogTitle>Complete the payment record</AlertDialogTitle>
+              <AlertDialogDescription asChild>
+                <div className="space-y-2 text-sm">
+                  <div>
+                    This order already has a recorded amount and exchange rate, but
+                    is missing the account it was paid from and the payment date.
+                    Fill those in to mark it as paid.
+                  </div>
+                  <div className="text-muted-foreground">
+                    This does not change the amount or recompute item costs &mdash; it
+                    only completes the record.
+                  </div>
+                </div>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="cpr-account">From account</Label>
+                <Select value={cprAccount} onValueChange={setCprAccount}>
+                  <SelectTrigger id="cpr-account">
+                    <SelectValue placeholder="Pick an account..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {moneyAccounts.map((a) => (
+                      <SelectItem key={a.id} value={a.id}>
+                        {a.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="cpr-at">Paid at</Label>
+                <Input
+                  id="cpr-at"
+                  type="datetime-local"
+                  value={cprAt}
+                  onChange={(e) => setCprAt(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1.5 md:col-span-2">
+                <Label htmlFor="cpr-category">Expense category (optional)</Label>
+                <Select value={cprCategory} onValueChange={setCprCategory}>
+                  <SelectTrigger id="cpr-category">
+                    <SelectValue placeholder="Leave blank to skip ledger post..." />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-72">
+                    {catBlocks.map((b) => (
+                      <SelectGroup key={b.key}>
+                        <SelectLabel>{b.heading}</SelectLabel>
+                        {b.items.map((c) => (
+                          <SelectItem key={c.id} value={c.id} className="pl-6">
+                            {c.name}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Optional. Only set this if you also want a ledger entry posted.
+                </p>
+              </div>
+            </div>
+
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={busyAction === 'completingpay'}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                disabled={!cprValid || busyAction === 'completingpay'}
+                onClick={(e) => { e.preventDefault(); void handleCompletePayment() }}
+              >
+                {busyAction === 'completingpay' ? 'Saving...' : 'Mark as paid'}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
