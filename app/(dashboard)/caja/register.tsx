@@ -454,7 +454,7 @@ export function Register({
               autoComplete="off"
             />
           </div>
-          <QrScanButton locale={locale} continuous onScan={handleScan} />
+          <QrScanButton locale={locale} onScan={handleScan} />
         </div>
 
         {loadingProducts ? (
