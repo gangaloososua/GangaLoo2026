@@ -245,7 +245,7 @@ export default async function PurchaseDetailPage({
         </div>
         <div className="flex flex-col items-end gap-2">
           <StatusBadge status={stored} />
-          <PurchaseActionsBar orderId={order.id} status={stored} items={items} lotTrail={lotTrail} moneyAccounts={moneyAccounts} categories={expenseCategories} />
+          <PurchaseActionsBar orderId={order.id} status={stored} items={items} lotTrail={lotTrail} moneyAccounts={moneyAccounts} categories={expenseCategories} usdShipping={order.usd_shipping} usdTax={order.usd_tax} usdDiscount={order.usd_discount} />
         </div>
       </div>
 
@@ -327,6 +327,10 @@ export default async function PurchaseDetailPage({
                 <div className="flex justify-between">
                   <dt className="text-muted-foreground">+ Tax</dt>
                   <dd className="tabular-nums">{formatNumber(order.usd_tax)}</dd>
+                </div>
+                <div className="flex justify-between">
+                  <dt className="text-muted-foreground">&minus; Discount</dt>
+                  <dd className="tabular-nums">{formatNumber(order.usd_discount)}</dd>
                 </div>
                 <div className="flex justify-between pt-1.5 border-t font-semibold">
                   <dt>USD total</dt>

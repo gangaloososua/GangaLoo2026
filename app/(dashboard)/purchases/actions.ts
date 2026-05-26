@@ -420,3 +420,47 @@ export async function correctSupplierPayment(
   revalidatePath('/purchases')
   return { ok: true }
 }
+
+// ---------------------------------------------------------------------------
+// editPendingPurchaseCosts (round-38a)
+// ---------------------------------------------------------------------------
+// Correct the USD shipping / tax / discount on a PENDING purchase order.
+// usd_total is a generated column (subtotal + shipping + tax - discount), so we
+// only write the three inputs and the DB recomputes the total. The RPC refuses
+// any order that isn't 'pending', so this is safe by construction.
+// ---------------------------------------------------------------------------
+
+export type EditPendingPurchaseCostsInput = {
+  orderId: string
+  usdShipping: number
+  usdTax: number
+  usdDiscount: number
+}
+
+export async function editPendingPurchaseCosts(
+  input: EditPendingPurchaseCostsInput,
+): Promise<ActionResult> {
+  await requireOwner()
+
+  if (!input.orderId) return { ok: false, error: 'Order id is required.' }
+  if (!Number.isFinite(input.usdShipping) || input.usdShipping < 0)
+    return { ok: false, error: 'Shipping must be zero or more.' }
+  if (!Number.isFinite(input.usdTax) || input.usdTax < 0)
+    return { ok: false, error: 'Tax must be zero or more.' }
+  if (!Number.isFinite(input.usdDiscount) || input.usdDiscount < 0)
+    return { ok: false, error: 'Discount must be zero or more.' }
+
+  const supabase = await createClient()
+  const { error } = await supabase.rpc('edit_pending_purchase_costs', {
+    p_purchase_order_id: input.orderId,
+    p_usd_shipping: input.usdShipping,
+    p_usd_tax: input.usdTax,
+    p_usd_discount: input.usdDiscount,
+  })
+  if (error) return { ok: false, error: error.message }
+
+  revalidatePath(`/purchases/${input.orderId}`)
+  revalidatePath('/purchases')
+  return { ok: true }
+}
+

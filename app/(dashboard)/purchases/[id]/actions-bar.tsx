@@ -10,6 +10,7 @@ import {
   Truck,
   XCircle,
   Banknote,
+  Pencil,
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -43,6 +44,7 @@ import {
   markCancelled,
   markPaidSupplier,
   correctSupplierPayment,
+  editPendingPurchaseCosts,
 } from '../actions'
 import type {
   PurchaseStatus,
@@ -59,6 +61,10 @@ type Props = {
   lotTrail: Map<string, LotTrailEntry[]>
   moneyAccounts: MoneyAccount[]
   categories: AccountCategoryOption[]
+  // round-38a — current USD costs, used to pre-fill the Edit costs dialog.
+  usdShipping?: number
+  usdTax?: number
+  usdDiscount?: number
 }
 
 function alreadyReceivedQty(lineId: string, lotTrail: Map<string, LotTrailEntry[]>): number {
@@ -109,17 +115,21 @@ export function PurchaseActionsBar({
   lotTrail,
   moneyAccounts,
   categories,
+  usdShipping,
+  usdTax,
+  usdDiscount,
 }: Props) {
   const router = useRouter()
 
   const [busyAction, setBusyAction] =
-    useState<null | 'complete' | 'lost' | 'received' | 'cancelled' | 'paid' | 'correcting'>(null)
+    useState<null | 'complete' | 'lost' | 'received' | 'cancelled' | 'paid' | 'correcting' | 'editing'>(null)
   const [completeOpen, setCompleteOpen] = useState(false)
   const [lostOpen, setLostOpen] = useState(false)
   const [receiveOpen, setReceiveOpen] = useState(false)
   const [cancelOpen, setCancelOpen] = useState(false)
   const [payOpen, setPayOpen] = useState(false)
   const [correctOpen, setCorrectOpen] = useState(false)
+  const [editOpen, setEditOpen] = useState(false)
 
   const catBlocks = useMemo(() => buildExpenseBlocks(categories), [categories])
 
@@ -210,6 +220,21 @@ export function PurchaseActionsBar({
     corCategory.length > 0 &&
     corAt.length > 0
 
+  // ---- Edit costs dialog state (round-38a) ----
+  // Pre-fills with the order's current shipping/tax/discount so the user can
+  // see and adjust. Pending-only.
+  const [editShipping, setEditShipping] = useState<string>(String(usdShipping ?? 0))
+  const [editTax,      setEditTax]      = useState<string>(String(usdTax ?? 0))
+  const [editDiscount, setEditDiscount] = useState<string>(String(usdDiscount ?? 0))
+
+  const editValid =
+    Number(editShipping) >= 0 &&
+    Number(editTax) >= 0 &&
+    Number(editDiscount) >= 0 &&
+    Number.isFinite(Number(editShipping)) &&
+    Number.isFinite(Number(editTax)) &&
+    Number.isFinite(Number(editDiscount))
+
   // Has any stock been received for this order? Correcting a payment is only
   // allowed before the first receipt (the DB function also enforces this).
   const hasReceipts = useMemo(
@@ -297,6 +322,20 @@ export function PurchaseActionsBar({
     setCorrectOpen(false); setBusyAction(null); router.refresh()
   }
 
+  async function handleEditCosts() {
+    if (!editValid) return
+    setBusyAction('editing')
+    const res = await editPendingPurchaseCosts({
+      orderId,
+      usdShipping: Number(editShipping),
+      usdTax:      Number(editTax),
+      usdDiscount: Number(editDiscount),
+    })
+    if (!res.ok) { toast.error(res.error); setBusyAction(null); return }
+    toast.success('Costs updated. Order total recalculated.')
+    setEditOpen(false); setBusyAction(null); router.refresh()
+  }
+
   // ---- Visibility ----
   const canReceive  = status === 'paid_supplier' || status === 'received'
   const canComplete = status === 'received'
@@ -304,6 +343,7 @@ export function PurchaseActionsBar({
   const canCancel   = status === 'pending' || status === 'paid_supplier'
   const canPay      = status === 'pending'
   const canCorrect  = status === 'paid_supplier' && !hasReceipts
+  const canEdit     = status === 'pending'
 
   // Add transport is always shown, so the bar always renders.
   return (
@@ -315,6 +355,86 @@ export function PurchaseActionsBar({
           Add transport
         </Link>
       </Button>
+
+      {/* Edit costs (round-38a) - pending orders only */}
+      {canEdit && (
+        <AlertDialog open={editOpen} onOpenChange={setEditOpen}>
+          <AlertDialogTrigger asChild>
+            <Button type="button" variant="outline" size="sm">
+              <Pencil className="mr-1.5 h-4 w-4" />
+              Edit costs
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent className="max-w-xl">
+            <AlertDialogHeader>
+              <AlertDialogTitle>Edit shipping, tax &amp; discount</AlertDialogTitle>
+              <AlertDialogDescription asChild>
+                <div className="space-y-2 text-sm">
+                  <div>
+                    Adjust the USD shipping, tax and discount for this order. The
+                    USD total recalculates automatically
+                    (subtotal + shipping + tax &minus; discount).
+                  </div>
+                  <div className="text-muted-foreground">
+                    Available only while the order is pending (before it is paid
+                    or received).
+                  </div>
+                </div>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-shipping">Shipping (USD)</Label>
+                <Input
+                  id="edit-shipping"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={editShipping}
+                  onChange={(e) => setEditShipping(e.target.value)}
+                  placeholder="0.00"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-tax">Tax (USD)</Label>
+                <Input
+                  id="edit-tax"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={editTax}
+                  onChange={(e) => setEditTax(e.target.value)}
+                  placeholder="0.00"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-discount">Discount (USD)</Label>
+                <Input
+                  id="edit-discount"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={editDiscount}
+                  onChange={(e) => setEditDiscount(e.target.value)}
+                  placeholder="0.00"
+                />
+              </div>
+            </div>
+
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={busyAction === 'editing'}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                disabled={!editValid || busyAction === 'editing'}
+                onClick={(e) => { e.preventDefault(); void handleEditCosts() }}
+              >
+                {busyAction === 'editing' ? 'Saving...' : 'Save costs'}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
+
       {/* Pay supplier */}
       {canPay && (
         <AlertDialog open={payOpen} onOpenChange={setPayOpen}>
