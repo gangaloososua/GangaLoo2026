@@ -464,3 +464,57 @@ export async function editPendingPurchaseCosts(
   return { ok: true }
 }
 
+
+// ---------------------------------------------------------------------------
+// paySupplierForReceived (round-38c)
+// ---------------------------------------------------------------------------
+// Record a supplier payment on an order that is ALREADY received or complete
+// (migrated orders paid in real life but never recorded). Keeps the order's
+// status, recomputes item landed cost, syncs on-hand lots, posts to the ledger.
+// ---------------------------------------------------------------------------
+
+export type PaySupplierForReceivedInput = {
+  orderId: string
+  dopPaidTotal: number
+  exchangeRate: number
+  officialRateAtPayment: number
+  supplierPaymentAccountId: string
+  paidAtDop: string // ISO
+  categoryId: string
+}
+
+export async function paySupplierForReceived(
+  input: PaySupplierForReceivedInput,
+): Promise<ActionResult> {
+  await requireOwner()
+
+  if (!input.orderId) return { ok: false, error: 'Order id is required.' }
+  if (!input.supplierPaymentAccountId)
+    return { ok: false, error: 'Pick the account the supplier was paid from.' }
+  if (!Number.isFinite(input.dopPaidTotal) || input.dopPaidTotal <= 0)
+    return { ok: false, error: 'DOP paid total must be greater than zero.' }
+  if (!Number.isFinite(input.exchangeRate) || input.exchangeRate <= 0)
+    return { ok: false, error: 'Exchange rate must be greater than zero.' }
+  if (!Number.isFinite(input.officialRateAtPayment) || input.officialRateAtPayment <= 0)
+    return { ok: false, error: 'Official rate must be greater than zero.' }
+  if (!input.paidAtDop) return { ok: false, error: 'Payment date is required.' }
+  if (!input.categoryId)
+    return { ok: false, error: 'Pick an expense category for this payment.' }
+
+  const supabase = await createClient()
+  const { error } = await supabase.rpc('pay_supplier_for_received', {
+    p_purchase_order_id: input.orderId,
+    p_dop_paid_total: input.dopPaidTotal,
+    p_exchange_rate: input.exchangeRate,
+    p_official_rate_at_payment: input.officialRateAtPayment,
+    p_supplier_payment_account_id: input.supplierPaymentAccountId,
+    p_paid_at_dop: input.paidAtDop,
+    p_category_id: input.categoryId,
+  })
+  if (error) return { ok: false, error: error.message }
+
+  revalidatePath(`/purchases/${input.orderId}`)
+  revalidatePath('/purchases')
+  return { ok: true }
+}
+

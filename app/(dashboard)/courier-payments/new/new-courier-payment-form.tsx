@@ -272,7 +272,13 @@ export function NewCourierPaymentForm({
       setSubmitting(false)
       return
     }
-    router.push(`/courier-payments/${result.id}`)
+    // round-38d: if we came from a purchase order ("Add transport"), go back to it;
+    // otherwise show the new courier payment's detail page.
+    if (prefillPurchaseOrderId) {
+      router.push(`/purchases/${prefillPurchaseOrderId}`)
+    } else {
+      router.push(`/courier-payments/${result.id}`)
+    }
   }
 
   return (

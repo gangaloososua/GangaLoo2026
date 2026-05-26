@@ -45,6 +45,7 @@ import {
   markPaidSupplier,
   correctSupplierPayment,
   editPendingPurchaseCosts,
+  paySupplierForReceived,
 } from '../actions'
 import type {
   PurchaseStatus,
@@ -65,6 +66,8 @@ type Props = {
   usdShipping?: number
   usdTax?: number
   usdDiscount?: number
+  // round-38c: is a supplier payment already recorded? (drives late-pay button)
+  alreadyPaid?: boolean
 }
 
 function alreadyReceivedQty(lineId: string, lotTrail: Map<string, LotTrailEntry[]>): number {
@@ -118,6 +121,7 @@ export function PurchaseActionsBar({
   usdShipping,
   usdTax,
   usdDiscount,
+  alreadyPaid,
 }: Props) {
   const router = useRouter()
 
@@ -291,7 +295,7 @@ export function PurchaseActionsBar({
   async function handleMarkPaidSupplier() {
     if (!payValid) return
     setBusyAction('paid')
-    const res = await markPaidSupplier({
+    const payload = {
       orderId,
       dopPaidTotal:          Number(payDopTotal),
       exchangeRate:          Number(payExchange),
@@ -299,9 +303,14 @@ export function PurchaseActionsBar({
       supplierPaymentAccountId: payAccount,
       paidAtDop: new Date(payAt).toISOString(),
       categoryId: payCategory,
-    })
+    }
+    // round-38c: pending uses the normal flow (flips to paid_supplier); a
+    // received/complete order records the payment WITHOUT regressing status.
+    const res = status === 'pending'
+      ? await markPaidSupplier(payload)
+      : await paySupplierForReceived(payload)
     if (!res.ok) { toast.error(res.error); setBusyAction(null); return }
-    toast.success('Supplier marked paid. Cost basis allocated across lines.')
+    toast.success('Supplier payment recorded. Cost basis allocated across lines.')
     setPayOpen(false); setBusyAction(null); router.refresh()
   }
 
@@ -342,6 +351,8 @@ export function PurchaseActionsBar({
   const canLost     = status === 'received'
   const canCancel   = status === 'pending' || status === 'paid_supplier'
   const canPay      = status === 'pending'
+  // round-38c: completed/received orders that were never paid can record payment too.
+  const canPayLate  = (status === 'received' || status === 'complete') && !alreadyPaid
   const canCorrect  = status === 'paid_supplier' && !hasReceipts
   const canEdit     = status === 'pending'
 
@@ -435,8 +446,8 @@ export function PurchaseActionsBar({
         </AlertDialog>
       )}
 
-      {/* Pay supplier */}
-      {canPay && (
+      {/* Pay supplier (round-38c: also for received/complete unpaid orders) */}
+      {(canPay || canPayLate) && (
         <AlertDialog open={payOpen} onOpenChange={setPayOpen}>
           <AlertDialogTrigger asChild>
             <Button type="button" variant="default" size="sm">
