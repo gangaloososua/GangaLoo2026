@@ -16,8 +16,6 @@ function slugify(s: string): string {
     .slice(0, 80)
 }
 
-// Derive a SKU prefix from the name: uppercase, alnum, dash-separated, capped.
-// Mirrors the slugify rule but yields a SKU-shaped string (no lowercasing).
 function skuPrefix(s: string): string {
   return s
     .normalize('NFD')
@@ -28,9 +26,6 @@ function skuPrefix(s: string): string {
     .slice(0, 24)
 }
 
-// Stable 5-digit suffix appended to auto-generated SKUs, mirroring the
-// placeholder pattern (e.g. 13X-150-12-12345). Helps avoid collisions
-// between products with similar names. Stays constant for the session.
 function randomSkuSuffix(): string {
   return Math.floor(10000 + Math.random() * 90000).toString()
 }
@@ -42,6 +37,7 @@ type Props = {
   initialDescription?: string
   initialIsActive?: boolean
   initialVisibleInStore?: boolean
+  initialIsInventory?: boolean
 }
 
 export function BasicsTab({
@@ -51,6 +47,7 @@ export function BasicsTab({
   initialDescription = '',
   initialIsActive = true,
   initialVisibleInStore = true,
+  initialIsInventory = true,
 }: Props) {
   const [name, setName] = useState(initialName)
 
@@ -63,7 +60,6 @@ export function BasicsTab({
   const [skuManuallyEdited, setSkuManuallyEdited] = useState(
     Boolean(initialSku),
   )
-  // Lazy-initialized once per mount; same suffix across keystrokes.
   const skuSuffixRef = useRef<string>(randomSkuSuffix())
 
   function handleNameChange(v: string) {
@@ -163,6 +159,22 @@ export function BasicsTab({
           Visible in online store
           <span className="block text-xs font-normal text-muted-foreground">
             Active but hidden products can still be sold in-store / POS.
+          </span>
+        </Label>
+      </div>
+
+      <div className="flex items-center gap-3">
+        <Switch
+          id="is_inventory"
+          name="is_inventory"
+          defaultChecked={initialIsInventory}
+        />
+        <Label htmlFor="is_inventory" className="cursor-pointer">
+          Track inventory
+          <span className="block text-xs font-normal text-muted-foreground">
+            Turn off for service / non-physical products (e.g. "Pedido Amazon"
+            placeholder for third-party orders). Non-inventory products skip
+            stock checks and COGS — set the price per sale.
           </span>
         </Label>
       </div>

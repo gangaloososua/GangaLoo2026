@@ -39,6 +39,9 @@ export async function createProduct(
   const description = String(formData.get('description') ?? '').trim()
   const isActive = formData.get('is_active') === 'on'
   const visibleInStore = formData.get('visible_in_store') === 'on'
+  // Round 39: track-inventory flag. Defaults true if unchecked AND no other
+  // signal, but the form always sends 'on' when checked, so missing == false.
+  const isInventory = formData.get('is_inventory') === 'on'
 
   const priceDopRaw = String(formData.get('price_dop') ?? '').trim()
   const priceDop = priceDopRaw ? parseFloat(priceDopRaw) : 0
@@ -58,9 +61,7 @@ export async function createProduct(
   if (priceDop < 0)
     return { ok: false, error: 'Price cannot be negative.' }
 
-  // Optional: calculator state submitted by CalculatorTab in create mode.
-  // If the calc produces a valid rounded price, it OVERRIDES the manual
-  // price_dop input.  Otherwise we fall back to the typed price.
+  // Optional calculator state (create-mode).
   let costCalcState: CostCalcState | null = null
   let calcPriceCents: number | null = null
   const costCalcRaw = String(formData.get('cost_calc_json') ?? '').trim()
@@ -75,7 +76,7 @@ export async function createProduct(
         }
       }
     } catch {
-      // Malformed JSON: ignore the calc submission silently rather than blocking create.
+      // Malformed JSON: ignore the calc submission silently.
     }
   }
 
@@ -90,7 +91,6 @@ export async function createProduct(
   if (!slug) slug = slugify(name)
   if (!slug) slug = slugify(sku) || `product-${Date.now()}`
 
-  // Enforce slug uniqueness; append suffix if needed
   let candidate = slug
   for (let i = 1; i <= 30; i++) {
     const { data: existing } = await supabase
@@ -110,6 +110,7 @@ export async function createProduct(
     description: description || null,
     is_active: isActive,
     visible_in_store: visibleInStore,
+    is_inventory: isInventory,
     price_cents: priceCents,
     club_price_cents: clubPriceCents,
     commission_percent: commissionPercent,
@@ -150,6 +151,7 @@ export async function updateProduct(
   const description = String(formData.get('description') ?? '').trim()
   const isActive = formData.get('is_active') === 'on'
   const visibleInStore = formData.get('visible_in_store') === 'on'
+  const isInventory = formData.get('is_inventory') === 'on'
 
   const priceDop =
     parseFloat(String(formData.get('price_dop') ?? '0')) || 0
@@ -171,7 +173,6 @@ export async function updateProduct(
   if (!slug) slug = slugify(name)
   if (!slug) slug = slugify(sku) || `product-${Date.now()}`
 
-  // Slug uniqueness, EXCLUDING this product's own row
   let candidate = slug
   for (let i = 1; i <= 30; i++) {
     const { data: existing } = await supabase
@@ -200,6 +201,7 @@ export async function updateProduct(
       description: description || null,
       is_active: isActive,
       visible_in_store: visibleInStore,
+      is_inventory: isInventory,
       price_cents: priceCents,
       club_price_cents: clubPriceCents,
       commission_percent: commissionPercent,
@@ -255,14 +257,11 @@ export async function saveProductCategories(
   await requireOwner()
   const supabase = await createClient()
 
-  // Validate: at most one primary, and if any rows exist, exactly one must be primary
   const primaryCount = rows.filter((r) => r.is_primary).length
   if (rows.length > 0 && primaryCount !== 1) {
     return { ok: false, error: 'Exactly one category must be marked as primary.' }
   }
 
-  // Replace strategy: delete all existing rows for this product, then insert the new set.
-  // Simple and safe given the small row count per product.
   const { error: delError } = await supabase
     .from('product_categories')
     .delete()
@@ -326,7 +325,6 @@ export async function uploadProductImage(
   const { data: pub } = supabase.storage.from(BUCKET).getPublicUrl(path)
   const publicUrl = pub.publicUrl
 
-  // Determine display_order = max + 1, is_primary = true if first image
   const { data: existing, error: countErr } = await supabase
     .from('product_images')
     .select('id, display_order')
@@ -349,7 +347,6 @@ export async function uploadProductImage(
     .select('id, url')
     .single()
   if (insErr) {
-    // Best-effort cleanup of the just-uploaded file
     await supabase.storage.from(BUCKET).remove([path])
     return { ok: false, error: insErr.message }
   }
@@ -382,7 +379,6 @@ export async function saveProductImagesMetadata(
     }
   }
 
-  // Update each row. Small N, sequential is fine and avoids transaction complexity.
   for (const r of rows) {
     const { error } = await supabase
       .from('product_images')
@@ -396,7 +392,6 @@ export async function saveProductImagesMetadata(
     if (error) return { ok: false, error: error.message }
   }
 
-  // Sync products.primary_image_url with the new primary
   const primary = rows.find((r) => r.is_primary)
   if (primary) {
     const { data: primaryRow, error: fetchErr } = await supabase
@@ -413,7 +408,6 @@ export async function saveProductImagesMetadata(
       if (updErr) return { ok: false, error: updErr.message }
     }
   } else if (rows.length === 0) {
-    // No images at all — clear the primary URL
     await supabase.from('products').update({ primary_image_url: null }).eq('id', productId)
   }
 
@@ -423,7 +417,6 @@ export async function saveProductImagesMetadata(
 }
 
 function storagePathFromPublicUrl(url: string): string | null {
-  // Public URL shape: .../storage/v1/object/public/product-images/<path>
   const marker = `/${BUCKET}/`
   const idx = url.indexOf(marker)
   if (idx === -1) return null
@@ -437,7 +430,6 @@ export async function deleteProductImage(
   await requireOwner()
   const supabase = await createClient()
 
-  // Fetch the row first so we know the URL (for Storage delete) and primary status
   const { data: img, error: fetchErr } = await supabase
     .from('product_images')
     .select('id, url, is_primary')
@@ -447,9 +439,6 @@ export async function deleteProductImage(
   if (fetchErr) return { ok: false, error: fetchErr.message }
   if (!img) return { ok: false, error: 'Image not found.' }
 
-  // Delete the DB row first — if Storage delete fails afterward we have an orphan
-  // file but no broken UI reference. The other way around leaves a row pointing
-  // to a missing file, which is worse.
   const { error: delErr } = await supabase
     .from('product_images')
     .delete()
@@ -457,13 +446,11 @@ export async function deleteProductImage(
     .eq('product_id', productId)
   if (delErr) return { ok: false, error: delErr.message }
 
-  // Best-effort Storage cleanup
   const path = storagePathFromPublicUrl(img.url)
   if (path) {
     await supabase.storage.from(BUCKET).remove([path])
   }
 
-  // If we just removed the primary, promote the next image (lowest display_order)
   if (img.is_primary) {
     const { data: next, error: nextErr } = await supabase
       .from('product_images')
@@ -506,7 +493,6 @@ export async function saveProductWarehouseSettings(
   await requireOwner()
   const supabase = await createClient()
 
-  // Validate price overrides are non-negative when set
   for (const r of rows) {
     if (r.price_override_cents !== null && r.price_override_cents < 0) {
       return { ok: false, error: 'Price override cannot be negative.' }

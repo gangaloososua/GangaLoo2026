@@ -45,6 +45,7 @@ type InitialValues = {
   description?: string
   is_active?: boolean
   visible_in_store?: boolean
+  is_inventory?: boolean
   price_cents?: number
   club_price_cents?: number | null
   commission_percent?: number
@@ -187,6 +188,7 @@ export function ProductForm({
             initialDescription={initial.description}
             initialIsActive={initial.is_active ?? true}
             initialVisibleInStore={initial.visible_in_store ?? true}
+            initialIsInventory={initial.is_inventory ?? true}
           />
         </TabsContent>
 
