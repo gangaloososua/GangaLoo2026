@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import { useActionState, useEffect, useRef } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
@@ -23,6 +23,7 @@ import { CategoriesTab } from './categories-tab'
 import { ImagesTab } from './images-tab'
 import { WarehousesTab } from './warehouses-tab'
 import { CalculatorTab, type CostCalcState } from './calculator-tab'
+import { MovementsTab } from './movements-tab'
 import { DeleteDialog } from './delete-dialog'
 import type {
   ProductCategory,
@@ -31,6 +32,7 @@ import type {
   ProductWarehouseSetting
 } from '@/lib/products'
 import type { ExchangeRate } from '@/lib/exchange-rates-types'
+import type { StockMovementRow } from '@/lib/inventory'
 
 type Mode = 'create' | 'edit'
 
@@ -62,6 +64,7 @@ type Props = {
   costCalc?: CostCalcState | null
   canSeeCosts?: boolean
   currentRate?: ExchangeRate | null
+  movements?: StockMovementRow[]
   justCreated?: boolean
 }
 
@@ -80,6 +83,7 @@ export function ProductForm({
   costCalc = null,
   canSeeCosts = false,
   currentRate = null,
+  movements = [],
   justCreated,
 }: Props) {
   const router = useRouter()
@@ -161,6 +165,11 @@ export function ProductForm({
             Calculator
           </TabsTrigger>
           )}
+          {canSeeCosts && (
+          <TabsTrigger value="movements" disabled={mode === 'create'}>
+            Movements
+          </TabsTrigger>
+          )}
         </TabsList>
 
         <TabsContent value="basics" forceMount className="pt-6">
@@ -219,6 +228,12 @@ export function ProductForm({
               productTargetPaybackPercent={initial.target_payback_percent ?? null}
               currentRate={currentRate}
             />
+          </TabsContent>
+        )}
+
+        {mode === 'edit' && productId && canSeeCosts && (
+          <TabsContent value="movements" forceMount className="pt-6">
+            <MovementsTab rows={movements} productName={initial.name} />
           </TabsContent>
         )}
       </Tabs>

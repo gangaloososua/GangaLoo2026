@@ -10,9 +10,9 @@ import {
   fetchProductStockByWarehouse
 } from '@/lib/products'
 import { fetchCurrentExchangeRate } from '@/lib/exchange-rates'
+import { fetchStockMovements } from '@/lib/inventory'
 import { requireAdminCaller } from '@/lib/auth/guard'
 import { isOwnerEquivalent } from '@/lib/auth/roles'
-
 export default async function EditProductPage({
   params,
   searchParams,
@@ -22,23 +22,19 @@ export default async function EditProductPage({
 }) {
   const caller = await requireAdminCaller()
   const canSeeCosts = isOwnerEquivalent(caller.role)
-
   const { id } = await params
   const sp = await searchParams
   const supabase = await createClient()
-
   // Non-owners never see cost_calc — leave it out of the SELECT entirely.
   const selectFields = canSeeCosts
     ? 'id, sku, name, slug, description, is_active, visible_in_store, price_cents, club_price_cents, commission_percent, target_payback_percent, cost_calc'
     : 'id, sku, name, slug, description, is_active, visible_in_store, price_cents, club_price_cents, commission_percent, target_payback_percent'
-
   const { data: product, error } = await supabase
     .from('products')
     .select(selectFields)
     .eq('id', id)
     .maybeSingle()
   if (error || !product) notFound()
-
   const productTyped = product as unknown as {
     id: string
     sku: string
@@ -53,7 +49,6 @@ export default async function EditProductPage({
     target_payback_percent: number | string | null
     cost_calc?: unknown
   }
-
   const [
     productCategories,
     allCategories,
@@ -62,6 +57,7 @@ export default async function EditProductPage({
     productWarehouseSettings,
     stockByWarehouse,
     currentRate,
+    movements,
   ] = await Promise.all([
     fetchProductCategories(productTyped.id),
     fetchAllCategoriesFlat(),
@@ -70,8 +66,10 @@ export default async function EditProductPage({
     fetchProductWarehouseSettings(productTyped.id),
     fetchProductStockByWarehouse(productTyped.id),
     canSeeCosts ? fetchCurrentExchangeRate('USD') : Promise.resolve(null),
+    canSeeCosts
+      ? fetchStockMovements({ productId: productTyped.id })
+      : Promise.resolve([]),
   ])
-
   return (
     <ProductForm
       mode="edit"
@@ -100,6 +98,7 @@ export default async function EditProductPage({
       stockByWarehouse={stockByWarehouse}
       costCalc={canSeeCosts ? (productTyped.cost_calc as never) ?? null : null}
       currentRate={currentRate}
+      movements={movements}
       justCreated={sp.created === '1'}
     />
   )
