@@ -1,6 +1,6 @@
 # Feature Plan — Product Attributes & Store Filters
 
-_Drafted 26 May 2026. Updated 26 May 2026 (session 3): **Stages 1–3 SHIPPED (all admin side done).** Read fully before writing code._
+_Drafted 26 May 2026. Updated 26 May 2026 (session 3): **Stages 1–4 SHIPPED. Only Stage 5 (store filter UI) remains.** Read fully before writing code._
 
 ## Goal (in the owner's words)
 Products are currently organized by categories, including a category per color.
@@ -23,19 +23,23 @@ attribute having its own set of values, assignable per product, and ultimately
   the owner could ask for that WOULD need new DDL is hard DB-level single-value enforcement
   with no flag — strictly more restrictive, additive later, not a rebuild.
 
-## CRITICAL CONTEXT (read-only schema check, session 2; re-confirmed session 3)
-- Attribute scaffolding now EXISTS (Stage 1, session 3). See "Stage 1 — DONE" below.
-- **The store is a SEPARATE set of tables from admin products.** Confirmed tables:
-  admin side → `products`, `product_categories`, `product_images`,
-  `product_warehouse_settings`, `product_locations`, `v_product_warehouse_price`.
-  store side → `store_products`, `store_product_categories`, `store_product_images`,
-  `store_product_settings`.
-  => There is an **admin→store publish/sync bridge**. Attributes must travel across it
-  to reach the storefront. This is why "store filter" is a later, separate stage from
-  "assign attributes in admin". DO NOT assume admin data is automatically visible in store.
-  **Before Stage 4, first thing: find and read the sync/publish code** (search for where
-  `store_products` rows get written from `products`) so Stage 4 is designed correctly.
-  (Not needed for Stages 2–3, which are admin-only.)
+## CRITICAL CONTEXT — CORRECTED in session 3 (the original assumption was WRONG)
+- Attribute scaffolding EXISTS (Stage 1). Admin management + per-product assign EXIST
+  (Stages 2–3). Store views EXIST (Stage 4). See stage sections below.
+- **The original plan assumed an admin→store "sync/publish bridge" copying rows into store_*
+  TABLES. THAT IS WRONG.** Reading `db/migrations/round-29b-storefront-public-views.sql`
+  (session 3) showed the storefront reads **VIEWS** named `store_*`, defined directly over the
+  admin base tables, exposing only customer-safe columns. There is **no copy step and nothing
+  to publish** — admin data reaches the store the instant it's written, through the views.
+  Security model: views run with owner rights (security_invoker off); the public gets `SELECT`
+  on the VIEWS only (never base tables), so sensitive columns (cost, commission) stay hidden.
+  The store layer (`lib/store/catalog.ts`) queries these views directly via the Supabase client
+  and filters `is_active`/`visible_in_store` ITSELF in the query.
+  => This made **Stage 4 tiny** (three parallel attribute views — DONE). And it makes
+  **Stage 5** a pure front-end/query job against those views — no new backend.
+- Store views now include (session 3): `store_attributes`, `store_attribute_values`,
+  `store_product_attribute_values` — alongside the existing store_products / store_categories /
+  store_product_categories / etc.
 
 ## Honest sizing
 This is the BIG version — a real multi-part feature, several sessions. Build in stages,
@@ -110,32 +114,42 @@ save persists across reload), committed + pushed. **Zero store risk — all admi
 NOTE: data-read helpers live in the new `_form` file (not lib/products.ts) to keep the change
 self-contained; minor deviation from where categories' reads live, flagged here.
 
-## STAGE 4 — Store bridge (sync attributes admin→store)
-Carry assigned attributes across the admin→store publish step. **READ THE SYNC CODE FIRST**
-(search where `store_products` is written from `products`). Likely a
-`store_product_attribute_values` table mirroring the admin link table, populated on publish.
-Design depends entirely on how the existing sync works.
+## STAGE 4 — Store views ✅ DONE (session 3, commit 9c3dbfd)
+**Reframed once we read the code: NOT a sync bridge — just views** (see CORRECTED context
+above). Migration `db/migrations/2026-05-26_attributes_stage4_store_views.sql`, applied in
+Supabase, verified (3 views, anon+authenticated SELECT granted), data-flow confirmed by a
+3-view join returning real rows. Mirrors `round-29b`: three `create or replace view`s exposing
+customer-safe columns, `grant select … to anon, authenticated`, `notify pgrst`.
+Views: `store_attributes` (id, name, slug, display_order, is_active),
+`store_attribute_values` (id, attribute_id, value, slug, display_order, is_active),
+`store_product_attribute_values` (product_id, attribute_value_id — mirrors
+store_product_categories). NO single_value_only / timestamps exposed. `is_active` exposed as a
+COLUMN (consumer filters it, matching catalog.ts), not pre-filtered in the view. Additive,
+re-runnable, zero write-path risk.
 
-## STAGE 5 — Store filter UI
-Surface attributes as customer-facing filters on the store listing page. Filter products
-by selected values (e.g. Color = Black). Match the store's existing category-filter pattern
-if one exists. Performance: the `idx_pav_value` reverse index (Stage 1) is for this.
+## STAGE 5 — Store filter UI ⟵ ONLY REMAINING STAGE
+Surface attributes as customer-facing filters on the store listing page (e.g. Color = Black).
+Pure front-end + query work against the Stage-4 views; NO new backend. The reverse query
+(products WHERE attribute_value_id in [...]) is backed by the Stage-1 `idx_pav_value` index.
+First moves listed below.
 
 ---
 
-## Next-session opening moves (Stage 4 — store bridge) ⟵ NEXT, and it's a SHIFT
-**All admin work is done (Stages 1–3). Stage 4 touches the STORE — different, higher-care.**
-1. **READ THE SYNC CODE FIRST. This is the whole job before any design.** Find where
-   `store_products` rows get written from admin `products` (search the repo for `store_products`,
-   `store_product_`, "publish", "sync"). Understand: what triggers a publish, what tables it
-   writes, whether it's a DB function / server action / job. Do NOT assume.
-2. Only then design: likely a `store_product_attribute_values` table mirroring the admin link
-   table, populated during publish. Schema + RLS depend entirely on how the store side is built
-   (its RLS will differ from admin — store tables are customer-readable).
-3. Build the migration (Stage-1 style: read conventions, preview, run, record), then extend the
-   publish step to carry attributes across.
-4. Stage 5 (store filter UI) comes after, and needs the store's existing category-filter
-   pattern as a template.
+## Next-session opening moves (Stage 5 — store filter UI) ⟵ THE LAST STAGE
+**All backend is done (Stages 1–4). Stage 5 is front-end + queries only, against store_* views.**
+1. Read `lib/store/catalog.ts` (already partly read session 3) + `lib/store/product.ts` to see
+   how the catalog is fetched/shaped and how categories are surfaced today — the attribute
+   filter should match that shape. Find the store LISTING page/component that renders the
+   catalog + any existing category filter UI (search the store route, likely under the storefront
+   app dir / `tienda`).
+2. Add a fetch: for the listed products, pull their attribute values via the three store_*
+   attribute views (join product → value → attribute), same style as the category fetch in
+   catalog.ts. Build the available filter facets (attribute → its values present in this store).
+3. Add filter UI on the listing page (match existing category-filter pattern if one exists;
+   otherwise simple checkboxes/links per value). Filter the product list by selected values.
+   Consider URL params (e.g. `?color=black`) using the value slugs the views expose.
+4. Typecheck, localhost test against the real store, commit, push. This COMPLETES the feature.
+**Carry-forward owner item (still open):** Stage-1 CASCADE FKs are our design choice, unconfirmed.
 **Carry-forward owner item:** the Stage-1 CASCADE FKs are still our design choice, unconfirmed.
 
 (Stages 1–3 done — schema, RLS, admin management screen, per-product assignment all shipped.)
