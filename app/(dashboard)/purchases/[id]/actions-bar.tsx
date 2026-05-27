@@ -44,7 +44,6 @@ import {
   markCancelled,
   markPaidSupplier,
   correctSupplierPayment,
-  editPendingPurchaseCosts,
   paySupplierForReceived,
   completePaymentRecord,
 } from '../actions'
@@ -63,14 +62,13 @@ type Props = {
   lotTrail: Map<string, LotTrailEntry[]>
   moneyAccounts: MoneyAccount[]
   categories: AccountCategoryOption[]
-  // round-38a — current USD costs, used to pre-fill the Edit costs dialog.
-  usdShipping?: number
-  usdTax?: number
-  usdDiscount?: number
   // round-38c: is a supplier payment already recorded? (drives late-pay button)
   alreadyPaid?: boolean
   // round-38e: half-paid migrated order (has amount+rate but no paid date/account)
   halfPaid?: boolean
+  // round-40: any transport allocated? Hides the Edit button for pending orders
+  // that already have transport spread, since editing items would invalidate it.
+  hasTransport?: boolean
 }
 
 function alreadyReceivedQty(lineId: string, lotTrail: Map<string, LotTrailEntry[]>): number {
@@ -89,9 +87,6 @@ function toLocalDatetimeInputValue(d: Date): string {
   )
 }
 
-// Group expense categories: parent-with-children -> heading + items; childless
-// top-levels collected under "Other expense". Parents with children are
-// headings only (not selectable). Mirrors the courier-payment form.
 type CatBlock = { key: string; heading: string; items: AccountCategoryOption[] }
 function buildExpenseBlocks(categories: AccountCategoryOption[]): CatBlock[] {
   const childrenOf = new Map<string, AccountCategoryOption[]>()
@@ -121,23 +116,20 @@ export function PurchaseActionsBar({
   lotTrail,
   moneyAccounts,
   categories,
-  usdShipping,
-  usdTax,
-  usdDiscount,
   alreadyPaid,
   halfPaid,
+  hasTransport,
 }: Props) {
   const router = useRouter()
 
   const [busyAction, setBusyAction] =
-    useState<null | 'complete' | 'lost' | 'received' | 'cancelled' | 'paid' | 'correcting' | 'editing' | 'completingpay'>(null)
+    useState<null | 'complete' | 'lost' | 'received' | 'cancelled' | 'paid' | 'correcting' | 'completingpay'>(null)
   const [completeOpen, setCompleteOpen] = useState(false)
   const [lostOpen, setLostOpen] = useState(false)
   const [receiveOpen, setReceiveOpen] = useState(false)
   const [cancelOpen, setCancelOpen] = useState(false)
   const [payOpen, setPayOpen] = useState(false)
   const [correctOpen, setCorrectOpen] = useState(false)
-  const [editOpen, setEditOpen] = useState(false)
   const [cprOpen, setCprOpen] = useState(false)
 
   const catBlocks = useMemo(() => buildExpenseBlocks(categories), [categories])
@@ -211,7 +203,6 @@ export function PurchaseActionsBar({
     payAt.length > 0
 
   // ---- Correct payment dialog state (Round 24g) ----
-  // Starts blank; the current values are visible in the order's Money card.
   const [corDopTotal, setCorDopTotal] = useState<string>('')
   const [corExchange, setCorExchange] = useState<string>('')
   const [corOfficial, setCorOfficial] = useState<string>('')
@@ -229,13 +220,6 @@ export function PurchaseActionsBar({
     corCategory.length > 0 &&
     corAt.length > 0
 
-  // ---- Edit costs dialog state (round-38a) ----
-  // Pre-fills with the order's current shipping/tax/discount so the user can
-  // see and adjust. Pending-only.
-  const [editShipping, setEditShipping] = useState<string>(String(usdShipping ?? 0))
-  const [editTax,      setEditTax]      = useState<string>(String(usdTax ?? 0))
-  const [editDiscount, setEditDiscount] = useState<string>(String(usdDiscount ?? 0))
-
   // ---- Complete payment record dialog state (round-38e) ----
   const [cprAccount, setCprAccount] = useState<string>('')
   const [cprCategory, setCprCategory] = useState<string>('')
@@ -243,16 +227,8 @@ export function PurchaseActionsBar({
 
   const cprValid = cprAccount.length > 0 && cprAt.length > 0
 
-  const editValid =
-    Number(editShipping) >= 0 &&
-    Number(editTax) >= 0 &&
-    Number(editDiscount) >= 0 &&
-    Number.isFinite(Number(editShipping)) &&
-    Number.isFinite(Number(editTax)) &&
-    Number.isFinite(Number(editDiscount))
-
-  // Has any stock been received for this order? Correcting a payment is only
-  // allowed before the first receipt (the DB function also enforces this).
+  // Has any stock been received? Correcting a payment is only allowed before
+  // the first receipt (the DB function also enforces this).
   const hasReceipts = useMemo(
     () => items.some((ln) => alreadyReceivedQty(ln.id, lotTrail) > 0),
     [items, lotTrail],
@@ -316,8 +292,6 @@ export function PurchaseActionsBar({
       paidAtDop: new Date(payAt).toISOString(),
       categoryId: payCategory,
     }
-    // round-38c: pending uses the normal flow (flips to paid_supplier); a
-    // received/complete order records the payment WITHOUT regressing status.
     const res = status === 'pending'
       ? await markPaidSupplier(payload)
       : await paySupplierForReceived(payload)
@@ -343,20 +317,6 @@ export function PurchaseActionsBar({
     setCorrectOpen(false); setBusyAction(null); router.refresh()
   }
 
-  async function handleEditCosts() {
-    if (!editValid) return
-    setBusyAction('editing')
-    const res = await editPendingPurchaseCosts({
-      orderId,
-      usdShipping: Number(editShipping),
-      usdTax:      Number(editTax),
-      usdDiscount: Number(editDiscount),
-    })
-    if (!res.ok) { toast.error(res.error); setBusyAction(null); return }
-    toast.success('Costs updated. Order total recalculated.')
-    setEditOpen(false); setBusyAction(null); router.refresh()
-  }
-
   async function handleCompletePayment() {
     if (!cprValid) return
     setBusyAction('completingpay')
@@ -377,16 +337,14 @@ export function PurchaseActionsBar({
   const canLost     = status === 'received'
   const canCancel   = status === 'pending' || status === 'paid_supplier'
   const canPay      = status === 'pending'
-  // round-38c: completed/received orders that were never paid can record payment too.
-  // Truly-unpaid received/complete orders (no amount at all). Half-paid orders
-  // (amount but no date) use Complete payment instead.
   const canPayLate  = (status === 'received' || status === 'complete') && !alreadyPaid && !halfPaid
-  // round-38e: half-paid order just needs its date+account completed.
   const canCompletePay = halfPaid === true
   const canCorrect  = status === 'paid_supplier' && !hasReceipts
-  const canEdit     = status === 'pending'
+  // round-40: full edit available for pending PO with no transport allocated.
+  // The "no transport" gate matches the RPC's own guard; the user's transport
+  // flow is "at receive time", so pending POs typically don't have it yet.
+  const canEdit     = status === 'pending' && !hasTransport
 
-  // Add transport is always shown, so the bar always renders.
   return (
     <div className="flex flex-wrap gap-2">
       {/* Add transport (link to courier payments new with prefill) */}
@@ -397,83 +355,14 @@ export function PurchaseActionsBar({
         </Link>
       </Button>
 
-      {/* Edit costs (round-38a) - pending orders only */}
+      {/* Edit order (round-40) - pending orders, no transport */}
       {canEdit && (
-        <AlertDialog open={editOpen} onOpenChange={setEditOpen}>
-          <AlertDialogTrigger asChild>
-            <Button type="button" variant="outline" size="sm">
-              <Pencil className="mr-1.5 h-4 w-4" />
-              Edit costs
-            </Button>
-          </AlertDialogTrigger>
-          <AlertDialogContent className="max-w-xl">
-            <AlertDialogHeader>
-              <AlertDialogTitle>Edit shipping, tax &amp; discount</AlertDialogTitle>
-              <AlertDialogDescription asChild>
-                <div className="space-y-2 text-sm">
-                  <div>
-                    Adjust the USD shipping, tax and discount for this order. The
-                    USD total recalculates automatically
-                    (subtotal + shipping + tax &minus; discount).
-                  </div>
-                  <div className="text-muted-foreground">
-                    Available only while the order is pending (before it is paid
-                    or received).
-                  </div>
-                </div>
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-              <div className="space-y-1.5">
-                <Label htmlFor="edit-shipping">Shipping (USD)</Label>
-                <Input
-                  id="edit-shipping"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={editShipping}
-                  onChange={(e) => setEditShipping(e.target.value)}
-                  placeholder="0.00"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="edit-tax">Tax (USD)</Label>
-                <Input
-                  id="edit-tax"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={editTax}
-                  onChange={(e) => setEditTax(e.target.value)}
-                  placeholder="0.00"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="edit-discount">Discount (USD)</Label>
-                <Input
-                  id="edit-discount"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={editDiscount}
-                  onChange={(e) => setEditDiscount(e.target.value)}
-                  placeholder="0.00"
-                />
-              </div>
-            </div>
-
-            <AlertDialogFooter>
-              <AlertDialogCancel disabled={busyAction === 'editing'}>Cancel</AlertDialogCancel>
-              <AlertDialogAction
-                disabled={!editValid || busyAction === 'editing'}
-                onClick={(e) => { e.preventDefault(); void handleEditCosts() }}
-              >
-                {busyAction === 'editing' ? 'Saving...' : 'Save costs'}
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+        <Button asChild variant="outline" size="sm">
+          <Link href={`/purchases/${orderId}/edit`}>
+            <Pencil className="mr-1.5 h-4 w-4" />
+            Edit order
+          </Link>
+        </Button>
       )}
 
       {/* Complete payment record (round-38e) - half-paid migrated orders */}

@@ -56,12 +56,6 @@ function formatNumber(n: number, dp = 2): string {
   }).format(n)
 }
 
-function formatNumberOrDash(n: number | null | undefined, dp = 2): string {
-  if (n == null) return '—'
-  if (n === 0) return '—'
-  return formatNumber(n, dp)
-}
-
 function statusLabel(s: PurchaseStatus): string {
   switch (s) {
     case 'pending': return 'Pending'
@@ -103,9 +97,6 @@ function StatusBadge({ status }: { status: PurchaseStatus }) {
   }
 }
 
-// "isPaid" rule: paid_at_dop set AND dop_paid_total > 0.
-// (Migration data has dop_paid_total = NULL or exchange_rate = 0
-// on unpaid rows; treat 0 as null per the data-layer finding.)
 function isPaid(po: PurchaseOrderRow): boolean {
   if (!po.paid_at_dop) return false
   if (po.dop_paid_total == null) return false
@@ -176,7 +167,6 @@ export default async function PurchaseDetailPage({
   const order = await getPurchaseOrder(id)
   if (!order) notFound()
 
-  // Fetch the side-data sets in parallel.
   const [items, lotTrail, transport, moneyAccounts, categories] = await Promise.all([
     getPurchaseOrderItems(order.id),
     getLotTrailForOrder(order.id),
@@ -200,8 +190,6 @@ export default async function PurchaseDetailPage({
     : null
   const storedRate = order.exchange_rate && order.exchange_rate > 0 ? order.exchange_rate : null
 
-  // Line-item audit: base + bank + transport == landed?
-  // Tolerance of 0.01 DOP per unit to absorb migration rounding.
   function lineAuditMismatch(line: typeof items[number]): boolean {
     if (line.dop_unit_landed_cost == null) return false
     const base = line.dop_unit_cost_base ?? 0
@@ -211,15 +199,10 @@ export default async function PurchaseDetailPage({
     return Math.abs(expected - line.dop_unit_landed_cost) > 0.01
   }
 
-  // Skip the audit on terminal states where (base + bank + transport != landed)
-  // is the expected outcome rather than a data issue:
-  //   - lost: markLost recomputes landed cost upward on surviving lots
-  //   - cancelled: no payments allocated, only base may be set
   const auditApplies = stored !== 'lost' && stored !== 'cancelled'
   const lineMismatchCount = auditApplies ? items.filter(lineAuditMismatch).length : 0
   const showLineMismatchDots = lineMismatchCount > 0 && lineMismatchCount / Math.max(items.length, 1) <= 0.10
 
-  // Header label: prefer legacy_id, else short id.
   const shortId = order.id.split('-')[0]
   const headerLabel = order.legacy_id ?? shortId
 
@@ -245,7 +228,17 @@ export default async function PurchaseDetailPage({
         </div>
         <div className="flex flex-col items-end gap-2">
           <StatusBadge status={stored} />
-          <PurchaseActionsBar orderId={order.id} status={stored} items={items} lotTrail={lotTrail} moneyAccounts={moneyAccounts} categories={expenseCategories} usdShipping={order.usd_shipping} usdTax={order.usd_tax} usdDiscount={order.usd_discount} alreadyPaid={order.dop_paid_total != null} halfPaid={order.dop_paid_total != null && order.dop_paid_total > 0 && order.paid_at_dop == null} />
+          <PurchaseActionsBar
+            orderId={order.id}
+            status={stored}
+            items={items}
+            lotTrail={lotTrail}
+            moneyAccounts={moneyAccounts}
+            categories={expenseCategories}
+            alreadyPaid={order.dop_paid_total != null}
+            halfPaid={order.dop_paid_total != null && order.dop_paid_total > 0 && order.paid_at_dop == null}
+            hasTransport={transport.allocation_count > 0}
+          />
         </div>
       </div>
 
