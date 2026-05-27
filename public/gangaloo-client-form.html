@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>GangaLoo — Tu Pedido</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --green:#00c97a;--green-dark:#00a362;--green-light:#e6fff5;
+  --bg:#f4f7f5;--white:#fff;--text:#15201b;--muted:#6b7280;
+  --border:#e5e7eb;--warn:#f59e0b;--warn-bg:#fff8e1;--danger:#ef4444;--wa:#25D366;
+}
+html,body{height:100%;font-family:'Plus Jakarta Sans',sans-serif;background:var(--bg);color:var(--text)}
+.screen{display:none;min-height:100vh;flex-direction:column}
+.screen.active{display:flex}
+.wrap{width:100%;max-width:460px;margin:0 auto}
+
+/* LOADING / ERROR / INFO */
+#loadingScreen,#errorScreen,#alreadyScreen,#waitScreen,#successScreen{align-items:center;justify-content:center;padding:28px;text-align:center;background:var(--white)}
+.spinner{width:40px;height:40px;border:3px solid var(--border);border-top-color:var(--green);border-radius:50%;animation:spin .8s linear infinite;margin-bottom:16px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.big-emoji{font-size:48px;margin-bottom:14px}
+
+/* HEADER */
+.header{background:var(--white);padding:20px 20px 0;border-bottom:1px solid var(--border)}
+.brand{font-size:21px;font-weight:800;color:var(--green)}
+.brand span{color:var(--text)}
+.order-ref{font-size:12px;color:var(--muted);font-family:monospace;margin-bottom:14px}
+.step-indicator{display:flex;align-items:center;gap:8px;margin-bottom:20px}
+.step{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0}
+.step.done{background:var(--green);color:#fff}
+.step.active{background:var(--text);color:#fff}
+.step.todo{background:var(--border);color:var(--muted)}
+.step-line{flex:1;height:2px;background:var(--border)}
+.step-line.done{background:var(--green)}
+
+/* INVOICE CARD */
+.invoice{background:var(--white);margin:16px;border-radius:18px;padding:20px;box-shadow:0 1px 5px rgba(0,0,0,.06)}
+.invoice h2{font-size:16px;font-weight:800;margin-bottom:4px}
+.invoice .sub{font-size:12.5px;color:var(--muted);margin-bottom:14px}
+.line{display:flex;justify-content:space-between;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);font-size:14px}
+.line:last-of-type{border-bottom:none}
+.line-label{color:var(--muted)}
+.line-value{font-weight:600;text-align:right;max-width:58%}
+.item-line{display:flex;justify-content:space-between;gap:10px;padding:7px 0;font-size:14px}
+.item-line .qty{color:var(--green);font-weight:700;margin-right:4px}
+.totals{margin-top:6px;padding-top:10px;border-top:1px dashed var(--border)}
+.balance-line{border-top:2px solid var(--border);margin-top:4px;padding-top:13px !important}
+.balance-line .line-value{color:var(--warn);font-size:19px;font-weight:800}
+.paid-chip{color:var(--green);font-weight:700}
+
+/* CONTENT */
+.content{padding:20px;flex:1}
+.content h2.q{font-size:20px;font-weight:800;margin-bottom:6px}
+.content p.lead{color:var(--muted);font-size:14px;margin-bottom:22px}
+
+.choice-card{background:var(--white);border:2px solid var(--border);border-radius:16px;padding:18px;margin-bottom:14px;cursor:pointer;transition:all .18s;display:flex;align-items:center;gap:15px}
+.choice-card:hover{border-color:var(--green)}
+.choice-card.selected{border-color:var(--green);background:var(--green-light)}
+.choice-icon{width:50px;height:50px;border-radius:13px;display:flex;align-items:center;justify-content:center;font-size:25px;background:var(--bg);flex-shrink:0}
+.choice-card.selected .choice-icon{background:#fff}
+.choice-info h3{font-size:16px;font-weight:700;margin-bottom:2px}
+.choice-info p{font-size:13px;color:var(--muted);line-height:1.4}
+.choice-fee{font-size:13px;font-weight:800;color:var(--green);margin-top:5px}
+
+.btn-go{width:100%;padding:16px;background:var(--green);color:#fff;border:none;border-radius:14px;font-size:16px;font-weight:800;font-family:inherit;cursor:pointer;transition:background .15s;margin-top:8px}
+.btn-go:hover{background:var(--green-dark)}
+.btn-go:disabled{background:var(--border);color:var(--muted);cursor:not-allowed}
+.btn-back{background:none;border:none;color:var(--muted);font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;padding:10px 0;margin-bottom:6px;display:inline-flex;align-items:center;gap:6px}
+
+.field{margin-bottom:18px}
+.field label{display:block;font-size:12px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--muted);margin-bottom:7px}
+.field input,.field textarea{width:100%;padding:14px;border:2px solid var(--border);border-radius:12px;font-size:15px;font-family:inherit;outline:none;transition:border .15s;background:var(--white)}
+.field input:focus,.field textarea:focus{border-color:var(--green)}
+.field textarea{resize:none;min-height:80px}
+
+.map-section{margin-bottom:18px}
+.map-section label{display:block;font-size:12px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
+.loc-btn{width:100%;padding:12px;background:var(--white);border:2px solid var(--green);border-radius:12px;color:var(--green);font-size:14px;font-weight:700;font-family:inherit;cursor:pointer;margin-bottom:10px;display:flex;align-items:center;justify-content:center;gap:8px}
+.loc-btn:hover{background:var(--green-light)}
+.map-wrap{border-radius:14px;overflow:hidden;border:2px solid var(--border);height:250px;position:relative}
+.map-wrap.has-pin{border-color:var(--green)}
+#map{width:100%;height:100%}
+.map-hint{position:absolute;top:10px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.72);color:#fff;font-size:12px;padding:6px 14px;border-radius:20px;z-index:1000;pointer-events:none;white-space:nowrap;font-weight:600}
+.map-hint.hidden{display:none}
+.pin-info{font-size:12px;color:var(--green-dark);text-align:center;padding:8px;background:var(--green-light);border-radius:8px;margin-top:8px;font-weight:600}
+
+/* STATUS BANNER (pre-arrival) */
+.status-banner{background:var(--green-light);border:1px solid #b6f0d8;border-radius:14px;padding:16px;margin:0 16px 16px;display:flex;gap:12px;align-items:flex-start}
+.status-banner .ic{font-size:22px}
+.status-banner h3{font-size:15px;font-weight:800;margin-bottom:3px}
+.status-banner p{font-size:13px;color:var(--muted);line-height:1.5}
+
+/* SUCCESS */
+.success-icon{width:78px;height:78px;background:var(--green-light);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:34px;margin:0 auto 18px}
+#successScreen h2{font-size:23px;font-weight:800;margin-bottom:8px}
+#successScreen p{color:var(--muted);font-size:15px;line-height:1.6;margin-bottom:18px}
+.balance-box{background:var(--warn-bg);border:2px solid var(--warn);border-radius:14px;padding:16px;margin:16px 0;font-size:14px}
+.balance-box .amt{font-size:23px;font-weight:800;color:#d97706;display:block;margin-top:4px}
+.wa-cta{display:inline-flex;align-items:center;justify-content:center;gap:10px;background:var(--wa);color:#fff;padding:15px 26px;border-radius:14px;font-weight:700;font-size:16px;text-decoration:none;margin-top:6px}
+.bottom-safe{height:env(safe-area-inset-bottom,16px)}
+</style>
+</head>
+<body>
+
+<!-- LOADING -->
+<div id="loadingScreen" class="screen active"><div class="spinner"></div><p style="color:#6b7280;font-size:14px">Cargando tu pedido…</p></div>
+
+<!-- ERROR -->
+<div id="errorScreen" class="screen">
+  <div class="big-emoji">😕</div>
+  <h2 style="font-size:20px;font-weight:800;margin-bottom:8px">Pedido no encontrado</h2>
+  <p style="color:#6b7280;font-size:14px">Este enlace puede haber expirado o no es válido. Escríbenos por WhatsApp.</p>
+</div>
+
+<!-- ALREADY RESPONDED -->
+<div id="alreadyScreen" class="screen">
+  <div class="wrap">
+    <div class="big-emoji">✅</div>
+    <h2 style="font-size:21px;font-weight:800;margin-bottom:8px">¡Ya respondiste!</h2>
+    <p id="alreadyMsg" style="color:#6b7280;font-size:14.5px;line-height:1.6"></p>
+    <div id="alreadyBalance"></div>
+  </div>
+</div>
+
+<!-- WAITING (pre-arrival invoice view) -->
+<div id="waitScreen" class="screen">
+  <div class="header">
+    <div class="brand">Ganga<span>Loo</span></div>
+    <div class="order-ref" id="waitRef"></div>
+  </div>
+  <div id="waitInvoice"></div>
+  <div class="status-banner">
+    <div class="ic">🚚</div>
+    <div><h3 id="waitTitle">Tu pedido está en camino</h3><p id="waitSub">Te avisaremos por WhatsApp en cuanto llegue y puedas elegir cómo recibirlo.</p></div>
+  </div>
+  <div class="bottom-safe"></div>
+</div>
+
+<!-- CHOICE -->
+<div id="choiceScreen" class="screen">
+  <div class="header">
+    <div class="brand">Ganga<span>Loo</span></div>
+    <div class="order-ref" id="choiceRef"></div>
+    <div class="step-indicator"><div class="step active">1</div><div class="step-line"></div><div class="step todo">2</div><div class="step-line"></div><div class="step todo">3</div></div>
+  </div>
+  <div id="choiceInvoice"></div>
+  <div class="content">
+    <h2 class="q">¡Tu pedido llegó! 🎉</h2>
+    <p class="lead">Elige cómo quieres recibirlo.</p>
+    <div class="choice-card" id="pickupCard" onclick="selectChoice('pickup')">
+      <div class="choice-icon">🏪</div>
+      <div class="choice-info"><h3>Recoger en tienda</h3><p>Pasa cuando quieras a buscarlo.</p><div class="choice-fee">Gratis</div></div>
+    </div>
+    <div class="choice-card" id="deliveryCard" onclick="selectChoice('delivery')">
+      <div class="choice-icon">🚚</div>
+      <div class="choice-info"><h3>Envío a domicilio</h3><p>Te lo llevamos a donde estés.</p><div class="choice-fee" id="deliveryFeeLabel">+RD$ 200.00</div></div>
+    </div>
+    <button class="btn-go" id="continueBtn" disabled onclick="proceed()">Continuar →</button>
+  </div>
+  <div class="bottom-safe"></div>
+</div>
+
+<!-- DELIVERY FORM -->
+<div id="deliveryScreen" class="screen">
+  <div class="header">
+    <div class="brand">Ganga<span>Loo</span></div>
+    <div class="order-ref" id="delRef"></div>
+    <div class="step-indicator"><div class="step done">✓</div><div class="step-line done"></div><div class="step active">2</div><div class="step-line"></div><div class="step todo">3</div></div>
+  </div>
+  <div class="content">
+    <button class="btn-back" onclick="backToChoice()">← Volver</button>
+    <h2 class="q">Datos de entrega</h2>
+    <p class="lead">Elige una fecha y marca tu dirección en el mapa.</p>
+    <div class="field"><label>📅 Fecha de entrega preferida</label><input type="date" id="deliveryDate"></div>
+    <div class="map-section">
+      <label>📍 Tu ubicación de entrega</label>
+      <button class="loc-btn" onclick="useMyLocation()"><svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>Usar mi ubicación actual</button>
+      <div class="map-wrap" id="mapWrap"><div class="map-hint" id="mapHint">Toca el mapa para marcar tu dirección</div><div id="map"></div></div>
+      <div class="pin-info" id="pinInfo" style="display:none"></div>
+    </div>
+    <div class="field"><label>📝 Descripción de la dirección</label><textarea id="deliveryAddress" placeholder="Ej: Calle Las Rosas #12, Sector Los Jardines, edificio amarillo, apto 3B."></textarea></div>
+    <div class="field"><label>💬 Nota adicional (opcional)</label><input type="text" id="deliveryNote" placeholder="Código de puerta, piso, referencia…"></div>
+    <button class="btn-go" id="submitBtn" onclick="submitDelivery()">Confirmar entrega →</button>
+  </div>
+  <div class="bottom-safe"></div>
+</div>
+
+<!-- SUCCESS -->
+<div id="successScreen" class="screen">
+  <div class="wrap">
+    <div class="step-indicator" style="margin-bottom:30px"><div class="step done">✓</div><div class="step-line done"></div><div class="step done">✓</div><div class="step-line done"></div><div class="step done">✓</div></div>
+    <div class="success-icon">🎉</div>
+    <h2 id="successTitle">¡Listo!</h2>
+    <p id="successMsg"></p>
+    <div id="successBalance"></div>
+    <a id="waBackBtn" href="#" class="wa-cta" target="_blank"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884"/></svg>Volver al chat</a>
+  </div>
+</div>
+
+<script>
+const params = new URLSearchParams(location.search);
+const ORDER_ID = params.get('order');
+let ORDER=null, CFG=null, leafletMap=null, marker=null, clientChoice=null, pinLat=null, pinLng=null;
+const DEFAULT_DELIVERY_FEE = 200;
+
+function show(id){ document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active')); document.getElementById(id).classList.add('active'); }
+function fmt(n){ return 'RD$ ' + Number(n||0).toLocaleString('es-DO',{minimumFractionDigits:2}); }
+function cap(s){ return (s||'').charAt(0).toUpperCase()+(s||'').slice(1); }
+function esc(s){ return (s==null?'':String(s)).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+/* money — computed client-side, never trusts a stored balance */
+function subtotal(o){ if(o.items&&o.items.length) return o.items.reduce((s,it)=>s+(Number(it.qty)||0)*(Number(it.price)||0),0); return Number(o.amount||0); }
+function paidTotal(o){ if(Array.isArray(o.payments)) return o.payments.reduce((s,p)=>s+(Number(p.amount)||0),0); return Number(o.paid||0); }
+function stageOf(o){ return o.stage || ({pending:'arrived',notified:'notified',form_sent:'notified',form_filled:'responded',pickup:'ready',scheduled:'ready',done:'completed'})[o.status] || 'arrived'; }
+
+async function init(){
+  if(!ORDER_ID){ show('errorScreen'); return; }
+  try{ CFG = JSON.parse(document.getElementById('appConfig').textContent.trim()); }
+  catch(e){ console.error('cfg',e); show('errorScreen'); return; }
+  if(!CFG.url || CFG.url==='SUPABASE_URL_PLACEHOLDER'){ show('errorScreen'); return; }
+
+  try{
+    const r = await fetch(`${CFG.url}/rest/v1/gl_orders?id=eq.${encodeURIComponent(ORDER_ID)}&select=*`,
+      { headers:{ 'apikey':CFG.key,'Authorization':`Bearer ${CFG.key}`,'Accept':'application/json' } });
+    if(!r.ok){ show('errorScreen'); return; }
+    const rows = await r.json();
+    if(!rows || !rows.length){ show('errorScreen'); return; }
+    ORDER = rows[0].data;
+  }catch(e){ console.error(e); show('errorScreen'); return; }
+
+  const dfee = Number(ORDER.deliveryFee)>0? Number(ORDER.deliveryFee): DEFAULT_DELIVERY_FEE;
+  ORDER.deliveryFee = dfee;
+  const stage = stageOf(ORDER);
+
+  // Already responded?
+  if(['responded','ready','completed'].includes(stage) || ORDER.fulfilment || ORDER.clientChoice){
+    renderAlready(); return;
+  }
+  // Arrived / notified → let them choose
+  if(['arrived','notified'].includes(stage)){
+    setupChoice(); show('choiceScreen'); return;
+  }
+  // Before arrival (invoice / ordered) → read-only invoice + waiting
+  renderWaiting(stage);
+}
+
+/* ---------- invoice card markup ---------- */
+function invoiceCard(o,{showBalanceLabel=true}={}){
+  const sub=subtotal(o), ship=Number(o.shippingFee||0), paid=paidTotal(o);
+  const bal=Math.max(0, sub+ship-paid);
+  let items='';
+  if(o.items&&o.items.length) items = o.items.map(it=>`<div class="item-line"><span><span class="qty">${it.qty}×</span>${esc(it.name)}</span><span class="line-value">${fmt((Number(it.qty)||0)*(Number(it.price)||0))}</span></div>`).join('');
+  else if(o.desc) items = `<div class="item-line"><span>${esc(o.desc)}</span></div>`;
+  return `<div class="invoice">
+    <h2>🧾 Tu pedido</h2>
+    <div class="sub">${cap(o.platform)}${o.ref?` · Ref: ${esc(o.ref)}`:''}</div>
+    ${items}
+    <div class="totals">
+      <div class="line"><span class="line-label">Subtotal</span><span class="line-value">${fmt(sub)}</span></div>
+      <div class="line"><span class="line-label">Costo de envío</span><span class="line-value">${fmt(ship)}</span></div>
+      ${paid>0?`<div class="line"><span class="line-label">Abonado ✓</span><span class="line-value paid-chip">-${fmt(paid)}</span></div>`:''}
+      <div class="line balance-line"><span class="line-label" style="font-weight:700">${showBalanceLabel?'💳 Saldo a pagar':'Total'}</span><span class="line-value">${fmt(bal)}</span></div>
+    </div>
+  </div>`;
+}
+
+/* ---------- screens ---------- */
+function renderWaiting(stage){
+  document.getElementById('waitRef').textContent = ORDER.id;
+  document.getElementById('waitInvoice').innerHTML = invoiceCard(ORDER);
+  if(stage==='invoice'){
+    document.getElementById('waitTitle').textContent='Estamos preparando tu pedido';
+    document.getElementById('waitSub').textContent='En cuanto recibamos tu depósito inicial, ordenamos tu producto. Te avisamos por WhatsApp en cada paso.';
+  }
+  show('waitScreen');
+}
+
+function setupChoice(){
+  document.getElementById('choiceRef').textContent = ORDER.id;
+  document.getElementById('delRef').textContent = ORDER.id;
+  document.getElementById('deliveryFeeLabel').textContent = `+${fmt(ORDER.deliveryFee)}`;
+  document.getElementById('choiceInvoice').innerHTML = invoiceCard(ORDER);
+  const tom=new Date(); tom.setDate(tom.getDate()+1);
+  const iso=tom.toISOString().split('T')[0];
+  const d=document.getElementById('deliveryDate'); d.min=iso; d.value=iso;
+}
+function selectChoice(c){
+  clientChoice=c;
+  document.getElementById('pickupCard').classList.toggle('selected',c==='pickup');
+  document.getElementById('deliveryCard').classList.toggle('selected',c==='delivery');
+  document.getElementById('continueBtn').disabled=false;
+}
+function proceed(){
+  if(!clientChoice) return;
+  if(clientChoice==='pickup'){ submitPickup(); }
+  else { show('deliveryScreen'); initMap(); }
+}
+function backToChoice(){ show('choiceScreen'); }
+
+/* ---------- map ---------- */
+function initMap(){
+  if(leafletMap) return;
+  setTimeout(()=>{
+    leafletMap = L.map('map',{zoomControl:true}).setView([18.735,-70.163],12);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap',maxZoom:19}).addTo(leafletMap);
+    leafletMap.on('click',e=>setPin(e.latlng.lat,e.latlng.lng));
+  },120);
+}
+function setPin(lat,lng){
+  pinLat=lat; pinLng=lng;
+  const icon=L.divIcon({html:'<div style="background:#00c97a;width:28px;height:28px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.3)"></div>',iconSize:[28,28],iconAnchor:[14,28]});
+  if(marker) leafletMap.removeLayer(marker);
+  marker=L.marker([lat,lng],{icon}).addTo(leafletMap);
+  document.getElementById('mapWrap').classList.add('has-pin');
+  document.getElementById('mapHint').classList.add('hidden');
+  const pi=document.getElementById('pinInfo'); pi.style.display='block'; pi.textContent=`📍 Ubicación marcada (${lat.toFixed(4)}, ${lng.toFixed(4)})`;
+}
+function useMyLocation(){
+  if(!navigator.geolocation){ alert('Tu navegador no soporta geolocalización.'); return; }
+  navigator.geolocation.getCurrentPosition(
+    p=>{ const{latitude:lat,longitude:lng}=p.coords; leafletMap.setView([lat,lng],16); setPin(lat,lng); },
+    ()=> alert('No se pudo obtener tu ubicación. Toca el mapa manualmente.')
+  );
+}
+
+/* ---------- submit ---------- */
+async function submitPickup(){ await saveResponse({fulfilment:'pickup'}); showSuccess('pickup'); }
+async function submitDelivery(){
+  const date=document.getElementById('deliveryDate').value;
+  const address=document.getElementById('deliveryAddress').value.trim();
+  const note=document.getElementById('deliveryNote').value.trim();
+  if(!date){ alert('Por favor elige una fecha de entrega.'); return; }
+  if(!address){ alert('Por favor describe tu dirección.'); return; }
+  const btn=document.getElementById('submitBtn'); btn.disabled=true; btn.textContent='Enviando…';
+  await saveResponse({ fulfilment:'delivery', deliveryDate:date, address, note, lat:pinLat, lng:pinLng });
+  showSuccess('delivery',date,address);
+}
+
+async function saveResponse(fields){
+  const updated = { ...ORDER, ...fields, stage:'responded',
+    timeline:[ ...(ORDER.timeline||[]), { label:`📱 Cliente eligió: ${fields.fulfilment==='delivery'?'entrega a domicilio':'recoger en tienda'}`, ts:Date.now() } ] };
+  try{
+    await fetch(`${CFG.url}/rest/v1/gl_orders?id=eq.${ORDER_ID}`,{
+      method:'PATCH',
+      headers:{ 'apikey':CFG.key,'Authorization':`Bearer ${CFG.key}`,'Content-Type':'application/json','Prefer':'return=minimal' },
+      body: JSON.stringify({ data:updated, updated_at:new Date().toISOString() })
+    });
+    ORDER = updated;
+  }catch(e){ console.error('save',e); }
+
+  // Notify admin (CallMeBot) — optional, configured in appConfig
+  if(CFG.notifyPhone && CFG.callMeBotKey){
+    try{
+      const sub=subtotal(ORDER), ship=Number(ORDER.shippingFee||0), paid=paidTotal(ORDER);
+      const fee = fields.fulfilment==='delivery'? Number(ORDER.deliveryFee||0):0;
+      const saldo = Math.max(0, sub+ship+fee-paid);
+      const choice = fields.fulfilment==='delivery'?'🚚 ENTREGA a domicilio':'🏪 RECOGIDA en tienda';
+      let m=`🔔 GangaLoo%0A%0ACliente: ${encodeURIComponent(ORDER.client)}%0APedido: ${ORDER_ID}%0A${encodeURIComponent(choice)}`;
+      if(fields.fulfilment==='delivery') m+=`%0AFecha: ${encodeURIComponent(fields.deliveryDate)}%0ADir: ${encodeURIComponent(fields.address)}`;
+      m+=`%0ASaldo: ${encodeURIComponent(fmt(saldo))}`;
+      await fetch(`https://api.callmebot.com/whatsapp.php?phone=${CFG.notifyPhone}&apikey=${CFG.callMeBotKey}&text=${m}`);
+    }catch(e){ console.error('notify',e); }
+  }
+}
+
+function balanceFor(type){
+  const sub=subtotal(ORDER), ship=Number(ORDER.shippingFee||0), paid=paidTotal(ORDER);
+  const fee = type==='delivery'? Number(ORDER.deliveryFee||0):0;
+  return Math.max(0, sub+ship+fee-paid);
+}
+function balanceBox(bal){
+  return bal>0? `<div class="balance-box">💳 Saldo a pagar al recibir:<span class="amt">${fmt(bal)}</span></div>`:'';
+}
+
+function showSuccess(type,date,address){
+  const bal=balanceFor(type);
+  if(type==='pickup'){
+    document.getElementById('successTitle').textContent='¡Perfecto!';
+    document.getElementById('successMsg').innerHTML='Recibimos tu respuesta. <strong>Recogerás tu pedido en tienda.</strong><br>Te confirmamos por WhatsApp muy pronto. 🙌';
+  } else {
+    document.getElementById('successTitle').textContent='¡Entrega solicitada!';
+    document.getElementById('successMsg').innerHTML=`Recibimos tu solicitud para el <strong>${esc(date)}</strong>.<br>Dirección: <strong>${esc(address)}</strong><br>Te confirmamos por WhatsApp.`;
+  }
+  document.getElementById('successBalance').innerHTML = balanceBox(bal);
+  setWaBack(type==='pickup'? `Hola! Confirmé que voy a recoger mi pedido (${ORDER_ID}).` : `Hola! Confirmé mi entrega para el ${date}. Pedido: ${ORDER_ID}.`);
+  show('successScreen');
+}
+
+function renderAlready(){
+  const fulfil = ORDER.fulfilment || ORDER.clientChoice;
+  const bal = balanceFor(fulfil==='delivery'?'delivery':'pickup');
+  document.getElementById('alreadyMsg').innerHTML = fulfil==='delivery'
+    ? `Ya solicitaste <strong>entrega a domicilio</strong>${ORDER.deliveryDate?` para el <strong>${esc(ORDER.deliveryDate)}</strong>`:''}. Te confirmamos por WhatsApp. ✅`
+    : `Ya elegiste <strong>recoger en tienda</strong>. Te avisamos cuando esté listo. ✅`;
+  document.getElementById('alreadyBalance').innerHTML = balanceBox(bal);
+  show('alreadyScreen');
+}
+
+function setWaBack(msg){
+  if(CFG.waphone){
+    document.getElementById('waBackBtn').href = `https://wa.me/${CFG.waphone.replace(/[\s\-\(\)\+]/g,'')}?text=${encodeURIComponent(msg)}`;
+    document.getElementById('waBackBtn').style.display='inline-flex';
+  } else document.getElementById('waBackBtn').style.display='none';
+}
+</script>
+
+<script id="appConfig" type="application/json">
+{
+  "url": "https://xnbkwczolkinurohloxj.supabase.co",
+  "key": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhuYmt3Y3pvbGtpbnVyb2hsb3hqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI4MTA5ODEsImV4cCI6MjA4ODM4Njk4MX0.qkSgk5BUccKF-bmla5nOFgI4HIPox40X6jYDT4Zcnes",
+  "waphone": "+18292867868",
+  "notifyPhone": "18292867868",
+  "callMeBotKey": "3286436"
+}
+</script>
+<script>init();</script>
+</body>
+</html>

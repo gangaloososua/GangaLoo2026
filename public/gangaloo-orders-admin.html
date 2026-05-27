@@ -1,0 +1,997 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GangaLoo — Order Manager</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0d0d0d;--surface:#161616;--surface2:#1e1e1e;--surface3:#272727;
+  --border:#2a2a2a;--border2:#333;--accent:#00e5a0;--accent2:#00b37a;
+  --warn:#ffb84d;--danger:#ff5f5f;--text:#f0f0f0;--muted:#777;--muted2:#555;
+  --wa:#25D366;--blue:#5ab4ff;--purple:#c084fc;--yellow:#e5e500;
+}
+body{font-family:'Syne',sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+.mono{font-family:'DM Mono',monospace}
+
+/* SETUP SCREEN */
+.setup-screen{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px}
+.setup-card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:36px;width:100%;max-width:480px}
+.setup-card h1{font-size:24px;font-weight:800;margin-bottom:6px}
+.setup-card p{color:var(--muted);font-size:14px;margin-bottom:24px;line-height:1.6}
+.setup-warning{background:#1a0d00;border:1px solid var(--warn);border-radius:8px;padding:12px;font-size:13px;color:var(--warn);margin-bottom:20px;line-height:1.5}
+
+.header{display:flex;align-items:center;justify-content:space-between;padding:16px 28px;border-bottom:1px solid var(--border);background:var(--surface);position:sticky;top:0;z-index:100}
+.logo{font-size:22px;font-weight:800;letter-spacing:-0.5px}
+.logo span{color:var(--accent)}
+.logo small{font-weight:400;font-size:14px;color:var(--muted)}
+.header-actions{display:flex;gap:10px;align-items:center}
+.badge-count{background:var(--accent);color:#000;border-radius:20px;padding:3px 12px;font-size:12px;font-weight:700;font-family:'DM Mono',monospace}
+
+.layout{display:grid;grid-template-columns:1fr 420px;gap:0;min-height:calc(100vh - 61px)}
+.main{padding:24px 28px;overflow-y:auto}
+.sidebar{border-left:1px solid var(--border);padding:0;background:var(--surface);overflow-y:auto;max-height:calc(100vh - 61px);position:sticky;top:61px}
+.sidebar-inner{padding:22px}
+
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:10px 18px;border-radius:9px;border:none;cursor:pointer;font-family:'Syne',sans-serif;font-size:14px;font-weight:700;transition:all .15s;text-decoration:none;line-height:1}
+.btn:active{transform:translateY(1px)}
+.btn-primary{background:var(--accent);color:#000}
+.btn-primary:hover{background:var(--accent2)}
+.btn-ghost{background:transparent;color:var(--muted);border:1px solid var(--border)}
+.btn-ghost:hover{border-color:var(--accent);color:var(--accent)}
+.btn-wa{background:var(--wa);color:#fff}
+.btn-wa:hover{background:#1da851}
+.btn-danger{background:transparent;color:var(--danger);border:1px solid var(--danger)}
+.btn-danger:hover{background:var(--danger);color:#fff}
+.btn-warn{background:var(--warn);color:#000}
+.btn-warn:hover{filter:brightness(1.08)}
+.btn-block{width:100%}
+.btn-sm{padding:7px 13px;font-size:12.5px}
+
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.field{display:flex;flex-direction:column;gap:6px}
+.field label{font-size:11px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted)}
+.field input,.field select,.field textarea{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 14px;color:var(--text);font-family:'Syne',sans-serif;font-size:14px;transition:border .15s;outline:none;width:100%}
+.field input:focus,.field select:focus,.field textarea:focus{border-color:var(--accent)}
+.field select option{background:var(--surface2)}
+.field textarea{resize:vertical;min-height:60px}
+.field-hint{font-size:11px;color:var(--muted);margin-top:2px}
+
+/* ORDER LIST CARDS */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:18px;margin-bottom:12px;transition:border .15s,background .15s;cursor:pointer}
+.card:hover{border-color:var(--border2)}
+.card.selected{border-color:var(--accent);background:#0c1813}
+.card.flag{border-color:var(--purple);background:#160d1f}
+.card-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;gap:10px}
+.card-name{font-size:16px;font-weight:700;line-height:1.2}
+.card-id{font-size:11.5px;color:var(--muted);font-family:'DM Mono',monospace;margin-top:3px}
+.card-source{font-size:10.5px;font-family:'DM Mono',monospace;padding:3px 8px;border-radius:5px;font-weight:500;flex-shrink:0;text-transform:uppercase}
+.src-amazon{background:#ff9900;color:#000}
+.src-temu{background:#f0380a;color:#fff}
+.src-shein{background:#222;color:#fff;border:1px solid #555}
+.src-aliexpress{background:#e62f18;color:#fff}
+.src-other{background:var(--surface3);color:var(--muted)}
+.card-meta{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:10px}
+.meta-item{font-size:13px;color:var(--muted);font-family:'DM Mono',monospace}
+.meta-item strong{color:var(--text)}
+.card-foot{display:flex;align-items:center;justify-content:space-between;gap:8px}
+
+.stage-pill{font-size:11px;font-weight:700;padding:4px 11px;border-radius:20px;font-family:'DM Mono',monospace;letter-spacing:0.3px;display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
+.sp-invoice{background:#1a1400;color:var(--warn);border:1px solid var(--warn)}
+.sp-ordered{background:#001a20;color:var(--blue);border:1px solid var(--blue)}
+.sp-arrived{background:#001a12;color:var(--accent);border:1px solid var(--accent)}
+.sp-notified{background:#101a00;color:#9ae600;border:1px solid #9ae600}
+.sp-responded{background:#1a0020;color:var(--purple);border:1px solid var(--purple)}
+.sp-ready{background:#1a1a00;color:var(--yellow);border:1px solid var(--yellow)}
+.sp-completed{background:#161616;color:var(--muted);border:1px solid var(--border)}
+
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:22px}
+.stat{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:15px 16px}
+.stat-val{font-size:24px;font-weight:800;font-family:'DM Mono',monospace;margin-bottom:3px;line-height:1}
+.stat-label{font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;font-weight:700}
+
+.filters{display:flex;gap:7px;margin-bottom:20px;flex-wrap:wrap}
+.fchip{padding:7px 14px;border:1px solid var(--border);border-radius:20px;background:var(--surface);color:var(--muted);font-size:12.5px;font-weight:600;cursor:pointer;transition:all .15s;display:inline-flex;align-items:center;gap:6px}
+.fchip:hover{border-color:var(--border2);color:var(--text)}
+.fchip.active{background:var(--text);color:var(--bg);border-color:var(--text)}
+.fchip .cnt{background:rgba(0,0,0,.18);border-radius:10px;padding:0 6px;font-size:11px;font-family:'DM Mono',monospace}
+.fchip.active .cnt{background:rgba(255,255,255,.25)}
+.fchip.alert{border-color:var(--purple);color:var(--purple)}
+.fchip.alert .cnt{background:var(--purple);color:#fff}
+
+.search-bar{position:relative;margin-bottom:18px}
+.search-bar input{width:100%;padding:11px 14px 11px 40px;background:var(--surface);border:1px solid var(--border);border-radius:9px;color:var(--text);font-family:'Syne',sans-serif;font-size:14px;outline:none;transition:border .15s}
+.search-bar input:focus{border-color:var(--accent)}
+.search-bar svg{position:absolute;left:13px;top:50%;transform:translateY(-50%);color:var(--muted)}
+
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.78);z-index:200;display:flex;align-items:center;justify-content:center;padding:20px}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:26px;width:100%;max-width:600px;max-height:92vh;overflow-y:auto}
+.modal h2{font-size:18px;font-weight:800;margin-bottom:18px}
+.modal-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:22px;flex-wrap:wrap}
+
+.section-label{font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin:8px 0}
+.divider{height:1px;background:var(--border);margin:18px 0}
+
+/* LINE ITEMS EDITOR */
+.li-row{display:grid;grid-template-columns:1fr 64px 110px 30px;gap:8px;margin-bottom:8px;align-items:center}
+.li-row input{background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:8px 10px;color:var(--text);font-family:'Syne',sans-serif;font-size:13px;outline:none}
+.li-row input:focus{border-color:var(--accent)}
+.li-del{background:transparent;border:none;color:var(--muted);cursor:pointer;font-size:16px;padding:4px}
+.li-del:hover{color:var(--danger)}
+.li-head{display:grid;grid-template-columns:1fr 64px 110px 30px;gap:8px;font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--muted);font-weight:700;margin-bottom:6px}
+
+/* ===== SIDEBAR DETAIL ===== */
+.sd-head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:18px}
+.sd-name{font-size:20px;font-weight:800;line-height:1.1}
+.sd-id{font-size:12px;color:var(--muted);font-family:'DM Mono',monospace;margin-top:4px}
+
+.sec{margin-bottom:20px}
+.sec-title{font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:11px;padding-bottom:8px;border-bottom:1px solid var(--border)}
+
+/* STAGE RAIL */
+.rail{position:relative;padding-left:6px}
+.rail-item{position:relative;display:flex;align-items:flex-start;gap:12px;padding-bottom:13px}
+.rail-item:last-child{padding-bottom:0}
+.rail-line{position:absolute;left:9px;top:18px;width:2px;height:calc(100% - 6px);background:var(--border)}
+.rail-item.done .rail-line{background:var(--accent2)}
+.rail-dot{width:20px;height:20px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;z-index:1;border:2px solid var(--border);background:var(--surface);color:var(--muted)}
+.rail-item.done .rail-dot{background:var(--accent2);border-color:var(--accent2);color:#000}
+.rail-item.current .rail-dot{background:var(--accent);border-color:var(--accent);color:#000;box-shadow:0 0 0 4px rgba(0,229,160,.18)}
+.rail-text{flex:1;padding-top:0}
+.rail-label{font-size:13.5px;font-weight:700;line-height:1.3}
+.rail-item.future .rail-label{color:var(--muted2);font-weight:600}
+.rail-item.current .rail-label{color:var(--accent)}
+.rail-desc{font-size:11.5px;color:var(--muted);margin-top:2px;line-height:1.4}
+
+/* NEXT STEP CARD */
+.nextstep{background:#0c1813;border:1px solid var(--accent2);border-radius:13px;padding:16px;margin-bottom:20px}
+.nextstep.flag{background:#160d1f;border-color:var(--purple)}
+.ns-kicker{font-size:10.5px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--accent);margin-bottom:4px}
+.nextstep.flag .ns-kicker{color:var(--purple)}
+.ns-title{font-size:16px;font-weight:800;margin-bottom:5px;line-height:1.2}
+.ns-sub{font-size:12.5px;color:var(--muted);line-height:1.5;margin-bottom:13px}
+.ns-actions{display:flex;flex-direction:column;gap:8px}
+.ns-row{display:flex;gap:8px}
+.ns-row>*{flex:1}
+
+.waiting{display:flex;align-items:center;gap:9px;font-size:12.5px;color:var(--blue);background:#0a131a;border:1px solid #1d3445;border-radius:9px;padding:11px 13px;margin-bottom:10px}
+.dotpulse{width:9px;height:9px;border-radius:50%;background:var(--blue);animation:dp 1.3s infinite}
+@keyframes dp{0%,100%{opacity:.3}50%{opacity:1}}
+
+/* DETAIL ROWS / LEDGER */
+.drow{display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px solid #1a1a1a;font-size:13px}
+.drow:last-child{border-bottom:none}
+.dlabel{color:var(--muted)}
+.dval{font-weight:600;font-family:'DM Mono',monospace;text-align:right;word-break:break-word}
+.ledger-total{border-top:1px solid var(--border);margin-top:5px;padding-top:10px;display:flex;justify-content:space-between;align-items:baseline}
+.ledger-total .dlabel{font-weight:700;color:var(--text);font-size:13px}
+.amount-owed{font-size:20px;color:var(--warn);font-weight:800;font-family:'DM Mono',monospace}
+.amount-clear{font-size:20px;color:var(--accent);font-weight:800;font-family:'DM Mono',monospace}
+
+.pay-row{display:flex;align-items:center;gap:10px;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;margin-bottom:7px}
+.pay-kind{font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;padding:3px 8px;border-radius:5px;flex-shrink:0}
+.pk-deposit{background:#001a20;color:var(--blue)}
+.pk-final{background:#001a12;color:var(--accent)}
+.pk-other{background:var(--surface3);color:var(--muted)}
+.pay-amt{font-family:'DM Mono',monospace;font-weight:600;font-size:13px;margin-left:auto}
+.pay-date{font-size:11px;color:var(--muted);font-family:'DM Mono',monospace}
+.pay-del{background:none;border:none;color:var(--muted2);cursor:pointer;font-size:14px;padding:0 2px}
+.pay-del:hover{color:var(--danger)}
+
+.wa-box{background:#0a1410;border:1px solid var(--accent2);border-radius:10px;padding:13px;font-size:12px;line-height:1.7;font-family:'DM Mono',monospace;color:#b0ffdc;white-space:pre-wrap;word-break:break-word;margin-bottom:10px;max-height:230px;overflow-y:auto}
+
+.copy-link{display:flex;gap:8px;align-items:center;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:9px 11px;font-size:11.5px;font-family:'DM Mono',monospace;color:var(--muted);word-break:break-all;margin-bottom:10px}
+.copy-link button{flex-shrink:0;background:var(--surface3);border:none;color:var(--text);padding:5px 11px;border-radius:6px;cursor:pointer;font-size:11px;font-family:'Syne',sans-serif;font-weight:700}
+.copy-link button:hover{background:var(--accent);color:#000}
+
+.map-preview{width:100%;height:170px;border-radius:9px;border:1px solid var(--border);overflow:hidden;margin-top:9px}
+.map-preview iframe{width:100%;height:100%;border:none}
+
+.timeline{position:relative;padding-left:18px}
+.timeline::before{content:'';position:absolute;left:5px;top:3px;bottom:3px;width:2px;background:var(--border)}
+.tl-item{position:relative;padding:0 0 11px 14px;font-size:12px}
+.tl-item::before{content:'';position:absolute;left:-8px;top:3px;width:9px;height:9px;border-radius:50%;background:var(--accent);border:2px solid var(--surface)}
+.tl-item.old::before{background:var(--muted2)}
+.tl-time{font-size:10.5px;color:var(--muted);font-family:'DM Mono',monospace;margin-top:1px}
+
+.notes-box{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-size:12.5px;color:var(--text);line-height:1.5;min-height:36px}
+
+.no-select{display:flex;flex-direction:column;align-items:center;justify-content:center;height:340px;color:var(--muted);text-align:center;gap:12px;font-size:14px;padding:20px}
+.empty{text-align:center;padding:60px 20px;color:var(--muted)}
+.empty svg{margin-bottom:12px;opacity:.5}
+
+#toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#111;border:1px solid var(--border2);color:#fff;padding:11px 24px;border-radius:30px;font-size:13px;font-weight:700;z-index:9999;opacity:0;transition:opacity .25s;pointer-events:none}
+
+@media(max-width:980px){
+  .layout{grid-template-columns:1fr}
+  .sidebar{border-left:none;border-top:1px solid var(--border);position:static;max-height:none}
+  .stats{grid-template-columns:repeat(2,1fr)}
+}
+@media(max-width:520px){.form-grid{grid-template-columns:1fr}.li-row,.li-head{grid-template-columns:1fr 50px 90px 26px}}
+</style>
+</head>
+<body>
+
+<!-- SETUP SCREEN -->
+<div id="setupScreen" class="setup-screen" style="display:none">
+  <div class="setup-card">
+    <h1>⚙️ Setup</h1>
+    <p>Connect your Supabase project so client form responses sync in real time across devices.</p>
+    <div class="setup-warning">⚠️ One-time setup. Use your existing GangaLoo Supabase project — the same <code>gl_orders</code> table powers this.</div>
+    <div class="field" style="margin-bottom:14px"><label>Supabase URL</label><input type="text" id="setup_url" placeholder="https://xxxx.supabase.co"></div>
+    <div class="field" style="margin-bottom:14px"><label>Supabase Anon Key</label><input type="text" id="setup_key" placeholder="eyJhbGci..."></div>
+    <div class="field" style="margin-bottom:14px">
+      <label>Client Form Base URL</label>
+      <input type="text" id="setup_baseurl" placeholder="https://yourdomain.com/gangaloo-client-form.html">
+      <div class="field-hint">Where gangaloo-client-form.html is hosted.</div>
+    </div>
+    <div class="field" style="margin-bottom:20px"><label>Your WhatsApp Business Number</label><input type="tel" id="setup_waphone" placeholder="+1 829 000 0000"></div>
+    <button class="btn btn-primary btn-block" onclick="saveSetup()">Save & Continue</button>
+  </div>
+</div>
+
+<!-- MAIN APP -->
+<div id="mainApp" style="display:none">
+<div class="header">
+  <div class="logo">Ganga<span>Loo</span> <small>/ Orders</small></div>
+  <div class="header-actions">
+    <span class="badge-count" id="activeBadge">0 active</span>
+    <button class="btn btn-ghost btn-sm" onclick="openSetup()">⚙️</button>
+    <button class="btn btn-primary" onclick="openNewOrder()">
+      <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+      New Invoice
+    </button>
+  </div>
+</div>
+
+<div class="layout">
+<div class="main">
+  <div class="stats">
+    <div class="stat"><div class="stat-val" id="statTotal">0</div><div class="stat-label">Total</div></div>
+    <div class="stat"><div class="stat-val" style="color:var(--blue)" id="statActive">0</div><div class="stat-label">In Progress</div></div>
+    <div class="stat"><div class="stat-val" style="color:var(--purple)" id="statResp">0</div><div class="stat-label">Awaiting You</div></div>
+    <div class="stat"><div class="stat-val" style="color:var(--warn)" id="statOwed">RD$ 0</div><div class="stat-label">Balance Owed</div></div>
+  </div>
+
+  <div class="filters" id="filters"></div>
+
+  <div class="search-bar">
+    <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+    <input type="text" placeholder="Search client, order ID, platform, phone…" oninput="renderOrders()" id="searchInput">
+  </div>
+
+  <div id="orderList"></div>
+</div>
+
+<div class="sidebar">
+  <div class="sidebar-inner" id="sidebarContent">
+    <div class="no-select">
+      <svg width="46" height="46" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2"/></svg>
+      <p>Select an order to view its<br>full lifecycle &amp; next step.</p>
+    </div>
+  </div>
+</div>
+</div>
+</div>
+
+<!-- NEW / EDIT ORDER MODAL -->
+<div class="modal-overlay" id="orderModal" style="display:none">
+<div class="modal">
+  <h2 id="orderModalTitle">📦 New Third-Party Order</h2>
+  <div class="form-grid" style="margin-bottom:14px">
+    <div class="field"><label>Client Name</label><input type="text" id="m_client" placeholder="Full name"></div>
+    <div class="field"><label>WhatsApp Number</label><input type="tel" id="m_phone" placeholder="+1 829 000 0000"></div>
+    <div class="field"><label>Source Platform</label>
+      <select id="m_platform">
+        <option value="amazon">Amazon</option><option value="temu">Temu</option>
+        <option value="shein">Shein</option><option value="aliexpress">AliExpress</option>
+        <option value="other">Other</option>
+      </select>
+    </div>
+    <div class="field"><label>Source Order / Tracking #</label><input type="text" id="m_ref" placeholder="e.g. TRK-29483"></div>
+  </div>
+
+  <div class="divider"></div>
+  <div class="section-label">🧾 Invoice Items</div>
+  <div class="li-head"><span>Product</span><span>Qty</span><span>Unit RD$</span><span></span></div>
+  <div id="itemsEditor"></div>
+  <button class="btn btn-ghost btn-sm" style="margin-bottom:6px" onclick="addItemRow()">+ Add item</button>
+  <div class="field" style="margin-top:10px"><label>Or short description (if not itemizing)</label><input type="text" id="m_desc" placeholder="e.g. 1 Peluca Lacio 30&quot;"></div>
+
+  <div class="divider"></div>
+  <div class="section-label">💰 Money</div>
+  <div class="form-grid" style="margin-bottom:6px">
+    <div class="field"><label>Product Subtotal (RD$)</label><input type="number" id="m_amount" placeholder="0.00" min="0" step="0.01" oninput="recalcModal()"><div class="field-hint" id="m_amountHint">Auto-sums from items.</div></div>
+    <div class="field"><label>Source Shipping (RD$)</label><input type="number" id="m_shipping" placeholder="0.00" min="0" step="0.01" value="0" oninput="recalcModal()"></div>
+    <div class="field"><label>Local Delivery Fee (RD$)</label><input type="number" id="m_deliveryFee" placeholder="200" min="0" step="0.01" value="200"><div class="field-hint">Only charged if client picks delivery.</div></div>
+    <div class="field"><label>Initial Deposit Now (RD$)</label><input type="number" id="m_deposit" placeholder="0.00" min="0" step="0.01" oninput="recalcModal()"><div class="field-hint" id="m_depositHint">Enter if you've already taken a deposit & ordered.</div></div>
+  </div>
+  <div class="drow" style="border-top:1px solid var(--border);margin-top:6px;padding-top:10px"><span class="dlabel" style="font-weight:700;color:var(--text)">Invoice total (excl. delivery)</span><span class="dval" id="m_totalPreview">RD$ 0.00</span></div>
+
+  <div class="field" style="margin-top:14px"><label>Internal Notes (optional)</label><input type="text" id="m_notes" placeholder="Anything to remember…"></div>
+
+  <div class="modal-actions">
+    <button class="btn btn-danger btn-sm" id="m_deleteBtn" onclick="deleteCurrentOrder()" style="display:none">Delete</button>
+    <button class="btn btn-ghost" onclick="closeModal('orderModal')">Cancel</button>
+    <button class="btn btn-primary" id="m_saveBtn" onclick="saveOrder()">Save Order</button>
+  </div>
+</div>
+</div>
+
+<!-- PAYMENT MODAL -->
+<div class="modal-overlay" id="payModal" style="display:none">
+<div class="modal" style="max-width:420px">
+  <h2 id="payModalTitle">💵 Record Payment</h2>
+  <div class="field" style="margin-bottom:14px"><label>Type</label>
+    <select id="p_kind"><option value="deposit">Initial Deposit</option><option value="final">Final Payment</option><option value="other">Other</option></select>
+  </div>
+  <div class="field" style="margin-bottom:14px"><label>Amount (RD$)</label><input type="number" id="p_amount" min="0" step="0.01" placeholder="0.00"></div>
+  <div class="field" style="margin-bottom:6px"><label>Note (optional)</label><input type="text" id="p_note" placeholder="Cash, transfer, ref…"></div>
+  <div class="modal-actions">
+    <button class="btn btn-ghost" onclick="closeModal('payModal')">Cancel</button>
+    <button class="btn btn-primary" onclick="savePayment()">Record</button>
+  </div>
+</div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+/* ════════════════ CONFIG ════════════════ */
+(function(){
+  const stored = JSON.parse(localStorage.getItem('gl_cfg') || '{}');
+  const gc = window.GANGALOO_CONFIG || {};
+  if (!stored.url && gc.supabaseUrl) stored.url = gc.supabaseUrl;
+  if (!stored.key && gc.supabaseKey) stored.key = gc.supabaseKey;
+  if (!stored.waphone && gc.waPhone) stored.waphone = gc.waPhone;
+  if (!stored.baseurl) stored.baseurl = window.location.origin;
+  if (stored.url && stored.key) localStorage.setItem('gl_cfg', JSON.stringify(stored));
+  window._CFG = stored;
+})();
+let CFG = window._CFG || JSON.parse(localStorage.getItem('gl_cfg') || '{}');
+let orders = [];
+let selectedId = null;
+let filterMode = 'all';
+let editingId = null;
+let payTargetId = null;
+let pollTimer = null;
+const DEFAULT_DELIVERY_FEE = 200;
+
+/* ════════════════ STAGE MODEL ════════════════ */
+const STAGES = [
+  { key:'invoice',   label:'Invoice created',   desc:'Awaiting initial deposit before ordering.' },
+  { key:'ordered',   label:'Ordered from source',desc:'Deposit in. Ordered — waiting for it to arrive.' },
+  { key:'arrived',   label:'Arrived',           desc:'Item is here. Time to notify the client.' },
+  { key:'notified',  label:'Client notified',   desc:'WhatsApp + form sent. Waiting for their answer.' },
+  { key:'responded', label:'Client responded',  desc:'They chose how to receive it — confirm it.' },
+  { key:'ready',     label:'Ready / scheduled', desc:'Confirmed. Hand over & collect the balance.' },
+  { key:'completed', label:'Completed',         desc:'Delivered/picked up and fully paid.' },
+];
+const STAGE_KEYS = STAGES.map(s=>s.key);
+function stageIdx(k){ const i = STAGE_KEYS.indexOf(k); return i<0?0:i; }
+const STAGE_SHORT = { invoice:'Invoice', ordered:'Ordered', arrived:'Arrived', notified:'Notified', responded:'Responded', ready:'Ready', completed:'Done' };
+
+/* Map legacy status -> new stage so old orders still display */
+function legacyStage(status){
+  return ({ pending:'arrived', notified:'notified', form_sent:'notified', form_filled:'responded',
+            pickup:'ready', scheduled:'ready', done:'completed' })[status] || 'arrived';
+}
+
+/* Normalize any order record (handles both new & legacy shape) */
+function normalize(o){
+  o = { ...o };
+  if (!o.stage) o.stage = legacyStage(o.status);
+  if (!Array.isArray(o.items)) o.items = [];
+  if (!Array.isArray(o.payments)){
+    o.payments = [];
+    const legacyPaid = Number(o.paid||0);
+    if (legacyPaid > 0) o.payments.push({ id:'legacy', kind:'deposit', amount:legacyPaid, ts:o.createdAt||Date.now(), note:'migrated' });
+  }
+  if (o.fulfilment == null) o.fulfilment = o.clientChoice || null;
+  if (o.deliveryDate == null && o.clientDeliveryDate) o.deliveryDate = o.clientDeliveryDate;
+  if (o.address == null && o.clientAddress) o.address = o.clientAddress;
+  if (o.note == null && o.clientNote) o.note = o.clientNote;
+  if (o.lat == null && o.clientLat) o.lat = o.clientLat;
+  if (o.lng == null && o.clientLng) o.lng = o.clientLng;
+  o.ref = o.ref || o.orderId || '';
+  if (!Array.isArray(o.timeline)) o.timeline = [];
+  o.shippingFee = Number(o.shippingFee||0);
+  o.deliveryFee = Number(o.deliveryFee||0) || DEFAULT_DELIVERY_FEE;
+  return o;
+}
+
+/* ════════════════ MONEY ════════════════ */
+function subtotal(o){
+  if (o.items && o.items.length) return o.items.reduce((s,it)=> s + (Number(it.qty)||0)*(Number(it.price)||0), 0);
+  return Number(o.amount||0);
+}
+function paidTotal(o){ return (o.payments||[]).reduce((s,p)=> s + (Number(p.amount)||0), 0); }
+function deliveryCharge(o){ return o.fulfilment === 'delivery' ? Number(o.deliveryFee||0) : 0; }
+function charges(o){ return subtotal(o) + Number(o.shippingFee||0) + deliveryCharge(o); }
+function balance(o){ return Math.max(0, charges(o) - paidTotal(o)); }
+function productCount(o){
+  if (o.items && o.items.length) return o.items.reduce((s,it)=> s + (Number(it.qty)||0), 0);
+  return null;
+}
+
+/* ════════════════ UTILS ════════════════ */
+function genId(){ return 'ORD-' + Date.now().toString(36).toUpperCase(); }
+function cleanPhone(p){ return (p||'').replace(/[\s\-\(\)\+]/g,''); }
+function fmt(n){ return 'RD$ ' + Number(n||0).toLocaleString('es-DO',{minimumFractionDigits:2}); }
+function fmtShort(n){ const v=Number(n||0); return 'RD$ ' + (v>=1000? (v/1000).toFixed(v%1000?1:0)+'k' : v.toFixed(0)); }
+function fmtDate(ts){ if(!ts) return '—'; return new Date(ts).toLocaleDateString('es-DO',{day:'2-digit',month:'short',year:'numeric'}); }
+function fmtDateTime(ts){ return new Date(ts).toLocaleString('es-DO',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}); }
+function cap(s){ return (s||'').charAt(0).toUpperCase()+(s||'').slice(1); }
+function srcClass(p){ return ({amazon:'src-amazon',temu:'src-temu',shein:'src-shein',aliexpress:'src-aliexpress'})[p] || 'src-other'; }
+function esc(s){ return (s==null?'':String(s)).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function clientFormLink(id){
+  const base = (CFG.baseurl||'').replace(/\/+$/,'').replace(/\/[^\/]*\.html$/,'');
+  return `${base}/gangaloo-client-form.html?order=${id}`;
+}
+function waLink(phone,msg){ return `https://wa.me/${cleanPhone(phone)}?text=${encodeURIComponent(msg)}`; }
+function toast(msg){ const t=document.getElementById('toast'); t.textContent=msg; t.style.opacity='1'; clearTimeout(t._h); t._h=setTimeout(()=>t.style.opacity='0',2400); }
+
+/* ════════════════ SETUP ════════════════ */
+function openSetup(){
+  document.getElementById('setup_url').value = CFG.url||'';
+  document.getElementById('setup_key').value = CFG.key||'';
+  document.getElementById('setup_baseurl').value = CFG.baseurl||'';
+  document.getElementById('setup_waphone').value = CFG.waphone||'';
+  document.getElementById('setupScreen').style.display='flex';
+  document.getElementById('mainApp').style.display='none';
+}
+function saveSetup(){
+  const url=document.getElementById('setup_url').value.trim();
+  const key=document.getElementById('setup_key').value.trim();
+  const baseurl=document.getElementById('setup_baseurl').value.trim().replace(/\/$/,'');
+  const waphone=document.getElementById('setup_waphone').value.trim();
+  if(!url||!key||!baseurl||!waphone){ alert('All fields required.'); return; }
+  CFG={url,key,baseurl,waphone};
+  localStorage.setItem('gl_cfg',JSON.stringify(CFG));
+  initApp();
+}
+async function initApp(){
+  if(!CFG.url||!CFG.key){ openSetup(); return; }
+  await ensureTable();
+  document.getElementById('setupScreen').style.display='none';
+  document.getElementById('mainApp').style.display='block';
+  buildFilters();
+  await loadOrders();
+  startPolling();
+}
+
+/* ════════════════ SUPABASE ════════════════ */
+async function sb(method,path,body,extra){
+  const r = await fetch(`${CFG.url}/rest/v1/${path}`,{
+    method, headers:{ 'apikey':CFG.key,'Authorization':`Bearer ${CFG.key}`,'Content-Type':'application/json', ...(extra||{}) },
+    body: body? JSON.stringify(body): undefined
+  });
+  if(!r.ok){ const err=await r.text(); console.error('Supabase error:',method,path,err); throw new Error(err); }
+  const t=await r.text(); return t? JSON.parse(t): null;
+}
+async function ensureTable(){
+  try{ await sb('GET','gl_orders?limit=1'); }
+  catch(e){
+    if(e.message.includes('relation')||e.message.includes('does not exist'))
+      alert("Create the Supabase table first → SQL Editor:\n\nCREATE TABLE gl_orders (\n  id text PRIMARY KEY,\n  data jsonb NOT NULL,\n  updated_at timestamptz DEFAULT now()\n);");
+  }
+}
+async function loadOrders(){
+  try{
+    const rows = await sb('GET','gl_orders?order=updated_at.desc');
+    orders = (rows||[]).map(r=> normalize(r.data));
+    renderOrders(); renderSidebar();
+  }catch(e){ console.error('Load error',e); }
+}
+async function upsertOrder(o){
+  o.updatedAt = Date.now();
+  try{ await sb('POST','gl_orders',{ id:o.id, data:o, updated_at:new Date().toISOString() },{ 'Prefer':'resolution=merge-duplicates,return=minimal' }); }
+  catch(e){ console.error('Upsert failed:',e); alert('Failed to save. Check console.'); }
+}
+async function deleteOrderSb(id){ await sb('DELETE',`gl_orders?id=eq.${id}`); }
+
+function startPolling(){
+  if(pollTimer) clearInterval(pollTimer);
+  pollTimer = setInterval(async ()=>{
+    const prev = orders.filter(o=>o.stage==='responded').map(o=>o.id);
+    await loadOrders();
+    const now = orders.filter(o=>o.stage==='responded').map(o=>o.id);
+    const fresh = now.filter(id=>!prev.includes(id));
+    if(fresh.length){
+      document.title=`🔔 ${fresh.length} responded — GangaLoo`;
+      toast(`🔔 ${fresh.length} client response${fresh.length>1?'s':''} received`);
+      setTimeout(()=>document.title='GangaLoo — Order Manager',6000);
+    }
+  },15000);
+}
+
+/* ════════════════ TIMELINE ════════════════ */
+function addTL(o,label){ if(!o.timeline) o.timeline=[]; o.timeline.push({label,ts:Date.now()}); }
+
+/* ════════════════ WHATSAPP BUILDERS ════════════════ */
+function itemLines(o){
+  if(o.items && o.items.length) return o.items.map(it=>`   • ${it.qty}× ${it.name}`).join('\n');
+  if(o.desc) return `   • ${o.desc}`;
+  return '';
+}
+function buildWAInvoice(o){
+  const sub=subtotal(o), ship=Number(o.shippingFee||0), paid=paidTotal(o), bal=Math.max(0,sub+ship-paid);
+  let m=`Hola ${o.client}! 👋\n\nAquí está tu factura de GangaLoo 🧾\n`;
+  m+=`🛒 Pedido de *${cap(o.platform)}*`; if(o.ref) m+=` · Ref: ${o.ref}`; m+='\n';
+  const il=itemLines(o); if(il) m+=il+'\n';
+  m+=`\n💵 Subtotal: *${fmt(sub)}*`;
+  m+=`\n📦 Envío: *${fmt(ship)}*`;
+  m+=`\n🧾 Total: *${fmt(sub+ship)}*`;
+  if(paid>0) m+=`\n✅ Abonado: *${fmt(paid)}*`;
+  m+=`\n⚡ Por pagar: *${fmt(bal)}*\n`;
+  m+=`\nPara empezar a procesar tu pedido necesitamos un *depósito inicial*. Avísanos cuando lo hayas enviado 🙏\n`;
+  m+=`\n👉 Ver tu pedido: ${clientFormLink(o.id)}`;
+  return m;
+}
+function buildWANotify(o){
+  const sub=subtotal(o), ship=Number(o.shippingFee||0), paid=paidTotal(o), bal=Math.max(0,sub+ship-paid);
+  const dfee=Number(o.deliveryFee)>0?Number(o.deliveryFee):DEFAULT_DELIVERY_FEE;
+  let m=`Hola ${o.client}! 👋\n\n¡Tu pedido de *${cap(o.platform)}* ya llegó! 📦`; if(o.ref) m+=`\n🔖 Ref: ${o.ref}`;
+  const il=itemLines(o); if(il) m+='\n'+il;
+  m+=`\n\n💵 Total: *${fmt(sub+ship)}*`;
+  if(paid>0) m+=`\n✅ Abonado: *${fmt(paid)}*`;
+  m+=`\n⚡ Saldo pendiente: *${fmt(bal)}*`;
+  m+=`\n\n¿Cómo prefieres recibirlo?\n🏪 *Recojo en tienda* (gratis)\n🚚 *Envío a domicilio* (+${fmt(dfee)})\n`;
+  m+=`\nHaz clic para elegir, marcar tu ubicación y fecha de entrega:\n👉 ${clientFormLink(o.id)}`;
+  return m;
+}
+function buildWAConfirm(o){
+  const sub=subtotal(o), ship=Number(o.shippingFee||0), fee=deliveryCharge(o), paid=paidTotal(o), bal=Math.max(0,sub+ship+fee-paid);
+  if(o.fulfilment==='delivery'){
+    let m=`✅ *Entrega confirmada — GangaLoo* 🎉\n\nHola ${o.client}!\n`;
+    m+=`📅 Fecha: *${o.deliveryDate||'a coordinar'}*\n📍 Dirección: ${o.address||'—'}\n\n`;
+    m+=`💳 *A pagar al recibir:* ${fmt(bal)}\n\nTe contactamos el día de la entrega. ¡Gracias! 🙏`;
+    return m;
+  }
+  return `✅ *Listo para recoger — GangaLoo* 🎉\n\nHola ${o.client}! Tu pedido está listo en tienda.\n💳 *A pagar al recoger:* ${fmt(bal)}\n\nPasa cuando gustes. ¡Te esperamos! 🙌`;
+}
+function waForStage(o){
+  if(o.stage==='invoice') return buildWAInvoice(o);
+  if(['ordered','arrived','notified'].includes(o.stage)) return buildWANotify(o);
+  if(['responded','ready'].includes(o.stage)) return buildWAConfirm(o);
+  return buildWANotify(o);
+}
+
+/* ════════════════ FILTERS ════════════════ */
+const FILTER_DEFS = [
+  { key:'all', label:'All' },
+  { key:'invoice', label:'Awaiting deposit' },
+  { key:'ordered', label:'Ordered' },
+  { key:'arrived', label:'Arrived' },
+  { key:'notified', label:'Awaiting response' },
+  { key:'responded', label:'Responded', alert:true },
+  { key:'ready', label:'Ready' },
+  { key:'completed', label:'Done' },
+];
+function countFor(key){ return key==='all'? orders.length : orders.filter(o=>o.stage===key).length; }
+function buildFilters(){
+  document.getElementById('filters').innerHTML = FILTER_DEFS.map(f=>{
+    const c = countFor(f.key);
+    return `<button class="fchip ${f.key===filterMode?'active':''} ${f.alert?'alert':''}" onclick="setFilter('${f.key}',this)">${f.label}<span class="cnt">${c}</span></button>`;
+  }).join('');
+}
+function setFilter(mode){ filterMode=mode; buildFilters(); renderOrders(); }
+
+/* ════════════════ RENDER LIST ════════════════ */
+function renderOrders(){
+  const q=(document.getElementById('searchInput')?.value||'').toLowerCase();
+  let list = orders.filter(o=>{
+    if(filterMode!=='all' && o.stage!==filterMode) return false;
+    if(q){ const h=`${o.client} ${o.id} ${o.ref} ${o.platform} ${o.phone}`.toLowerCase(); if(!h.includes(q)) return false; }
+    return true;
+  });
+  const el=document.getElementById('orderList');
+  if(!list.length){ el.innerHTML=`<div class="empty"><svg width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/></svg><p>No orders here yet.</p></div>`; updateStats(); buildFilters(); return; }
+
+  el.innerHTML = list.map(o=>{
+    const flag = o.stage==='responded';
+    const pc = productCount(o);
+    const descLine = (o.items&&o.items.length)? `${pc} producto${pc===1?'':'s'}` : (o.desc||'');
+    return `
+    <div class="card ${selectedId===o.id?'selected':''} ${flag?'flag':''}" onclick="selectOrder('${o.id}')">
+      <div class="card-header">
+        <div>
+          <div class="card-name">${esc(o.client)} ${flag?'🔔':''}</div>
+          <div class="card-id">${esc(o.id)}</div>
+        </div>
+        <span class="card-source ${srcClass(o.platform)}">${esc(o.platform)}</span>
+      </div>
+      <div class="card-meta">
+        <div class="meta-item">📱 <strong>${esc(o.phone)}</strong></div>
+        <div class="meta-item">⚡ <strong style="color:${balance(o)>0?'var(--warn)':'var(--accent)'}">${fmt(balance(o))}</strong></div>
+        <div class="meta-item">📅 <strong>${fmtDate(o.createdAt)}</strong></div>
+      </div>
+      ${descLine?`<div style="font-size:13px;color:var(--muted);margin-bottom:10px">${esc(descLine).substring(0,72)}</div>`:''}
+      <div class="card-foot">
+        <span class="stage-pill sp-${o.stage}">${STAGE_SHORT[o.stage]}</span>
+      </div>
+    </div>`;
+  }).join('');
+  updateStats(); buildFilters();
+}
+
+function updateStats(){
+  document.getElementById('statTotal').textContent = orders.length;
+  document.getElementById('statActive').textContent = orders.filter(o=>!['completed'].includes(o.stage)).length;
+  document.getElementById('statResp').textContent = orders.filter(o=>o.stage==='responded').length;
+  const owed = orders.filter(o=>o.stage!=='completed').reduce((s,o)=>s+balance(o),0);
+  document.getElementById('statOwed').textContent = fmtShort(owed);
+  document.getElementById('activeBadge').textContent = orders.filter(o=>!['completed'].includes(o.stage)).length + ' active';
+}
+
+function selectOrder(id){ selectedId=id; renderOrders(); renderSidebar(); }
+
+/* ════════════════ RENDER SIDEBAR ════════════════ */
+function renderSidebar(){
+  const o = orders.find(x=>x.id===selectedId);
+  const el = document.getElementById('sidebarContent');
+  if(!o){
+    el.innerHTML=`<div class="no-select"><svg width="46" height="46" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/></svg><p>Select an order to view its<br>full lifecycle &amp; next step.</p></div>`;
+    return;
+  }
+  const idx = stageIdx(o.stage);
+  const link = clientFormLink(o.id);
+
+  /* Stage rail */
+  const rail = STAGES.map((s,i)=>{
+    const cls = i<idx?'done': i===idx?'current':'future';
+    const dot = i<idx?'✓':(i+1);
+    return `<div class="rail-item ${cls}">
+      ${i<STAGES.length-1?'<div class="rail-line"></div>':''}
+      <div class="rail-dot">${dot}</div>
+      <div class="rail-text"><div class="rail-label">${s.label}</div>${i===idx?`<div class="rail-desc">${s.desc}</div>`:''}</div>
+    </div>`;
+  }).join('');
+
+  /* Next-step card */
+  el.innerHTML = `
+  <div class="sd-head">
+    <div><div class="sd-name">${esc(o.client)}</div><div class="sd-id">${esc(o.id)} · ${esc(o.phone)}</div></div>
+    <button class="btn btn-ghost btn-sm" onclick="openEdit('${o.id}')">✏️ Edit</button>
+  </div>
+
+  ${nextStepCard(o,link)}
+
+  <div class="sec">
+    <div class="sec-title">Lifecycle</div>
+    <div class="rail">${rail}</div>
+  </div>
+
+  ${invoiceSection(o)}
+
+  ${clientResponseSection(o)}
+
+  <div class="sec">
+    <div class="sec-title">Order Info</div>
+    <div class="drow"><span class="dlabel">Source</span><span class="dval"><span class="card-source ${srcClass(o.platform)}">${esc(o.platform)}</span></span></div>
+    ${o.ref?`<div class="drow"><span class="dlabel">Source Ref</span><span class="dval">${esc(o.ref)}</span></div>`:''}
+    <div class="drow"><span class="dlabel">WhatsApp</span><span class="dval">${esc(o.phone)}</span></div>
+    <div class="drow"><span class="dlabel">Created</span><span class="dval">${fmtDate(o.createdAt)}</span></div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-title">WhatsApp Message (this stage)</div>
+    <div class="wa-box">${esc(waForStage(o))}</div>
+    <a href="${waLink(o.phone,waForStage(o))}" target="_blank" class="btn btn-wa btn-block btn-sm">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884"/></svg>
+      Open in WhatsApp
+    </a>
+  </div>
+
+  <div class="sec">
+    <div class="sec-title">Internal Notes</div>
+    <div class="notes-box">${o.notes? esc(o.notes): '<span style="color:var(--muted)">No notes.</span>'}</div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-title">Activity</div>
+    <div class="timeline">${(o.timeline||[]).slice().reverse().map((t,i)=>`<div class="tl-item ${i>0?'old':''}"><div>${esc(t.label)}</div><div class="tl-time">${fmtDateTime(t.ts)}</div></div>`).join('') || '<div class="tl-item old"><div style="color:var(--muted)">No activity yet.</div></div>'}</div>
+  </div>`;
+}
+
+function nextStepCard(o,link){
+  const copyBtn = `<div class="copy-link"><span>${link}</span><button onclick="copyLink('${link}',this)">Copy</button></div>`;
+  const waBtn = (txtFn,label,extraClass='')=>`<a href="${waLink(o.phone, txtFn(o))}" target="_blank" class="btn btn-wa ${extraClass}"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347"/></svg>${label}</a>`;
+
+  if(o.stage==='invoice'){
+    return `<div class="nextstep">
+      <div class="ns-kicker">Next step</div>
+      <div class="ns-title">Send invoice & collect the deposit</div>
+      <div class="ns-sub">Share the invoice, then record the initial deposit. Recording a deposit moves this to <b>Ordered</b>.</div>
+      ${copyBtn}
+      <div class="ns-actions">
+        ${waBtn(buildWAInvoice,'Send invoice on WhatsApp','btn-block')}
+        <button class="btn btn-primary btn-block" onclick="openPay('${o.id}','deposit')">💵 Record deposit → mark Ordered</button>
+      </div>
+    </div>`;
+  }
+  if(o.stage==='ordered'){
+    return `<div class="nextstep">
+      <div class="ns-kicker">Next step</div>
+      <div class="ns-title">Waiting for it to arrive</div>
+      <div class="ns-sub">You've ordered from ${cap(o.platform)}. Mark it arrived once it's in your hands.</div>
+      <button class="btn btn-primary btn-block" onclick="advance('${o.id}','arrived','📥 Marked as arrived')">📥 Mark as Arrived</button>
+    </div>`;
+  }
+  if(o.stage==='arrived'){
+    return `<div class="nextstep">
+      <div class="ns-kicker">Next step</div>
+      <div class="ns-title">Notify the client it's here</div>
+      <div class="ns-sub">Send the WhatsApp + form link so they can choose pickup or delivery. This moves to <b>Notified</b>.</div>
+      ${copyBtn}
+      <div class="ns-actions">
+        <a href="${waLink(o.phone, buildWANotify(o))}" target="_blank" class="btn btn-wa btn-block" onclick="advance('${o.id}','notified','📱 Client notified — form sent')"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347"/></svg>Notify client (WhatsApp + form)</a>
+      </div>
+    </div>`;
+  }
+  if(o.stage==='notified'){
+    return `<div class="nextstep">
+      <div class="ns-kicker">Waiting</div>
+      <div class="ns-title">Waiting for the client</div>
+      <div class="ns-sub">They've got the form link. This updates automatically when they respond (every 15s).</div>
+      <div class="waiting"><span class="dotpulse"></span> Awaiting their pickup / delivery choice…</div>
+      ${copyBtn}
+      <div class="ns-row">${waBtn(buildWANotify,'Resend')}<button class="btn btn-ghost btn-sm" onclick="advance('${o.id}','responded','↪️ Marked responded manually')">Mark responded</button></div>
+    </div>`;
+  }
+  if(o.stage==='responded'){
+    const isDel = o.fulfilment==='delivery';
+    return `<div class="nextstep flag">
+      <div class="ns-kicker">🔔 Client responded</div>
+      <div class="ns-title">${isDel?'🚚 Wants delivery':'🏪 Wants store pickup'}</div>
+      <div class="ns-sub">${isDel?`On <b>${esc(o.deliveryDate||'a date to confirm')}</b>. Confirm to schedule it.`:'Confirm it\'s ready for pickup.'}</div>
+      <div class="ns-actions">
+        <a href="${waLink(o.phone, buildWAConfirm(o))}" target="_blank" class="btn btn-wa btn-block"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347"/></svg>Send ${isDel?'delivery':'pickup'} confirmation</a>
+        <button class="btn btn-primary btn-block" onclick="advance('${o.id}','ready','${isDel?'📅 Delivery scheduled':'🏪 Confirmed for pickup'}')">${isDel?'📅 Schedule delivery':'🏪 Confirm pickup'}</button>
+      </div>
+    </div>`;
+  }
+  if(o.stage==='ready'){
+    const isDel = o.fulfilment==='delivery';
+    return `<div class="nextstep">
+      <div class="ns-kicker">Final step</div>
+      <div class="ns-title">${isDel?'Out for delivery':'Ready for pickup'}</div>
+      <div class="ns-sub">When ${isDel?'delivered':'picked up'}, collect the remaining balance of <b style="color:var(--warn)">${fmt(balance(o))}</b> and close it out.</div>
+      <button class="btn btn-primary btn-block" onclick="completeOrder('${o.id}')">✅ Collect balance & complete</button>
+    </div>`;
+  }
+  /* completed */
+  return `<div class="nextstep" style="background:#101410;border-color:var(--border2)">
+    <div class="ns-kicker" style="color:var(--accent)">Completed</div>
+    <div class="ns-title">✅ Order done</div>
+    <div class="ns-sub">${o.fulfilment==='delivery'?'Delivered':'Picked up'} · fully paid (${fmt(paidTotal(o))}). Nice work.</div>
+  </div>`;
+}
+
+function invoiceSection(o){
+  const sub=subtotal(o), ship=Number(o.shippingFee||0), dfee=deliveryCharge(o), paid=paidTotal(o), bal=balance(o);
+  const itemsHtml = (o.items&&o.items.length)
+    ? o.items.map(it=>`<div class="drow"><span class="dlabel">${it.qty}× ${esc(it.name)}</span><span class="dval">${fmt((Number(it.qty)||0)*(Number(it.price)||0))}</span></div>`).join('')
+    : (o.desc? `<div class="drow"><span class="dlabel">${esc(o.desc)}</span><span class="dval">${fmt(sub)}</span></div>` : '');
+  const payList = (o.payments&&o.payments.length)
+    ? o.payments.map((p,i)=>`<div class="pay-row"><span class="pay-kind pk-${p.kind}">${p.kind}</span><span class="pay-date">${fmtDate(p.ts)}</span><span class="pay-amt">${fmt(p.amount)}</span><button class="pay-del" title="Remove" onclick="removePayment('${o.id}',${i})">✕</button></div>`).join('')
+    : `<div style="font-size:12px;color:var(--muted);padding:4px 0">No payments recorded yet.</div>`;
+  return `<div class="sec">
+    <div class="sec-title">Invoice & Payments</div>
+    ${itemsHtml}
+    <div class="drow"><span class="dlabel">Subtotal</span><span class="dval">${fmt(sub)}</span></div>
+    <div class="drow"><span class="dlabel">Source shipping</span><span class="dval">${fmt(ship)}</span></div>
+    ${o.fulfilment==='delivery'?`<div class="drow"><span class="dlabel">Local delivery</span><span class="dval">${fmt(dfee)}</span></div>`:`<div class="drow"><span class="dlabel">Local delivery</span><span class="dval" style="color:var(--muted2)">— (pickup)</span></div>`}
+    <div class="ledger-total"><span class="dlabel">Total charges</span><span class="dval" style="font-size:14px">${fmt(charges(o))}</span></div>
+
+    <div style="margin-top:14px"></div>
+    ${payList}
+    <button class="btn btn-ghost btn-sm btn-block" style="margin-top:4px" onclick="openPay('${o.id}','${bal>0?'final':'other'}')">+ Record payment</button>
+
+    <div class="ledger-total"><span class="dlabel">${bal>0?'Balance owed':'Fully paid'}</span><span class="${bal>0?'amount-owed':'amount-clear'}">${fmt(bal)}</span></div>
+  </div>`;
+}
+
+function clientResponseSection(o){
+  if(!['responded','ready','completed'].includes(o.stage) || !o.fulfilment) return '';
+  const map = (o.lat&&o.lng)? `<div class="map-preview"><iframe src="https://maps.google.com/maps?q=${o.lat},${o.lng}&z=15&output=embed" allowfullscreen></iframe></div>`:'';
+  return `<div class="sec">
+    <div class="sec-title">Client Response</div>
+    <div class="drow"><span class="dlabel">Chose</span><span class="dval">${o.fulfilment==='delivery'?'🚚 Delivery':'🏪 Pickup'}</span></div>
+    ${o.fulfilment==='delivery'?`
+      <div class="drow"><span class="dlabel">Date</span><span class="dval">${esc(o.deliveryDate||'—')}</span></div>
+      <div class="drow"><span class="dlabel">Address</span><span class="dval" style="max-width:220px">${esc(o.address||'—')}</span></div>
+      ${o.note?`<div class="drow"><span class="dlabel">Note</span><span class="dval" style="max-width:220px">${esc(o.note)}</span></div>`:''}
+      ${o.lat?`<a href="https://maps.google.com/?q=${o.lat},${o.lng}" target="_blank" class="btn btn-ghost btn-sm btn-block" style="margin-top:8px">🧭 Open in Maps</a>`:''}
+      ${map}
+    `:''}
+  </div>`;
+}
+
+/* ════════════════ STAGE ACTIONS ════════════════ */
+async function advance(id,toStage,tlLabel){
+  const o = orders.find(x=>x.id===id); if(!o) return;
+  o.stage = toStage; addTL(o,tlLabel);
+  await upsertOrder(o); renderOrders(); renderSidebar();
+  toast(tlLabel.replace(/^[^\s]+\s/,''));
+}
+async function completeOrder(id){
+  const o = orders.find(x=>x.id===id); if(!o) return;
+  const bal = balance(o);
+  if(bal>0){
+    const input = prompt(`Balance pendiente: ${fmt(bal)}\n\n¿Cuánto pagó el cliente ahora? (Enter = monto completo)`, bal.toFixed(2));
+    if(input===null) return;
+    const amt = parseFloat(input);
+    if(!isNaN(amt) && amt>0){ o.payments.push({ id:'p'+Date.now(), kind:'final', amount:amt, ts:Date.now(), note:'on handover' }); }
+  }
+  o.stage='completed'; addTL(o,`✅ Completed — collected ${fmt(bal)}`);
+  await upsertOrder(o); renderOrders(); renderSidebar();
+  toast('✅ Order completed!');
+}
+
+/* ════════════════ PAYMENTS ════════════════ */
+function openPay(id,kind){
+  payTargetId=id;
+  const o=orders.find(x=>x.id===id);
+  document.getElementById('p_kind').value = kind||'final';
+  document.getElementById('p_amount').value = (kind==='final'? balance(o).toFixed(2): '');
+  document.getElementById('p_note').value='';
+  document.getElementById('payModal').style.display='flex';
+  setTimeout(()=>document.getElementById('p_amount').focus(),50);
+}
+async function savePayment(){
+  const o = orders.find(x=>x.id===payTargetId); if(!o) return;
+  const amt = parseFloat(document.getElementById('p_amount').value);
+  const kind = document.getElementById('p_kind').value;
+  const note = document.getElementById('p_note').value.trim();
+  if(isNaN(amt)||amt<=0){ alert('Enter a valid amount.'); return; }
+  o.payments.push({ id:'p'+Date.now(), kind, amount:amt, ts:Date.now(), note });
+  addTL(o,`💵 ${cap(kind)} payment: ${fmt(amt)}`);
+  /* Recording the first deposit while still on Invoice auto-advances to Ordered */
+  if(o.stage==='invoice' && kind==='deposit'){ o.stage='ordered'; addTL(o,`🛒 Ordered from ${cap(o.platform)}`); }
+  await upsertOrder(o);
+  closeModal('payModal'); renderOrders(); renderSidebar();
+  toast('💵 Payment recorded');
+}
+async function removePayment(id,idx){
+  const o = orders.find(x=>x.id===id); if(!o) return;
+  if(!confirm('Remove this payment?')) return;
+  const p=o.payments[idx]; o.payments.splice(idx,1);
+  addTL(o,`➖ Removed ${p.kind} payment ${fmt(p.amount)}`);
+  await upsertOrder(o); renderSidebar(); renderOrders();
+}
+
+/* ════════════════ LINE ITEMS EDITOR ════════════════ */
+let modalItems = [];
+function renderItemsEditor(){
+  const wrap=document.getElementById('itemsEditor');
+  wrap.innerHTML = modalItems.map((it,i)=>`
+    <div class="li-row">
+      <input type="text" placeholder="Product name" value="${esc(it.name)}" oninput="modalItems[${i}].name=this.value">
+      <input type="number" min="0" step="1" placeholder="1" value="${it.qty||''}" oninput="modalItems[${i}].qty=parseFloat(this.value)||0;recalcModal()">
+      <input type="number" min="0" step="0.01" placeholder="0.00" value="${it.price||''}" oninput="modalItems[${i}].price=parseFloat(this.value)||0;recalcModal()">
+      <button class="li-del" onclick="removeItemRow(${i})">✕</button>
+    </div>`).join('');
+}
+function addItemRow(){ modalItems.push({name:'',qty:1,price:0}); renderItemsEditor(); recalcModal(); }
+function removeItemRow(i){ modalItems.splice(i,1); renderItemsEditor(); recalcModal(); }
+function recalcModal(){
+  const hasItems = modalItems.some(it=>it.name || it.price || (it.qty&&it.qty!==1));
+  const amountEl=document.getElementById('m_amount');
+  if(hasItems){
+    const sum = modalItems.reduce((s,it)=> s + (Number(it.qty)||0)*(Number(it.price)||0),0);
+    amountEl.value = sum.toFixed(2); amountEl.readOnly=true; amountEl.style.opacity='.7';
+    document.getElementById('m_amountHint').textContent='Auto-summed from items above.';
+  } else {
+    amountEl.readOnly=false; amountEl.style.opacity='1';
+    document.getElementById('m_amountHint').textContent='Enter manually (no items added).';
+  }
+  const sub = parseFloat(amountEl.value)||0;
+  const ship = parseFloat(document.getElementById('m_shipping').value)||0;
+  document.getElementById('m_totalPreview').textContent = fmt(sub+ship);
+  const dep = parseFloat(document.getElementById('m_deposit').value)||0;
+  document.getElementById('m_depositHint').textContent = dep>0 ? '✓ Will start at "Ordered" with this deposit.' : 'Leave blank to start at "Invoice".';
+}
+
+/* ════════════════ NEW / EDIT ════════════════ */
+function openNewOrder(){
+  editingId=null;
+  document.getElementById('orderModalTitle').textContent='🧾 New Third-Party Order';
+  document.getElementById('m_saveBtn').textContent='Save Order';
+  document.getElementById('m_deleteBtn').style.display='none';
+  ['m_client','m_phone','m_ref','m_desc','m_notes','m_amount'].forEach(i=>document.getElementById(i).value='');
+  document.getElementById('m_platform').value='amazon';
+  document.getElementById('m_shipping').value='0';
+  document.getElementById('m_deliveryFee').value='200';
+  document.getElementById('m_deposit').value='';
+  modalItems=[{name:'',qty:1,price:0}]; renderItemsEditor(); recalcModal();
+  document.getElementById('orderModal').style.display='flex';
+}
+function openEdit(id){
+  const o=orders.find(x=>x.id===id); if(!o) return;
+  editingId=id;
+  document.getElementById('orderModalTitle').textContent='✏️ Edit Order';
+  document.getElementById('m_saveBtn').textContent='Save Changes';
+  document.getElementById('m_deleteBtn').style.display='inline-flex';
+  document.getElementById('m_client').value=o.client;
+  document.getElementById('m_phone').value=o.phone;
+  document.getElementById('m_platform').value=o.platform;
+  document.getElementById('m_ref').value=o.ref||'';
+  document.getElementById('m_desc').value=o.desc||'';
+  document.getElementById('m_notes').value=o.notes||'';
+  document.getElementById('m_shipping').value=o.shippingFee||0;
+  document.getElementById('m_deliveryFee').value=o.deliveryFee||200;
+  document.getElementById('m_deposit').value='';
+  document.getElementById('m_deposit').parentElement.style.display='none'; // no deposit field on edit
+  modalItems = (o.items&&o.items.length)? o.items.map(it=>({...it})) : [];
+  if(!modalItems.length) modalItems=[{name:'',qty:1,price:0}];
+  renderItemsEditor();
+  document.getElementById('m_amount').value = subtotal(o).toFixed(2);
+  recalcModal();
+  document.getElementById('orderModal').style.display='flex';
+}
+async function saveOrder(){
+  const client=document.getElementById('m_client').value.trim();
+  const phone=document.getElementById('m_phone').value.trim();
+  if(!client||!phone){ alert('Client name and WhatsApp are required.'); return; }
+  const items = modalItems.filter(it=>it.name && (Number(it.qty)>0)).map(it=>({name:it.name.trim(),qty:Number(it.qty)||1,price:Number(it.price)||0}));
+  const fields = {
+    client, phone,
+    platform: document.getElementById('m_platform').value,
+    ref: document.getElementById('m_ref').value.trim(),
+    items,
+    desc: document.getElementById('m_desc').value.trim(),
+    amount: parseFloat(document.getElementById('m_amount').value)||0,
+    shippingFee: parseFloat(document.getElementById('m_shipping').value)||0,
+    deliveryFee: parseFloat(document.getElementById('m_deliveryFee').value)||DEFAULT_DELIVERY_FEE,
+    notes: document.getElementById('m_notes').value.trim(),
+  };
+  if(editingId){
+    const o=orders.find(x=>x.id===editingId);
+    Object.assign(o,fields); addTL(o,'✏️ Order edited');
+    document.getElementById('m_deposit').parentElement.style.display=''; // restore
+    await upsertOrder(o); selectedId=o.id;
+  } else {
+    const deposit = parseFloat(document.getElementById('m_deposit').value)||0;
+    const o = {
+      id: genId(), createdAt: Date.now(),
+      ...fields,
+      payments: [], fulfilment:null,
+      stage:'invoice',
+      timeline:[{label:'🧾 Invoice created',ts:Date.now()}],
+    };
+    if(deposit>0){
+      o.payments.push({ id:'p'+Date.now(), kind:'deposit', amount:deposit, ts:Date.now(), note:'initial' });
+      o.stage='ordered';
+      addTL(o,`💵 Deposit ${fmt(deposit)} · 🛒 ordered from ${cap(o.platform)}`);
+    }
+    orders.unshift(o); selectedId=o.id;
+    await upsertOrder(o);
+  }
+  closeModal('orderModal'); renderOrders(); renderSidebar();
+  toast(editingId?'✏️ Saved':'🧾 Invoice created');
+}
+async function deleteCurrentOrder(){
+  if(!editingId) return;
+  if(!confirm('Delete this order permanently?')) return;
+  orders=orders.filter(x=>x.id!==editingId);
+  await deleteOrderSb(editingId);
+  if(selectedId===editingId) selectedId=null;
+  document.getElementById('m_deposit').parentElement.style.display='';
+  closeModal('orderModal'); renderOrders(); renderSidebar();
+  toast('🗑️ Deleted');
+}
+
+function copyLink(link,btn){
+  navigator.clipboard.writeText(link).then(()=>{ const o=btn.textContent; btn.textContent='Copied!'; setTimeout(()=>btn.textContent=o,1400); });
+}
+function closeModal(id){ document.getElementById(id).style.display='none'; }
+document.querySelectorAll('.modal-overlay').forEach(m=>m.addEventListener('click',e=>{ if(e.target===m) m.style.display='none'; }));
+
+/* ════════════════ INIT ════════════════ */
+initApp();
+</script>
+</body>
+</html>
