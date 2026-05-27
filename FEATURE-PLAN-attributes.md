@@ -1,6 +1,6 @@
 # Feature Plan — Product Attributes & Store Filters
 
-_Drafted 26 May 2026. Updated 26 May 2026 (session 3): **Stage 1 SHIPPED.** Read fully before writing code._
+_Drafted 26 May 2026. Updated 26 May 2026 (session 3): **Stages 1 & 2 SHIPPED.** Read fully before writing code._
 
 ## Goal (in the owner's words)
 Products are currently organized by categories, including a category per color.
@@ -73,14 +73,23 @@ choice, NOT copied from product_categories (its on-delete actions were not read)
 for child/link rows + is_active gives soft-delete. Worth an explicit owner/Perkins nod, but
 nothing depends on it until products/attributes actually get deleted.
 
-## STAGE 2 — Admin: manage attributes  ⟵ NEXT
-A screen (likely under a settings/catalog area — check where categories are managed for
-the pattern) to CRUD attributes and their values, so the owner can add "a new color"
-themselves without a developer. Reuse existing category-management UI patterns if present.
-First moves: find the categories-management screen, copy its structure; build CRUD for
-`attributes` then `attribute_values`; expose the `single_value_only` toggle per attribute.
-Server actions write to the Stage 1 tables (RLS already enforces staff-only). Typecheck +
-commit + push as usual. Zero store risk.
+## STAGE 2 — Admin: manage attributes ✅ DONE (session 3, commit 6fd7695)
+Screen at `app/(dashboard)/attributes/` — built by mirroring the `categories/` screen
+almost exactly. Owner-only (`requireOwner()` on page + write actions; `requireAdminCaller()`
+on reads). Two-level nested UI: attributes are "main" rows (with a "Single value" badge when
+`single_value_only`), their values nest beneath. Drag-to-reorder both levels (dnd-kit, same
+as categories). Reused the exact `slugify()` helper; new rows drop at bottom; `updated_at`
+set in the action (no DB trigger). Delete is guarded: refuses to delete an attribute that
+still has values, refuses to delete a value still assigned to products (cascade is backstop
+only). Postgres unique-violation (23505) mapped to a friendly message for the owner.
+Files (NEW): `actions.ts`, `page.tsx`, `attributes-table.tsx`, `attribute-dialog.tsx`,
+`value-dialog.tsx`, `delete-dialog.tsx`. MODIFIED: `lib/nav.ts` (added "Attributes" item
+after Categories, OWNER_ONLY, icon `Tag`, i18n es "Atributos"). Typecheck clean, tested on
+localhost (create/edit/reorder/delete + guard all confirmed), committed + pushed. Zero store risk.
+**Deliberate deviations from categories (by design):** (1) values can't be re-parented to
+another attribute — "Black" belonging to "Color" is fixed; (2) friendly 23505 handling.
+**NOTE:** `single_value_only` is STORED here but NOT yet enforced — enforcement is Stage 3
+(the assign-on-product UI), since that's the only place a product picks values.
 
 ## STAGE 3 — Admin: assign attributes on a product
 A new tab on the product page — **same pattern as the Movements tab shipped session 2**
@@ -105,8 +114,18 @@ if one exists. Performance: the `idx_pav_value` reverse index (Stage 1) is for t
 
 ---
 
-## Next-session opening moves (Stage 2)
-1. Find the existing categories-management admin screen; read its structure + server actions.
-2. Build attributes CRUD (then attribute_values CRUD), reusing that pattern.
-3. Surface the `single_value_only` toggle. Typecheck, commit, push. Checkpoint.
-(Stage 1 recon already done — tables/RLS/conventions all recorded above.)
+## Next-session opening moves (Stage 3 — assign attributes on a product)
+1. Re-read the Movements-tab work (session 2) as the template: `products/_form/movements-tab.tsx`,
+   how it's wired in `products/_form/product-form.tsx`, and how data is fetched in
+   `products/[id]/page.tsx` and passed as a prop. The new Attributes tab follows this exactly.
+2. Build an editable "Attributes" tab: list each active attribute and its values; let the
+   owner tick which values this product has. **Enforce `single_value_only`** in the tab UI
+   (radio-style / single-select when the flag is on; multi-select when off) AND in the save
+   server action (defensive). Save into `product_attribute_values`.
+3. CRITICAL: the product page is ONE `<form>` — the tab must NOT nest a `<form>`. Follow how
+   the categories/warehouses editable tabs submit.
+4. **Confirm per-attribute single/multi defaults with the owner** (e.g. Color = single) — this
+   is the stage where the flag finally matters in the UI.
+5. Typecheck, localhost test, commit, push. Checkpoint. (Stages 4–5 = store; read sync first.)
+
+(Stages 1 & 2 recon + build done — schema, RLS, conventions, admin CRUD screen all shipped.)
