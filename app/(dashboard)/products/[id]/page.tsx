@@ -11,6 +11,10 @@ import {
 } from '@/lib/products'
 import { fetchCurrentExchangeRate } from '@/lib/exchange-rates'
 import { fetchStockMovements } from '@/lib/inventory'
+import {
+  listActiveAttributesWithValues,
+  getProductAttributeValueIds,
+} from '../_form/attributes-tab-actions'
 import { requireAdminCaller } from '@/lib/auth/guard'
 import { isOwnerEquivalent } from '@/lib/auth/roles'
 export default async function EditProductPage({
@@ -58,6 +62,8 @@ export default async function EditProductPage({
     stockByWarehouse,
     currentRate,
     movements,
+    allAttributes,
+    productAttributeValueIds,
   ] = await Promise.all([
     fetchProductCategories(productTyped.id),
     fetchAllCategoriesFlat(),
@@ -69,6 +75,8 @@ export default async function EditProductPage({
     canSeeCosts
       ? fetchStockMovements({ productId: productTyped.id })
       : Promise.resolve([]),
+    listActiveAttributesWithValues(),
+    getProductAttributeValueIds(productTyped.id),
   ])
   return (
     <ProductForm
@@ -99,6 +107,8 @@ export default async function EditProductPage({
       costCalc={canSeeCosts ? (productTyped.cost_calc as never) ?? null : null}
       currentRate={currentRate}
       movements={movements}
+      allAttributes={allAttributes}
+      productAttributeValueIds={productAttributeValueIds}
       justCreated={sp.created === '1'}
     />
   )

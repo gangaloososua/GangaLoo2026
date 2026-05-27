@@ -20,6 +20,7 @@ import {
 import { BasicsTab } from './basics-tab'
 import { PricingTab } from './pricing-tab'
 import { CategoriesTab } from './categories-tab'
+import { AttributesTab } from './attributes-tab'
 import { ImagesTab } from './images-tab'
 import { WarehousesTab } from './warehouses-tab'
 import { CalculatorTab, type CostCalcState } from './calculator-tab'
@@ -33,6 +34,7 @@ import type {
 } from '@/lib/products'
 import type { ExchangeRate } from '@/lib/exchange-rates-types'
 import type { StockMovementRow } from '@/lib/inventory'
+import type { ProductAttributeOption } from './attributes-tab-actions'
 
 type Mode = 'create' | 'edit'
 
@@ -65,6 +67,8 @@ type Props = {
   canSeeCosts?: boolean
   currentRate?: ExchangeRate | null
   movements?: StockMovementRow[]
+  allAttributes?: ProductAttributeOption[]
+  productAttributeValueIds?: string[]
   justCreated?: boolean
 }
 
@@ -84,6 +88,8 @@ export function ProductForm({
   canSeeCosts = false,
   currentRate = null,
   movements = [],
+  allAttributes = [],
+  productAttributeValueIds = [],
   justCreated,
 }: Props) {
   const router = useRouter()
@@ -154,6 +160,9 @@ export function ProductForm({
           <TabsTrigger value="categories" disabled={mode === 'create'}>
             Categories
           </TabsTrigger>
+          <TabsTrigger value="attributes" disabled={mode === 'create'}>
+            Attributes
+          </TabsTrigger>
           <TabsTrigger value="images" disabled={mode === 'create'}>
             Images
           </TabsTrigger>
@@ -198,6 +207,16 @@ export function ProductForm({
               productId={productId}
               initialRows={productCategories}
               allCategories={allCategories}
+            />
+          </TabsContent>
+        )}
+
+        {mode === 'edit' && productId && (
+          <TabsContent value="attributes" forceMount className="pt-6">
+            <AttributesTab
+              productId={productId}
+              attributes={allAttributes}
+              initialValueIds={productAttributeValueIds}
             />
           </TabsContent>
         )}
