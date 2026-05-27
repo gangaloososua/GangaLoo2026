@@ -4,7 +4,7 @@
 export type CostCalcState = {
   base_cost_usd: number | null
   shipping_usd: number | null
-  tax_usd: number | null
+  tax_percent: number | null
   discount_usd: number | null
   exchange_rate: number | null
   transport_dop_per_unit: number | null
@@ -29,15 +29,17 @@ export function computeFinalPrice(s: CostCalcState): {
   const haveLanded =
     s.base_cost_usd != null &&
     s.shipping_usd != null &&
-    s.tax_usd != null &&
+    s.tax_percent != null &&
     s.discount_usd != null &&
     s.exchange_rate != null &&
     s.transport_dop_per_unit != null
 
   if (!haveLanded) return { landed: null, price: null, priceRounded: null }
 
-  const usdSub =
-    s.base_cost_usd! + s.shipping_usd! + s.tax_usd! - s.discount_usd!
+  // Tax is a percentage applied to (base + shipping) — typical import duty
+  // / US sales tax model. Discount is then subtracted from that pre-tax total.
+  const cifUsd = s.base_cost_usd! + s.shipping_usd!
+  const usdSub = cifUsd * (1 + s.tax_percent! / 100) - s.discount_usd!
   const landed = usdSub * s.exchange_rate! + s.transport_dop_per_unit!
 
   const havePrice =
@@ -61,7 +63,7 @@ export function parseCostCalcState(raw: unknown): CostCalcState | null {
   const keys: (keyof CostCalcState)[] = [
     'base_cost_usd',
     'shipping_usd',
-    'tax_usd',
+    'tax_percent',
     'discount_usd',
     'exchange_rate',
     'transport_dop_per_unit',

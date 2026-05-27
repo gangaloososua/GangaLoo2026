@@ -20,7 +20,7 @@ export type CostCalcState = _CostCalcState
 const EMPTY: CostCalcState = {
   base_cost_usd: null,
   shipping_usd: null,
-  tax_usd: null,
+  tax_percent: null,
   discount_usd: null,
   exchange_rate: null,
   transport_dop_per_unit: null,
@@ -174,17 +174,19 @@ export function CalculatorTab({
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="tax_usd">Tax (USD)</Label>
+          <Label htmlFor="tax_percent">Tax (%)</Label>
           <Input
-            id="tax_usd"
+            id="tax_percent"
             type="number"
             inputMode="decimal"
             step="0.01"
             min="0"
-            value={inputValue(state.tax_usd)}
-            onChange={(e) => set('tax_usd', e.target.value)}
+            value={inputValue(state.tax_percent)}
+            onChange={(e) => set('tax_percent', e.target.value)}
           />
-          <p className="text-xs text-muted-foreground">Actual tax/duty per unit, in USD.</p>
+          <p className="text-xs text-muted-foreground">
+            Tax / customs duty %, applied to (base + shipping).
+          </p>
         </div>
 
         <div className="space-y-2">
@@ -285,7 +287,7 @@ export function CalculatorTab({
               {calc.landed != null ? fmtDOP(calc.landed) : ' '}
             </div>
             <p className="mt-1 text-xs text-muted-foreground">
-              (base + shipping + tax - discount)   rate + transport
+              (base + shipping) * (1 + tax%) - discount, then * rate + transport
             </p>
           </div>
           <div>
