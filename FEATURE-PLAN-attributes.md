@@ -1,6 +1,6 @@
 # Feature Plan — Product Attributes & Store Filters
 
-_Drafted 26 May 2026. Updated 26 May 2026 (session 3): **Stages 1–4 SHIPPED. Only Stage 5 (store filter UI) remains.** Read fully before writing code._
+_Drafted 26 May 2026. Updated 26 May 2026 (session 3): **ALL 5 STAGES SHIPPED — FEATURE COMPLETE.** Kept for reference + the one follow-up (bilingual attributes) noted at the bottom._
 
 ## Goal (in the owner's words)
 Products are currently organized by categories, including a category per color.
@@ -127,29 +127,31 @@ store_product_categories). NO single_value_only / timestamps exposed. `is_active
 COLUMN (consumer filters it, matching catalog.ts), not pre-filtered in the view. Additive,
 re-runnable, zero write-path risk.
 
-## STAGE 5 — Store filter UI ⟵ ONLY REMAINING STAGE
-Surface attributes as customer-facing filters on the store listing page (e.g. Color = Black).
-Pure front-end + query work against the Stage-4 views; NO new backend. The reverse query
-(products WHERE attribute_value_id in [...]) is backed by the Stage-1 `idx_pav_value` index.
-First moves listed below.
+## STAGE 5 — Store filter UI ✅ DONE (session 3, commits 00071ee data, 102e96e UI)
+Customer-facing attribute filters on the store listing (`app/(shop)/tienda/[warehouse]/`).
+Built in two parts: **5a** extended `lib/store/catalog.ts` to fetch attribute facets +
+per-product value ids from the Stage-4 views (facets built from SHOWN rows only; only
+active values); **5b** added the UI in `store-page.tsx`. Filters = multi-select chip rows
+under the category bar (one per attribute) AND in the slide-out menu ("both places");
+AND across attributes, OR within. Selections sync to the URL as `?attrSlug=valSlug,valSlug`
+silently via `window.history.replaceState` (NOT useSearchParams — avoids the Suspense-boundary
+requirement, keeps the change in one file) and are read back on load → shareable/bookmarkable.
+Reverse filtering backed by Stage-1 `idx_pav_value`. Typecheck clean, localhost-tested
+(filter combine, URL share/restore, menu, search-override, Spanish strings), LIVE.
 
 ---
 
-## Next-session opening moves (Stage 5 — store filter UI) ⟵ THE LAST STAGE
-**All backend is done (Stages 1–4). Stage 5 is front-end + queries only, against store_* views.**
-1. Read `lib/store/catalog.ts` (already partly read session 3) + `lib/store/product.ts` to see
-   how the catalog is fetched/shaped and how categories are surfaced today — the attribute
-   filter should match that shape. Find the store LISTING page/component that renders the
-   catalog + any existing category filter UI (search the store route, likely under the storefront
-   app dir / `tienda`).
-2. Add a fetch: for the listed products, pull their attribute values via the three store_*
-   attribute views (join product → value → attribute), same style as the category fetch in
-   catalog.ts. Build the available filter facets (attribute → its values present in this store).
-3. Add filter UI on the listing page (match existing category-filter pattern if one exists;
-   otherwise simple checkboxes/links per value). Filter the product list by selected values.
-   Consider URL params (e.g. `?color=black`) using the value slugs the views expose.
-4. Typecheck, localhost test against the real store, commit, push. This COMPLETES the feature.
-**Carry-forward owner item (still open):** Stage-1 CASCADE FKs are our design choice, unconfirmed.
-**Carry-forward owner item:** the Stage-1 CASCADE FKs are still our design choice, unconfirmed.
+## ✅ FEATURE COMPLETE — all 5 stages shipped (session 3)
+1 schema (2c2684b) · 2 admin mgmt screen (6fd7695) · 3 per-product assign (6caab98) ·
+4 store views (9c3dbfd) · 5 store filter UI (00071ee + 102e96e). Owner can define attributes,
+assign them per product (single-value), and customers can filter the store by them.
 
-(Stages 1–3 done — schema, RLS, admin management screen, per-product assignment all shipped.)
+## Follow-ups (NOT done — deliberately deferred)
+- **Bilingual attributes.** Attribute names/values are single plain-text entries (e.g.
+  "Pulgadas", "Color"), so they don't translate when a shopper flips ES/EN. This matches
+  categories (also not translated), so the store is at least consistent. Proper fix = optional
+  `name_en`/`value_en` columns + admin inputs (Stage 2 dialogs) + expose in store views +
+  carry through catalog.ts + pick by locale in store-page.tsx — a mini-feature touching all
+  layers. Natural home: roadmap item 21 (Spanish UI / es-DO). Owner chose "leave as is for now."
+- **Stage-1 CASCADE FKs** are our design choice, owner nod still pending (low priority — admin
+  delete guards mean cascade is only a backstop).
