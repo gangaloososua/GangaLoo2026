@@ -3,7 +3,8 @@
 // Reads only the SAFE public views (store_*), never the raw tables, so customer
 // browsers never touch costs, commissions, or inventory value:
 //   store_products, store_product_categories, store_categories,
-//   store_product_settings, store_inventory, store_warehouses
+//   store_product_settings, store_inventory, store_warehouses,
+//   store_attributes, store_attribute_values, store_product_attribute_values
 
 import { createClient } from '@/lib/supabase/server'
 
@@ -25,12 +26,23 @@ export type StoreProduct = {
   offerPercent: number // 0 when not an offer
   imageUrl: string | null
   category: { id: string; name: string } | null
+  attributeValueIds: string[] // active attribute value ids assigned to this product
   stock: number // qty on hand in THIS warehouse
   dealSlot?: 'daily' | 'weekly' | null // featured deal slot, if any
   dealEndsAt?: string | null // when this product's deal ends (ISO), if any
 }
 
 export type StoreCategory = { id: string; name: string }
+
+// Attribute filter facets surfaced to the storefront. Only attributes/values
+// that actually appear among the shown products are included.
+export type StoreAttributeValueFacet = { id: string; value: string; slug: string }
+export type StoreAttributeFacet = {
+  id: string
+  name: string
+  slug: string
+  values: StoreAttributeValueFacet[]
+}
 
 export type StoreDeal = {
   slot: 'daily' | 'weekly'
@@ -43,6 +55,7 @@ export type StoreCatalog = {
   products: StoreProduct[]
   offers: StoreProduct[]
   categories: StoreCategory[]
+  attributes: StoreAttributeFacet[]
   dailyDeal: StoreDeal | null
   weeklyDeal: StoreDeal | null
 }
@@ -212,6 +225,7 @@ export async function fetchStoreCatalog(
       products: [],
       offers: [],
       categories: [],
+      attributes: [],
       dailyDeal: null,
       weeklyDeal: null,
     }
@@ -292,6 +306,48 @@ export async function fetchStoreCatalog(
     if (name) catByProduct.set(l.product_id, { id: l.category_id, name })
   }
 
+  // Attribute assignments for these products (Stage 4 store views). We pull the
+  // raw links, then the value + attribute metadata, keeping only ACTIVE values
+  // (matching how the rest of this layer filters is_active itself in queries).
+  const { data: pavRows } = await supabase
+    .from('store_product_attribute_values')
+    .select('product_id, attribute_value_id')
+    .in('product_id', ids)
+  const valueIdsByProduct = new Map<string, string[]>()
+  const allValueIds = new Set<string>()
+  for (const r of pavRows ?? []) {
+    if (!valueIdsByProduct.has(r.product_id)) valueIdsByProduct.set(r.product_id, [])
+    valueIdsByProduct.get(r.product_id)!.push(r.attribute_value_id)
+    allValueIds.add(r.attribute_value_id)
+  }
+
+  const valueMeta = new Map<
+    string,
+    { id: string; attribute_id: string; value: string; slug: string; display_order: number }
+  >()
+  const attrMeta = new Map<
+    string,
+    { id: string; name: string; slug: string; display_order: number }
+  >()
+  if (allValueIds.size > 0) {
+    const { data: avRows } = await supabase
+      .from('store_attribute_values')
+      .select('id, attribute_id, value, slug, display_order')
+      .in('id', [...allValueIds])
+      .eq('is_active', true)
+    for (const v of avRows ?? []) valueMeta.set(v.id, v)
+
+    const attrIds = [...new Set((avRows ?? []).map((v) => v.attribute_id))]
+    if (attrIds.length > 0) {
+      const { data: aRows } = await supabase
+        .from('store_attributes')
+        .select('id, name, slug, display_order')
+        .in('id', attrIds)
+        .eq('is_active', true)
+      for (const a of aRows ?? []) attrMeta.set(a.id, a)
+    }
+  }
+
   const rows: StoreProduct[] = []
   for (const p of products) {
     const setting = settingByProduct.get(p.id)
@@ -315,6 +371,15 @@ export async function fetchStoreCatalog(
     const eff = deal && dealPrice != null ? dealPrice : storeNormal
     const isOffer = eff < compareAt
 
+    // Keep only value ids whose value (and its attribute) are active/known, so
+    // a product is never matched by a value that isn't an offered facet.
+    const attributeValueIds = (valueIdsByProduct.get(p.id) ?? []).filter(
+      (vid) => {
+        const v = valueMeta.get(vid)
+        return !!v && attrMeta.has(v.attribute_id)
+      },
+    )
+
     rows.push({
       id: p.id,
       sku: p.sku,
@@ -326,6 +391,7 @@ export async function fetchStoreCatalog(
       offerPercent: isOffer ? Math.round((1 - eff / compareAt) * 100) : 0,
       imageUrl: p.primary_image_url,
       category: catByProduct.get(p.id) ?? null,
+      attributeValueIds,
       stock: stockByProduct.get(p.id) ?? 0,
       dealSlot: deal?.slot ?? null,
       dealEndsAt: deal?.endsAt ?? null,
@@ -362,5 +428,49 @@ export async function fetchStoreCatalog(
     .map(([id, name]) => ({ id, name }))
     .sort((a, b) => a.name.localeCompare(b.name))
 
-  return { warehouse, products: rows, offers, categories, dailyDeal, weeklyDeal }
+  // Build attribute filter facets from the SHOWN rows only — so the filter only
+  // offers attributes/values that actually exist among visible products. Order
+  // attributes and values by their display_order (then name/value as tiebreak).
+  const facetMap = new Map<
+    string,
+    {
+      id: string
+      name: string
+      slug: string
+      display_order: number
+      values: Map<string, { id: string; value: string; slug: string; display_order: number }>
+    }
+  >()
+  for (const r of rows) {
+    for (const vid of r.attributeValueIds) {
+      const v = valueMeta.get(vid)
+      if (!v) continue
+      const a = attrMeta.get(v.attribute_id)
+      if (!a) continue
+      if (!facetMap.has(a.id)) {
+        facetMap.set(a.id, {
+          id: a.id,
+          name: a.name,
+          slug: a.slug,
+          display_order: a.display_order,
+          values: new Map(),
+        })
+      }
+      facetMap
+        .get(a.id)!
+        .values.set(v.id, { id: v.id, value: v.value, slug: v.slug, display_order: v.display_order })
+    }
+  }
+  const attributes: StoreAttributeFacet[] = [...facetMap.values()]
+    .sort((a, b) => a.display_order - b.display_order || a.name.localeCompare(b.name))
+    .map((f) => ({
+      id: f.id,
+      name: f.name,
+      slug: f.slug,
+      values: [...f.values.values()]
+        .sort((x, y) => x.display_order - y.display_order || x.value.localeCompare(y.value))
+        .map((v) => ({ id: v.id, value: v.value, slug: v.slug })),
+    }))
+
+  return { warehouse, products: rows, offers, categories, attributes, dailyDeal, weeklyDeal }
 }
