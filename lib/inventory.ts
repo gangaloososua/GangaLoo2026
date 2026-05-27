@@ -121,6 +121,11 @@ export type StockMovementRow = {
   unitCostDop: number | null
   adjustmentReason: string | null
   createdByName: string | null
+  // Set on sale_out and return_in movements; null for adjustments,
+  // transfers, initial receipts, and purchases. Used by the Movements
+  // tab to make those rows clickable -> /sales/<saleId>.
+  saleId: string | null
+  saleInvoiceNumber: string | null
 }
 
 export type StockMovementFilters = {
@@ -141,7 +146,7 @@ export async function fetchStockMovements(
   let query = supabase
     .from('stock_movements')
     .select(
-      'id, occurred_at, product_id, warehouse_id, kind, qty_delta, unit_cost_dop, adjustment_reason, products(name), warehouses(name), profiles(full_name)',
+      'id, occurred_at, product_id, warehouse_id, kind, qty_delta, unit_cost_dop, adjustment_reason, products(name), warehouses(name), profiles(full_name), sale_items(sale_id, sales(id, invoice_number))',
     )
     .order('occurred_at', { ascending: false })
     .limit(MOVEMENT_LIMIT)
@@ -191,6 +196,10 @@ export async function fetchStockMovements(
     products: { name: string } | null
     warehouses: { name: string } | null
     profiles: { full_name: string | null } | null
+    sale_items: {
+      sale_id: string | null
+      sales: { id: string; invoice_number: string } | null
+    } | null
   }>).map((m) => ({
     id: m.id,
     occurredAt: m.occurred_at,
@@ -203,6 +212,8 @@ export async function fetchStockMovements(
     unitCostDop: m.unit_cost_dop === null ? null : Number(m.unit_cost_dop),
     adjustmentReason: m.adjustment_reason,
     createdByName: m.profiles?.full_name ?? null,
+    saleId: m.sale_items?.sales?.id ?? null,
+    saleInvoiceNumber: m.sale_items?.sales?.invoice_number ?? null,
   }))
 }
 
