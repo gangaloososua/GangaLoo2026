@@ -1,9 +1,14 @@
-﻿'use server'
+'use server'
 
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { requireOwner } from '@/lib/auth/guard'
+import {
+  computeFinalPrice,
+  parseCostCalcState,
+  type CostCalcState,
+} from './_form/calc-utils'
 
 export type ProductFormState = {
   ok: boolean
@@ -35,8 +40,8 @@ export async function createProduct(
   const isActive = formData.get('is_active') === 'on'
   const visibleInStore = formData.get('visible_in_store') === 'on'
 
-  const priceDop =
-    parseFloat(String(formData.get('price_dop') ?? '0')) || 0
+  const priceDopRaw = String(formData.get('price_dop') ?? '').trim()
+  const priceDop = priceDopRaw ? parseFloat(priceDopRaw) : 0
   const clubPriceDopRaw = String(
     formData.get('club_price_dop') ?? '',
   ).trim()
@@ -53,7 +58,30 @@ export async function createProduct(
   if (priceDop < 0)
     return { ok: false, error: 'Price cannot be negative.' }
 
-  const priceCents = Math.round(priceDop * 100)
+  // Optional: calculator state submitted by CalculatorTab in create mode.
+  // If the calc produces a valid rounded price, it OVERRIDES the manual
+  // price_dop input.  Otherwise we fall back to the typed price.
+  let costCalcState: CostCalcState | null = null
+  let calcPriceCents: number | null = null
+  const costCalcRaw = String(formData.get('cost_calc_json') ?? '').trim()
+  if (costCalcRaw) {
+    try {
+      const parsed = parseCostCalcState(JSON.parse(costCalcRaw))
+      if (parsed) {
+        costCalcState = parsed
+        const c = computeFinalPrice(parsed)
+        if (c.priceRounded != null && c.priceRounded > 0) {
+          calcPriceCents = Math.round(c.priceRounded * 100)
+        }
+      }
+    } catch {
+      // Malformed JSON: ignore the calc submission silently rather than blocking create.
+    }
+  }
+
+  const manualPriceCents = Math.round(priceDop * 100)
+  const priceCents = calcPriceCents ?? manualPriceCents
+
   const clubPriceCents =
     clubPriceDop != null && !Number.isNaN(clubPriceDop)
       ? Math.round(clubPriceDop * 100)
@@ -75,20 +103,23 @@ export async function createProduct(
   }
   slug = candidate
 
+  const insertPayload: Record<string, unknown> = {
+    sku,
+    name,
+    slug,
+    description: description || null,
+    is_active: isActive,
+    visible_in_store: visibleInStore,
+    price_cents: priceCents,
+    club_price_cents: clubPriceCents,
+    commission_percent: commissionPercent,
+    target_payback_percent: targetPaybackPercent,
+  }
+  if (costCalcState) insertPayload.cost_calc = costCalcState
+
   const { data, error } = await supabase
     .from('products')
-    .insert({
-      sku,
-      name,
-      slug,
-      description: description || null,
-      is_active: isActive,
-      visible_in_store: visibleInStore,
-      price_cents: priceCents,
-      club_price_cents: clubPriceCents,
-      commission_percent: commissionPercent,
-      target_payback_percent: targetPaybackPercent,
-    })
+    .insert(insertPayload)
     .select('id')
     .single()
 
@@ -382,7 +413,7 @@ export async function saveProductImagesMetadata(
       if (updErr) return { ok: false, error: updErr.message }
     }
   } else if (rows.length === 0) {
-    // No images at all â€” clear the primary URL
+    // No images at all — clear the primary URL
     await supabase.from('products').update({ primary_image_url: null }).eq('id', productId)
   }
 
@@ -416,7 +447,7 @@ export async function deleteProductImage(
   if (fetchErr) return { ok: false, error: fetchErr.message }
   if (!img) return { ok: false, error: 'Image not found.' }
 
-  // Delete the DB row first â€” if Storage delete fails afterward we have an orphan
+  // Delete the DB row first — if Storage delete fails afterward we have an orphan
   // file but no broken UI reference. The other way around leaves a row pointing
   // to a missing file, which is worse.
   const { error: delErr } = await supabase

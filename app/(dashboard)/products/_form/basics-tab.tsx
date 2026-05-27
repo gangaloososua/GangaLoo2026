@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
@@ -14,6 +14,25 @@ function slugify(s: string): string {
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
     .slice(0, 80)
+}
+
+// Derive a SKU prefix from the name: uppercase, alnum, dash-separated, capped.
+// Mirrors the slugify rule but yields a SKU-shaped string (no lowercasing).
+function skuPrefix(s: string): string {
+  return s
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .toUpperCase()
+    .slice(0, 24)
+}
+
+// Stable 5-digit suffix appended to auto-generated SKUs, mirroring the
+// placeholder pattern (e.g. 13X-150-12-12345). Helps avoid collisions
+// between products with similar names. Stays constant for the session.
+function randomSkuSuffix(): string {
+  return Math.floor(10000 + Math.random() * 90000).toString()
 }
 
 type Props = {
@@ -34,19 +53,36 @@ export function BasicsTab({
   initialVisibleInStore = true,
 }: Props) {
   const [name, setName] = useState(initialName)
+
   const [slug, setSlug] = useState(initialSlug)
   const [slugManuallyEdited, setSlugManuallyEdited] = useState(
     Boolean(initialSlug),
   )
 
+  const [sku, setSku] = useState(initialSku)
+  const [skuManuallyEdited, setSkuManuallyEdited] = useState(
+    Boolean(initialSku),
+  )
+  // Lazy-initialized once per mount; same suffix across keystrokes.
+  const skuSuffixRef = useRef<string>(randomSkuSuffix())
+
   function handleNameChange(v: string) {
     setName(v)
     if (!slugManuallyEdited) setSlug(slugify(v))
+    if (!skuManuallyEdited) {
+      const prefix = skuPrefix(v)
+      setSku(prefix ? `${prefix}-${skuSuffixRef.current}` : '')
+    }
   }
 
   function handleSlugChange(v: string) {
     setSlug(v)
     setSlugManuallyEdited(true)
+  }
+
+  function handleSkuChange(v: string) {
+    setSku(v)
+    setSkuManuallyEdited(true)
   }
 
   return (
@@ -56,12 +92,13 @@ export function BasicsTab({
         <Input
           id="sku"
           name="sku"
-          defaultValue={initialSku}
-          placeholder="e.g. 13X-150-12-12345"
+          value={sku}
+          onChange={(e) => handleSkuChange(e.target.value)}
+          placeholder="auto-generated from name"
           required
         />
         <p className="text-xs text-muted-foreground">
-          Unique product code. Used internally and on labels.
+          Unique product code. Auto-fills from the name unless you edit it.
         </p>
       </div>
 

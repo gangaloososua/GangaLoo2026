@@ -22,7 +22,7 @@ export function PricingTab({
   return (
     <div className="space-y-4 max-w-2xl">
       <div className="grid gap-2">
-        <Label htmlFor="price_dop">Price (DOP) *</Label>
+        <Label htmlFor="price_dop">Price (DOP)</Label>
         <Input
           id="price_dop"
           name="price_dop"
@@ -31,10 +31,11 @@ export function PricingTab({
           min="0"
           defaultValue={centsToDop(initialPriceCents)}
           placeholder="0"
-          required
         />
         <p className="text-xs text-muted-foreground">
-          Regular retail price in pesos.
+          Regular retail price in pesos. Leave blank if you'll set it from the
+          Calculator tab — the calculator's final price overrides this value
+          when it's filled in.
         </p>
       </div>
 

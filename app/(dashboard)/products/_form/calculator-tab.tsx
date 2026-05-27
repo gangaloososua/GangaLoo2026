@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import { useMemo, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
@@ -8,17 +8,14 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { saveProductCostCalc, applyCalculatorPrice } from '../actions'
 import type { ExchangeRate } from '@/lib/exchange-rates-types'
+import {
+  computeFinalPrice,
+  type CostCalcState as _CostCalcState,
+} from './calc-utils'
 
-export type CostCalcState = {
-  base_cost_usd: number | null
-  shipping_usd: number | null
-  tax_usd: number | null
-  discount_usd: number | null
-  exchange_rate: number | null
-  transport_dop_per_unit: number | null
-  margin_percent: number | null
-  commission_percent: number | null
-}
+// Re-export so existing imports `import { type CostCalcState } from './calculator-tab'`
+// keep working without touching product-form.tsx imports.
+export type CostCalcState = _CostCalcState
 
 const EMPTY: CostCalcState = {
   base_cost_usd: null,
@@ -51,24 +48,18 @@ function inputValue(n: number | null): string {
   return n == null ? '' : String(n)
 }
 
-// Tiered round-up:
-//   raw <= 3000 -> next 25
-//   raw <= 5000 -> next 50
-//   raw  > 5000 -> next 100
-// On exact multiples the value stays.
-function roundFinalPrice(raw: number): number {
-  const step = raw <= 3000 ? 25 : raw <= 5000 ? 50 : 100
-  return Math.ceil(raw / step) * step
-}
+type Mode = 'create' | 'edit'
 
 export function CalculatorTab({
+  mode,
   productId,
   initialState,
   productCommissionPercent,
   productTargetPaybackPercent,
   currentRate,
 }: {
-  productId: string
+  mode: Mode
+  productId?: string
   initialState: CostCalcState | null
   productCommissionPercent: number
   productTargetPaybackPercent: number | null
@@ -87,57 +78,16 @@ export function CalculatorTab({
 
   const [state, setState] = useState<CostCalcState>(buildInitial)
   const [isSavingState, startSaveState] = useTransition()
-  const [isApplying, startApply] = useTransition()
+  const [isSaveAndApply, startSaveAndApply] = useTransition()
 
-   const calc = useMemo(() => {
-    const {
-      base_cost_usd,
-      shipping_usd,
-      tax_usd,
-      discount_usd,
-      exchange_rate,
-      transport_dop_per_unit,
-      margin_percent,
-      commission_percent,
-    } = state
-
-    const haveLanded =
-      base_cost_usd != null &&
-      shipping_usd != null &&
-      tax_usd != null &&
-      discount_usd != null &&
-      exchange_rate != null &&
-      transport_dop_per_unit != null
-
-    if (!haveLanded) {
-      return {
-        landed: null as number | null,
-        price: null as number | null,
-        priceRounded: null as number | null,
-      }
-    }
-
-    const usdSubtotal = base_cost_usd! + shipping_usd! + tax_usd! - discount_usd!
-    const landed = usdSubtotal * exchange_rate! + transport_dop_per_unit!
-
-    const havePrice =
-      margin_percent != null &&
-      commission_percent != null &&
-      commission_percent < 100
-
-    if (!havePrice) {
-      return { landed, price: null as number | null, priceRounded: null as number | null }
-    }
-
-    const price = (landed * (1 + margin_percent! / 100)) / (1 - commission_percent! / 100)
-    return { landed, price, priceRounded: roundFinalPrice(price) }
-  }, [state])
+  const calc = useMemo(() => computeFinalPrice(state), [state])
 
   function set<K extends keyof CostCalcState>(key: K, raw: string) {
     setState({ ...state, [key]: parseNum(raw) })
   }
 
   function onSaveState() {
+    if (!productId) return
     startSaveState(async () => {
       const res = await saveProductCostCalc(productId, state)
       if (res.ok) toast.success('Calculator state saved')
@@ -145,36 +95,55 @@ export function CalculatorTab({
     })
   }
 
-  function onApplyPrice() {
-    if (calc.priceRounded == null) return
+  // Edit-mode primary: save calc inputs + push final price into products.price_cents.
+  function onSaveAndApply() {
+    if (!productId) return
+    if (calc.priceRounded == null || calc.priceRounded <= 0) {
+      toast.error('Fill all calculator fields first')
+      return
+    }
     const priceCents = Math.round(calc.priceRounded * 100)
-    startApply(async () => {
-      const res = await applyCalculatorPrice(productId, priceCents)
-      if (res.ok) {
-        toast.success(`Price set to ${fmtDOP(priceCents / 100)}`)
-        router.refresh()
-      } else {
-        toast.error(res.error ?? 'Failed to apply price')
+    startSaveAndApply(async () => {
+      const saveRes = await saveProductCostCalc(productId, state)
+      if (!saveRes.ok) {
+        toast.error(saveRes.error ?? 'Failed to save calculator')
+        return
       }
+      const applyRes = await applyCalculatorPrice(productId, priceCents)
+      if (!applyRes.ok) {
+        toast.error(applyRes.error ?? 'Failed to apply price')
+        return
+      }
+      toast.success(`Saved · unit price set to ${fmtDOP(priceCents / 100)}`)
+      router.refresh()
     })
   }
 
   const now = new Date()
   const curY = now.getFullYear()
   const curM = now.getMonth() + 1
-  let rateHint = 'No monthly rate set — enter manually.'
+  let rateHint = 'No monthly rate set   enter manually.'
   if (currentRate) {
     const isCurrent = currentRate.year === curY && currentRate.month === curM
     const label = `${currentRate.year}-${String(currentRate.month).padStart(2, '0')}`
     rateHint = isCurrent
       ? `Monthly planning rate: ${currentRate.rate} (${label})`
-      : `Monthly planning rate: ${currentRate.rate} (${label} — no rate set for ${curY}-${String(curM).padStart(2, '0')} yet)`
+      : `Monthly planning rate: ${currentRate.rate} (${label}   no rate set for ${curY}-${String(curM).padStart(2, '0')} yet)`
   }
 
   const canApply = calc.priceRounded != null && calc.priceRounded > 0
+  const busy = isSavingState || isSaveAndApply
 
   return (
     <div className="space-y-6">
+      {mode === 'create' && (
+        <div className="rounded-md border border-dashed bg-muted/30 p-3 text-sm text-muted-foreground">
+          Fill the calculator here if you want — when you click <strong>Create</strong>,
+          the final rounded price will be saved as the product's unit price.
+          Leave it blank to use the manual price from the Pricing tab.
+        </div>
+      )}
+
       <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-2">
           <Label htmlFor="base_cost_usd">Base cost (USD)</Label>
@@ -233,7 +202,7 @@ export function CalculatorTab({
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="exchange_rate">Exchange rate (USD → DOP)</Label>
+          <Label htmlFor="exchange_rate">Exchange rate (USD ? DOP)</Label>
           <Input
             id="exchange_rate"
             type="number"
@@ -287,7 +256,9 @@ export function CalculatorTab({
             onChange={(e) => set('commission_percent', e.target.value)}
           />
           <p className="text-xs text-muted-foreground">
-            Defaults from product. Editing here is what-if only — doesn't change the saved value.
+            {mode === 'create'
+              ? "Type the seller commission % to use for this calc."
+              : "Defaults from product. Editing here is what-if only   doesn't change the saved value."}
           </p>
         </div>
 
@@ -311,10 +282,10 @@ export function CalculatorTab({
               Landed cost
             </div>
             <div className="text-2xl font-bold">
-              {calc.landed != null ? fmtDOP(calc.landed) : '—'}
+              {calc.landed != null ? fmtDOP(calc.landed) : ' '}
             </div>
             <p className="mt-1 text-xs text-muted-foreground">
-              (base + shipping + tax − discount) × rate + transport
+              (base + shipping + tax - discount)   rate + transport
             </p>
           </div>
           <div>
@@ -322,10 +293,10 @@ export function CalculatorTab({
               Suggested price (raw)
             </div>
             <div className="text-2xl font-bold">
-              {calc.price != null ? fmtDOP(calc.price) : '—'}
+              {calc.price != null ? fmtDOP(calc.price) : ' '}
             </div>
             <p className="mt-1 text-xs text-muted-foreground">
-              landed × (1 + margin%) ÷ (1 − commission%)
+              landed   (1 + margin%)   (1 - commission%)
             </p>
           </div>
           <div>
@@ -333,32 +304,42 @@ export function CalculatorTab({
               Final price (rounded)
             </div>
             <div className="text-2xl font-bold">
-              {calc.priceRounded != null ? fmtDOP(calc.priceRounded) : '—'}
+              {calc.priceRounded != null ? fmtDOP(calc.priceRounded) : ' '}
             </div>
             <p className="mt-1 text-xs text-muted-foreground">
-              Up to next 25 (≤3000), 50 (≤5000), or 100. What gets applied.
+              Up to next 25 (=3000), 50 (=5000), or 100. What gets applied.
             </p>
           </div>
         </div>
       </div>
 
-      <div className="flex justify-end gap-2">
-        <Button
-          type="button"
-          variant="outline"
-          onClick={onSaveState}
-          disabled={isSavingState}
-        >
-          {isSavingState ? 'Saving…' : 'Save calculator state'}
-        </Button>
-        <Button
-          type="button"
-          onClick={onApplyPrice}
-          disabled={!canApply || isApplying}
-        >
-          {isApplying ? 'Applying…' : 'Apply final price to product'}
-        </Button>
-      </div>
+      {mode === 'edit' && productId ? (
+        <div className="flex justify-end gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={onSaveState}
+            disabled={busy}
+          >
+            {isSavingState ? 'Saving…' : 'Save calculator only'}
+          </Button>
+          <Button
+            type="button"
+            onClick={onSaveAndApply}
+            disabled={!canApply || busy}
+          >
+            {isSaveAndApply ? 'Saving & applying…' : 'Save & set as unit price'}
+          </Button>
+        </div>
+      ) : (
+        // Create mode: the main form's Create button handles submission.
+        // We carry the calc state along as a hidden form input the server reads.
+        <input
+          type="hidden"
+          name="cost_calc_json"
+          value={JSON.stringify(state)}
+        />
+      )}
     </div>
   )
 }

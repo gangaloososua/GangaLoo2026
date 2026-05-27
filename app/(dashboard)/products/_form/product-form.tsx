@@ -170,14 +170,12 @@ export function ProductForm({
             Warehouses
           </TabsTrigger>
           {canSeeCosts && (
-          <TabsTrigger value="calculator" disabled={mode === 'create'}>
-            Calculator
-          </TabsTrigger>
+            <TabsTrigger value="calculator">Calculator</TabsTrigger>
           )}
           {canSeeCosts && (
-          <TabsTrigger value="movements" disabled={mode === 'create'}>
-            Movements
-          </TabsTrigger>
+            <TabsTrigger value="movements" disabled={mode === 'create'}>
+              Movements
+            </TabsTrigger>
           )}
         </TabsList>
 
@@ -238,9 +236,10 @@ export function ProductForm({
           </TabsContent>
         )}
 
-        {mode === 'edit' && productId && canSeeCosts && (
+        {canSeeCosts && (
           <TabsContent value="calculator" forceMount className="pt-6">
             <CalculatorTab
+              mode={mode}
               productId={productId}
               initialState={costCalc}
               productCommissionPercent={initial.commission_percent ?? 0}
