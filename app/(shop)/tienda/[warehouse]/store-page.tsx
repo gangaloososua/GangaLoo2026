@@ -124,8 +124,8 @@ const DEAL_T = {
 } as const
 
 const MENU_T = {
-  es: { home: 'Inicio', account: 'Mi cuenta', cart: 'Carrito', stores: 'Todas las tiendas', browse: 'Explorar por categoría', lang: 'Idioma' },
-  en: { home: 'Home', account: 'My account', cart: 'Cart', stores: 'All stores', browse: 'Browse by category', lang: 'Language' },
+  es: { home: 'Inicio', account: 'Mi cuenta', cart: 'Carrito', stores: 'Todas las tiendas', browse: 'Explorar por categoría', filters: 'Filtrar', lang: 'Idioma' },
+  en: { home: 'Home', account: 'My account', cart: 'Cart', stores: 'All stores', browse: 'Browse by category', filters: 'Filter', lang: 'Language' },
 } as const
 
 function Countdown({ endsAt, onExpire, locale, accent }: { endsAt: string; onExpire: () => void; locale: Locale; accent: string }) {
@@ -182,6 +182,8 @@ function DealSection({ deal, locale, storeSlug, onAdd, onShare }: { deal: StoreD
 export function StorePage({ catalog, stores = [] }: { catalog: StoreCatalog; stores?: StoreWarehouse[] }) {
   const [locale, setLocale] = useState<Locale>('es')
   const [activeCat, setActiveCat] = useState<string>('all')
+  // Selected attribute VALUE ids (multi-select, combine across attributes).
+  const [selectedValues, setSelectedValues] = useState<Set<string>>(new Set())
   const [query, setQuery] = useState('')
   const [visible, setVisible] = useState(PAGE)
   const [bump, setBump] = useState(false)
@@ -190,8 +192,87 @@ export function StorePage({ catalog, stores = [] }: { catalog: StoreCatalog; sto
   const [shareProduct, setShareProduct] = useState<StoreProduct | null>(null)
   const [shareCopied, setShareCopied] = useState(false)
 
-  const { warehouse, products, offers, categories, dailyDeal, weeklyDeal } = catalog
+  const { warehouse, products, offers, categories, attributes, dailyDeal, weeklyDeal } = catalog
   const cart = useCart(warehouse.slug)
+
+  // --- Shareable URL sync (slugs <-> selected value ids) ---------------------
+  // Uses window.location + history.replaceState so no <Suspense> boundary is
+  // needed (useSearchParams would require one). URL form: ?attrSlug=valSlug,valSlug
+  const valueById = useMemo(() => {
+    const m = new Map<string, { attrSlug: string; valueSlug: string }>()
+    for (const a of attributes)
+      for (const v of a.values) m.set(v.id, { attrSlug: a.slug, valueSlug: v.slug })
+    return m
+  }, [attributes])
+  const idByToken = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const a of attributes)
+      for (const v of a.values) m.set(`${a.slug}:${v.slug}`, v.id)
+    return m
+  }, [attributes])
+
+  // On mount: read ?attrSlug=valSlug,valSlug from the URL into the selection.
+  const urlHydrated = useRef(false)
+  useEffect(() => {
+    if (urlHydrated.current) return
+    urlHydrated.current = true
+    if (typeof window === 'undefined' || attributes.length === 0) return
+    const sp = new URLSearchParams(window.location.search)
+    const next = new Set<string>()
+    for (const a of attributes) {
+      const raw = sp.get(a.slug)
+      if (!raw) continue
+      for (const vs of raw.split(',')) {
+        const id = idByToken.get(`${a.slug}:${vs.trim()}`)
+        if (id) next.add(id)
+      }
+    }
+    if (next.size > 0) setSelectedValues(next)
+  }, [attributes, idByToken])
+
+  // Reflect the current selection back into the address bar, silently.
+  const writeUrl = useCallback(
+    (values: Set<string>) => {
+      if (typeof window === 'undefined') return
+      const byAttr = new Map<string, string[]>()
+      for (const id of values) {
+        const tok = valueById.get(id)
+        if (!tok) continue
+        if (!byAttr.has(tok.attrSlug)) byAttr.set(tok.attrSlug, [])
+        byAttr.get(tok.attrSlug)!.push(tok.valueSlug)
+      }
+      const sp = new URLSearchParams(window.location.search)
+      for (const a of attributes) sp.delete(a.slug) // clear managed params
+      for (const [attrSlug, vals] of byAttr) sp.set(attrSlug, vals.join(','))
+      const qs = sp.toString()
+      const url = window.location.pathname + (qs ? `?${qs}` : '')
+      window.history.replaceState(null, '', url)
+    },
+    [attributes, valueById],
+  )
+
+  const toggleValue = (valueId: string) => {
+    setSelectedValues((prev) => {
+      const next = new Set(prev)
+      if (next.has(valueId)) next.delete(valueId)
+      else next.add(valueId)
+      writeUrl(next)
+      return next
+    })
+    setVisible(PAGE)
+  }
+
+  const clearAttribute = (attrId: string) => {
+    const attr = attributes.find((a) => a.id === attrId)
+    if (!attr) return
+    setSelectedValues((prev) => {
+      const next = new Set(prev)
+      for (const v of attr.values) next.delete(v.id)
+      writeUrl(next)
+      return next
+    })
+    setVisible(PAGE)
+  }
 
   const handleAdd = (p: StoreProduct) => {
     cart.add(warehouse.slug, { id: p.id, slug: p.slug, name: p.name, imageUrl: p.imageUrl, priceCents: p.priceCents })
@@ -255,6 +336,16 @@ export function StorePage({ catalog, stores = [] }: { catalog: StoreCatalog; sto
     }, 60)
   }
 
+  // Toggle an attribute value from the slide-out menu, then jump to products.
+  const jumpToValue = (valueId: string) => {
+    setQuery('')
+    toggleValue(valueId)
+    setMenuOpen(false)
+    window.setTimeout(() => {
+      document.getElementById('productos')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }, 60)
+  }
+
   const trimmedQuery = query.trim().toLowerCase()
   const searching = trimmedQuery.length > 0
 
@@ -266,9 +357,25 @@ export function StorePage({ catalog, stores = [] }: { catalog: StoreCatalog; sto
         return hay.includes(trimmedQuery)
       })
     }
-    if (activeCat === 'all') return products
-    return products.filter((p) => p.category?.id === activeCat)
-  }, [searching, trimmedQuery, activeCat, products])
+    // Attribute filter: AND across attributes, OR within an attribute. A product
+    // passes only if, for every attribute that has any selected value, the
+    // product carries at least one of that attribute's selected values.
+    const attrOk = (p: StoreProduct) => {
+      if (selectedValues.size === 0) return true
+      for (const a of attributes) {
+        const picked = a.values.filter((v) => selectedValues.has(v.id))
+        if (picked.length === 0) continue // this attribute not filtered
+        const has = picked.some((v) => p.attributeValueIds.includes(v.id))
+        if (!has) return false
+      }
+      return true
+    }
+    const byCat =
+      activeCat === 'all'
+        ? products
+        : products.filter((p) => p.category?.id === activeCat)
+    return byCat.filter(attrOk)
+  }, [searching, trimmedQuery, activeCat, products, attributes, selectedValues])
 
   const shown = filtered.slice(0, visible)
   const cartHref = `/tienda/${warehouse.slug}/carrito`
@@ -409,6 +516,18 @@ export function StorePage({ catalog, stores = [] }: { catalog: StoreCatalog; sto
         />
       )}
 
+      {!searching &&
+        attributes.map((attr) => (
+          <AttributeBar
+            key={attr.id}
+            attr={attr}
+            selected={selectedValues}
+            clearLabel={ts(locale, 'shop.all')}
+            onToggle={toggleValue}
+            onClear={() => clearAttribute(attr.id)}
+          />
+        ))}
+
       {!searching && offers.length > 0 && activeCat === 'all' && (
         <section className="mx-auto w-full max-w-[1100px] px-4 pb-7">
           <div className="mb-3 flex items-center gap-2">
@@ -488,6 +607,27 @@ export function StorePage({ catalog, stores = [] }: { catalog: StoreCatalog; sto
                   ))}
                 </>
               )}
+
+              {attributes.map((attr) => (
+                <div key={attr.id}>
+                  <p className="px-4 pb-1 pt-4 text-[11px] font-semibold uppercase tracking-wide" style={{ color: MUTED }}>{attr.name}</p>
+                  {attr.values.map((v) => {
+                    const on = selectedValues.has(v.id)
+                    return (
+                      <button
+                        key={v.id}
+                        type="button"
+                        onClick={() => jumpToValue(v.id)}
+                        className="flex w-full items-center px-4 py-2.5 text-left text-[13px]"
+                        style={{ color: on ? NAVY : INK, fontWeight: on ? 600 : 400, background: on ? '#f0f4fb' : 'transparent' }}
+                      >
+                        <span className="flex-1">{v.value}</span>
+                        {on && <Icon d="M5 12l4 4 10-10" size={15} />}
+                      </button>
+                    )
+                  })}
+                </div>
+              ))}
             </div>
 
             <div className="flex items-center justify-between border-t px-4 py-3" style={{ borderColor: '#eceef2' }}>
@@ -609,6 +749,35 @@ function CategoryBar({
           <Icon d="M9 6l6 6-6 6" size={18} />
         </button>
       )}
+    </div>
+  )
+}
+
+function AttributeBar({
+  attr,
+  selected,
+  clearLabel,
+  onToggle,
+  onClear,
+}: {
+  attr: { id: string; name: string; values: { id: string; value: string }[] }
+  selected: Set<string>
+  clearLabel: string
+  onToggle: (valueId: string) => void
+  onClear: () => void
+}) {
+  const anySelected = attr.values.some((v) => selected.has(v.id))
+  return (
+    <div className="relative mx-auto w-full max-w-[1100px] px-4 pb-3">
+      <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide" style={{ color: MUTED }}>
+        {attr.name}
+      </p>
+      <div className="gl-chips flex gap-2 overflow-x-auto scroll-smooth">
+        <Chip label={clearLabel} active={!anySelected} onClick={onClear} />
+        {attr.values.map((v) => (
+          <Chip key={v.id} label={v.value} active={selected.has(v.id)} onClick={() => onToggle(v.id)} />
+        ))}
+      </div>
     </div>
   )
 }
