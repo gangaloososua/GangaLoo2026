@@ -251,8 +251,8 @@ async function init(){
 
 /* ---------- invoice card markup ---------- */
 function invoiceCard(o,{showBalanceLabel=true}={}){
-  const sub=subtotal(o), ship=Number(o.shippingFee||0), paid=paidTotal(o);
-  const bal=Math.max(0, sub+ship-paid);
+  const sub=subtotal(o), ship=Number(o.shippingFee||0), gFee=Number(o.gangalooFee||0), iFee=Number(o.financialInterestFee||0), paid=paidTotal(o);
+  const bal=Math.max(0, sub+ship+gFee+iFee-paid);
   let items='';
   if(o.items&&o.items.length) items = o.items.map(it=>`<div class="item-line"><span><span class="qty">${it.qty}×</span>${esc(it.name)}</span><span class="line-value">${fmt((Number(it.qty)||0)*(Number(it.price)||0))}</span></div>`).join('');
   else if(o.desc) items = `<div class="item-line"><span>${esc(o.desc)}</span></div>`;
@@ -262,7 +262,9 @@ function invoiceCard(o,{showBalanceLabel=true}={}){
     ${items}
     <div class="totals">
       <div class="line"><span class="line-label">Subtotal</span><span class="line-value">${fmt(sub)}</span></div>
-      <div class="line"><span class="line-label">Costo de envío</span><span class="line-value">${fmt(ship)}</span></div>
+      ${ship>0?`<div class="line"><span class="line-label">Envío origen</span><span class="line-value">${fmt(ship)}</span></div>`:''}
+      ${gFee>0?`<div class="line"><span class="line-label">Gestión GangaLoo</span><span class="line-value">${fmt(gFee)}</span></div>`:''}
+      ${iFee>0?`<div class="line"><span class="line-label">Interés financiero</span><span class="line-value">${fmt(iFee)}</span></div>`:''}
       ${paid>0?`<div class="line"><span class="line-label">Abonado ✓</span><span class="line-value paid-chip">-${fmt(paid)}</span></div>`:''}
       <div class="line balance-line"><span class="line-label" style="font-weight:700">${showBalanceLabel?'💳 Saldo a pagar':'Total'}</span><span class="line-value">${fmt(bal)}</span></div>
     </div>
@@ -356,9 +358,9 @@ async function saveResponse(fields){
   // Notify admin (CallMeBot) — optional, configured in appConfig
   if(CFG.notifyPhone && CFG.callMeBotKey){
     try{
-      const sub=subtotal(ORDER), ship=Number(ORDER.shippingFee||0), paid=paidTotal(ORDER);
+      const sub=subtotal(ORDER), ship=Number(ORDER.shippingFee||0), gFee=Number(ORDER.gangalooFee||0), iFee=Number(ORDER.financialInterestFee||0), paid=paidTotal(ORDER);
       const fee = fields.fulfilment==='delivery'? Number(ORDER.deliveryFee||0):0;
-      const saldo = Math.max(0, sub+ship+fee-paid);
+      const saldo = Math.max(0, sub+ship+gFee+iFee+fee-paid);
       const choice = fields.fulfilment==='delivery'?'🚚 ENTREGA a domicilio':'🏪 RECOGIDA en tienda';
       let m=`🔔 GangaLoo%0A%0ACliente: ${encodeURIComponent(ORDER.client)}%0APedido: ${ORDER_ID}%0A${encodeURIComponent(choice)}`;
       if(fields.fulfilment==='delivery') m+=`%0AFecha: ${encodeURIComponent(fields.deliveryDate)}%0ADir: ${encodeURIComponent(fields.address)}`;
@@ -369,9 +371,9 @@ async function saveResponse(fields){
 }
 
 function balanceFor(type){
-  const sub=subtotal(ORDER), ship=Number(ORDER.shippingFee||0), paid=paidTotal(ORDER);
+  const sub=subtotal(ORDER), ship=Number(ORDER.shippingFee||0), gFee=Number(ORDER.gangalooFee||0), iFee=Number(ORDER.financialInterestFee||0), paid=paidTotal(ORDER);
   const fee = type==='delivery'? Number(ORDER.deliveryFee||0):0;
-  return Math.max(0, sub+ship+fee-paid);
+  return Math.max(0, sub+ship+gFee+iFee+fee-paid);
 }
 function balanceBox(bal){
   return bal>0? `<div class="balance-box">💳 Saldo a pagar al recibir:<span class="amt">${fmt(bal)}</span></div>`:'';

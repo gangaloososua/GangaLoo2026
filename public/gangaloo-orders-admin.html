@@ -306,6 +306,8 @@ body{font-family:'Syne',sans-serif;background:var(--bg);color:var(--text);min-he
     <div class="field"><label>Product Subtotal (RD$)</label><input type="number" id="m_amount" placeholder="0.00" min="0" step="0.01" oninput="recalcModal()"><div class="field-hint" id="m_amountHint">Auto-sums from items.</div></div>
     <div class="field"><label>Source Shipping (RD$)</label><input type="number" id="m_shipping" placeholder="0.00" min="0" step="0.01" value="0" oninput="recalcModal()"></div>
     <div class="field"><label>Local Delivery Fee (RD$)</label><input type="number" id="m_deliveryFee" placeholder="200" min="0" step="0.01" value="200"><div class="field-hint">Only charged if client picks delivery.</div></div>
+    <div class="field"><label>GangaLoo Fee (RD$)</label><input type="number" id="m_gangalooFee" placeholder="0.00" min="0" step="0.01" value="0" oninput="recalcModal()"><div class="field-hint">Your service fee.</div></div>
+    <div class="field"><label>Financial Interest (RD$)</label><input type="number" id="m_financialInterestFee" placeholder="0.00" min="0" step="0.01" value="0" oninput="recalcModal()"><div class="field-hint">Surcharge for half-upfront payment plan.</div></div>
     <div class="field"><label>Initial Deposit Now (RD$)</label><input type="number" id="m_deposit" placeholder="0.00" min="0" step="0.01" oninput="recalcModal()"><div class="field-hint" id="m_depositHint">Enter if you've already taken a deposit & ordered.</div></div>
   </div>
   <div class="drow" style="border-top:1px solid var(--border);margin-top:6px;padding-top:10px"><span class="dlabel" style="font-weight:700;color:var(--text)">Invoice total (excl. delivery)</span><span class="dval" id="m_totalPreview">RD$ 0.00</span></div>
@@ -399,6 +401,8 @@ function normalize(o){
   if (!Array.isArray(o.timeline)) o.timeline = [];
   o.shippingFee = Number(o.shippingFee||0);
   o.deliveryFee = Number(o.deliveryFee||0) || DEFAULT_DELIVERY_FEE;
+  o.gangalooFee = Number(o.gangalooFee||0);
+  o.financialInterestFee = Number(o.financialInterestFee||0);
   return o;
 }
 
@@ -409,7 +413,9 @@ function subtotal(o){
 }
 function paidTotal(o){ return (o.payments||[]).reduce((s,p)=> s + (Number(p.amount)||0), 0); }
 function deliveryCharge(o){ return o.fulfilment === 'delivery' ? Number(o.deliveryFee||0) : 0; }
-function charges(o){ return subtotal(o) + Number(o.shippingFee||0) + deliveryCharge(o); }
+function gangalooFeeOf(o){ return Number(o.gangalooFee||0); }
+function financialInterestOf(o){ return Number(o.financialInterestFee||0); }
+function charges(o){ return subtotal(o) + Number(o.shippingFee||0) + deliveryCharge(o) + gangalooFeeOf(o) + financialInterestOf(o); }
 function balance(o){ return Math.max(0, charges(o) - paidTotal(o)); }
 function productCount(o){
   if (o.items && o.items.length) return o.items.reduce((s,it)=> s + (Number(it.qty)||0), 0);
@@ -516,34 +522,44 @@ function itemLines(o){
   if(o.desc) return `   • ${o.desc}`;
   return '';
 }
+/* Money breakdown lines shared by all WA messages */
+function waMoney(o,{includeDelivery=true}={}){
+  const sub=subtotal(o), ship=Number(o.shippingFee||0), gFee=gangalooFeeOf(o), iFee=financialInterestOf(o);
+  const dFee = includeDelivery ? deliveryCharge(o) : 0;
+  const paid = paidTotal(o);
+  const total = sub + ship + gFee + iFee + dFee;
+  const bal = Math.max(0, total - paid);
+  let m='';
+  m+=`\n💵 Subtotal: *${fmt(sub)}*`;
+  if(ship>0) m+=`\n📦 Envío origen: *${fmt(ship)}*`;
+  if(gFee>0) m+=`\n🏷️ Gestión GangaLoo: *${fmt(gFee)}*`;
+  if(iFee>0) m+=`\n💳 Interés financiero: *${fmt(iFee)}*`;
+  if(includeDelivery && dFee>0) m+=`\n🚚 Entrega a domicilio: *${fmt(dFee)}*`;
+  m+=`\n🧾 Total: *${fmt(total)}*`;
+  if(paid>0) m+=`\n✅ Abonado: *${fmt(paid)}*`;
+  m+=`\n⚡ Por pagar: *${fmt(bal)}*`;
+  return m;
+}
 function buildWAInvoice(o){
-  const sub=subtotal(o), ship=Number(o.shippingFee||0), paid=paidTotal(o), bal=Math.max(0,sub+ship-paid);
   let m=`Hola ${o.client}! 👋\n\nAquí está tu factura de GangaLoo 🧾\n`;
   m+=`🛒 Pedido de *${cap(o.platform)}*`; if(o.ref) m+=` · Ref: ${o.ref}`; m+='\n';
   const il=itemLines(o); if(il) m+=il+'\n';
-  m+=`\n💵 Subtotal: *${fmt(sub)}*`;
-  m+=`\n📦 Envío: *${fmt(ship)}*`;
-  m+=`\n🧾 Total: *${fmt(sub+ship)}*`;
-  if(paid>0) m+=`\n✅ Abonado: *${fmt(paid)}*`;
-  m+=`\n⚡ Por pagar: *${fmt(bal)}*\n`;
+  m+=waMoney(o,{includeDelivery:false})+'\n';
   m+=`\nPara empezar a procesar tu pedido necesitamos un *depósito inicial*. Avísanos cuando lo hayas enviado 🙏\n`;
   m+=`\n👉 Ver tu pedido: ${clientFormLink(o.id)}`;
   return m;
 }
 function buildWANotify(o){
-  const sub=subtotal(o), ship=Number(o.shippingFee||0), paid=paidTotal(o), bal=Math.max(0,sub+ship-paid);
   const dfee=Number(o.deliveryFee)>0?Number(o.deliveryFee):DEFAULT_DELIVERY_FEE;
   let m=`Hola ${o.client}! 👋\n\n¡Tu pedido de *${cap(o.platform)}* ya llegó! 📦`; if(o.ref) m+=`\n🔖 Ref: ${o.ref}`;
   const il=itemLines(o); if(il) m+='\n'+il;
-  m+=`\n\n💵 Total: *${fmt(sub+ship)}*`;
-  if(paid>0) m+=`\n✅ Abonado: *${fmt(paid)}*`;
-  m+=`\n⚡ Saldo pendiente: *${fmt(bal)}*`;
+  m+=waMoney(o,{includeDelivery:false});
   m+=`\n\n¿Cómo prefieres recibirlo?\n🏪 *Recojo en tienda* (gratis)\n🚚 *Envío a domicilio* (+${fmt(dfee)})\n`;
   m+=`\nHaz clic para elegir, marcar tu ubicación y fecha de entrega:\n👉 ${clientFormLink(o.id)}`;
   return m;
 }
 function buildWAConfirm(o){
-  const sub=subtotal(o), ship=Number(o.shippingFee||0), fee=deliveryCharge(o), paid=paidTotal(o), bal=Math.max(0,sub+ship+fee-paid);
+  const bal=balance(o);
   if(o.fulfilment==='delivery'){
     let m=`✅ *Entrega confirmada — GangaLoo* 🎉\n\nHola ${o.client}!\n`;
     m+=`📅 Fecha: *${o.deliveryDate||'a coordinar'}*\n📍 Dirección: ${o.address||'—'}\n\n`;
@@ -771,7 +787,7 @@ function nextStepCard(o,link){
 }
 
 function invoiceSection(o){
-  const sub=subtotal(o), ship=Number(o.shippingFee||0), dfee=deliveryCharge(o), paid=paidTotal(o), bal=balance(o);
+  const sub=subtotal(o), ship=Number(o.shippingFee||0), dfee=deliveryCharge(o), gFee=gangalooFeeOf(o), iFee=financialInterestOf(o), paid=paidTotal(o), bal=balance(o);
   const itemsHtml = (o.items&&o.items.length)
     ? o.items.map(it=>`<div class="drow"><span class="dlabel">${it.qty}× ${esc(it.name)}</span><span class="dval">${fmt((Number(it.qty)||0)*(Number(it.price)||0))}</span></div>`).join('')
     : (o.desc? `<div class="drow"><span class="dlabel">${esc(o.desc)}</span><span class="dval">${fmt(sub)}</span></div>` : '');
@@ -784,6 +800,8 @@ function invoiceSection(o){
     <div class="drow"><span class="dlabel">Subtotal</span><span class="dval">${fmt(sub)}</span></div>
     <div class="drow"><span class="dlabel">Source shipping</span><span class="dval">${fmt(ship)}</span></div>
     ${o.fulfilment==='delivery'?`<div class="drow"><span class="dlabel">Local delivery</span><span class="dval">${fmt(dfee)}</span></div>`:`<div class="drow"><span class="dlabel">Local delivery</span><span class="dval" style="color:var(--muted2)">— (pickup)</span></div>`}
+    ${gFee>0?`<div class="drow"><span class="dlabel">GangaLoo fee</span><span class="dval">${fmt(gFee)}</span></div>`:''}
+    ${iFee>0?`<div class="drow"><span class="dlabel">Financial interest</span><span class="dval">${fmt(iFee)}</span></div>`:''}
     <div class="ledger-total"><span class="dlabel">Total charges</span><span class="dval" style="font-size:14px">${fmt(charges(o))}</span></div>
 
     <div style="margin-top:14px"></div>
@@ -890,7 +908,9 @@ function recalcModal(){
   }
   const sub = parseFloat(amountEl.value)||0;
   const ship = parseFloat(document.getElementById('m_shipping').value)||0;
-  document.getElementById('m_totalPreview').textContent = fmt(sub+ship);
+  const gFee = parseFloat(document.getElementById('m_gangalooFee').value)||0;
+  const iFee = parseFloat(document.getElementById('m_financialInterestFee').value)||0;
+  document.getElementById('m_totalPreview').textContent = fmt(sub+ship+gFee+iFee);
   const dep = parseFloat(document.getElementById('m_deposit').value)||0;
   document.getElementById('m_depositHint').textContent = dep>0 ? '✓ Will start at "Ordered" with this deposit.' : 'Leave blank to start at "Invoice".';
 }
@@ -905,6 +925,8 @@ function openNewOrder(){
   document.getElementById('m_platform').value='amazon';
   document.getElementById('m_shipping').value='0';
   document.getElementById('m_deliveryFee').value='200';
+  document.getElementById('m_gangalooFee').value='0';
+  document.getElementById('m_financialInterestFee').value='0';
   document.getElementById('m_deposit').value='';
   modalItems=[{name:'',qty:1,price:0}]; renderItemsEditor(); recalcModal();
   document.getElementById('orderModal').style.display='flex';
@@ -923,6 +945,8 @@ function openEdit(id){
   document.getElementById('m_notes').value=o.notes||'';
   document.getElementById('m_shipping').value=o.shippingFee||0;
   document.getElementById('m_deliveryFee').value=o.deliveryFee||200;
+  document.getElementById('m_gangalooFee').value=o.gangalooFee||0;
+  document.getElementById('m_financialInterestFee').value=o.financialInterestFee||0;
   document.getElementById('m_deposit').value='';
   document.getElementById('m_deposit').parentElement.style.display='none'; // no deposit field on edit
   modalItems = (o.items&&o.items.length)? o.items.map(it=>({...it})) : [];
@@ -946,6 +970,8 @@ async function saveOrder(){
     amount: parseFloat(document.getElementById('m_amount').value)||0,
     shippingFee: parseFloat(document.getElementById('m_shipping').value)||0,
     deliveryFee: parseFloat(document.getElementById('m_deliveryFee').value)||DEFAULT_DELIVERY_FEE,
+    gangalooFee: parseFloat(document.getElementById('m_gangalooFee').value)||0,
+    financialInterestFee: parseFloat(document.getElementById('m_financialInterestFee').value)||0,
     notes: document.getElementById('m_notes').value.trim(),
   };
   if(editingId){
