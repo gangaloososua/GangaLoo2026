@@ -242,13 +242,18 @@ export function OnlineOrdersListTable({
                         {r.invoiceNumber ?? '—'}
                       </Link>
                     </TableCell>
-                    <TableCell>
+                  <TableCell>
                       <Link href={`/online-orders/${r.id}`} className="block">
                         {r.customerName ?? (
                           <span className="text-muted-foreground">
                             (no customer)
                           </span>
                         )}
+                        {r.sellerName ? (
+                          <span className="block text-xs text-muted-foreground">
+                            Seller: {r.sellerName}
+                          </span>
+                        ) : null}
                       </Link>
                     </TableCell>
                     <TableCell className="text-muted-foreground">
