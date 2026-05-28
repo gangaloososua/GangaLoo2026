@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import * as React from 'react'
 import Link from 'next/link'
@@ -333,6 +333,7 @@ export function PurchasesListTable({
               <TableRow>
                 <TableHead>Ordered</TableHead>
                 <TableHead>Supplier</TableHead>
+                <TableHead>Reference</TableHead>
                 <TableHead>Warehouse</TableHead>
                 <TableHead className="text-right">USD total</TableHead>
                 <TableHead className="text-right">DOP paid</TableHead>
@@ -349,11 +350,19 @@ export function PurchasesListTable({
                   </TableCell>
                   <TableCell className="font-medium">
                     {r.supplier_name ?? <span className="text-muted-foreground">—</span>}
-                    {r.legacy_id && (
-                      <Badge variant="outline" className="ml-2 text-xs font-normal">
-                        {r.legacy_id}
-                      </Badge>
-                    )}
+                  </TableCell>
+                  <TableCell className="max-w-[16rem] align-top">
+                    {r.legacy_id ? (
+                      <div className="font-medium tabular-nums">{r.legacy_id}</div>
+                    ) : null}
+                    {r.notes ? (
+                      <div className="whitespace-pre-wrap text-xs text-muted-foreground">
+                        {r.notes}
+                      </div>
+                    ) : null}
+                    {!r.legacy_id && !r.notes ? (
+                      <span className="text-muted-foreground">—</span>
+                    ) : null}
                   </TableCell>
                   <TableCell className="text-muted-foreground">
                     {r.warehouse_name ?? '—'}

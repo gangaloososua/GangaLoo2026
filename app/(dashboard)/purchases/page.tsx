@@ -85,9 +85,14 @@ export default async function PurchasesPage({
             {mismatchOnly ? ' with status mismatches' : ''}.
           </p>
         </div>
-        <Button asChild>
-          <Link href="/purchases/new">New purchase order</Link>
-        </Button>
+        <div className="flex gap-2">
+          <Button asChild variant="outline">
+            <Link href="/purchases/pay">Pagar a proveedores</Link>
+          </Button>
+          <Button asChild>
+            <Link href="/purchases/new">New purchase order</Link>
+          </Button>
+        </div>
       </div>
 
       <Suspense>
