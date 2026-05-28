@@ -22,12 +22,16 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { AddPaymentDialog } from './add-payment-dialog'
+import type { MoneyAccount } from '@/lib/sales'
 
 type Props = {
   saleId: string
   trackingStatus: string | null
   saleStatus: string
   fulfillmentMethod: string
+  outstandingCents: number
+  moneyAccounts: MoneyAccount[]
 }
 
 export function OnlineOrderActionsBar({
@@ -35,6 +39,8 @@ export function OnlineOrderActionsBar({
   trackingStatus,
   saleStatus,
   fulfillmentMethod,
+  outstandingCents,
+  moneyAccounts,
 }: Props) {
   const [isPending, startTransition] = useTransition()
   const [error, setError] = React.useState<string | null>(null)
@@ -46,6 +52,7 @@ export function OnlineOrderActionsBar({
   const [sellers, setSellers] = React.useState<ConfirmSellerOption[]>([])
   const [sellerId, setSellerId] = React.useState('')
   const [loadingSellers, setLoadingSellers] = React.useState(false)
+  const [payOpen, setPayOpen] = React.useState(false)
 
   const isCancelled = saleStatus === 'cancelled'
   const isRefunded = saleStatus === 'refunded'
@@ -71,8 +78,17 @@ export function OnlineOrderActionsBar({
 
   const canCancel = !isCancelled && !isDelivered
 
+  // Add payment: only when the order is collectable and still owes money.
+  const canAddPayment =
+    (saleStatus === 'confirmed' || saleStatus === 'partially_paid') &&
+    outstandingCents > 0
+
   const nothingAvailable =
-    !canConfirm && !canDispatch && !canMarkDelivered && !canCancel
+    !canConfirm &&
+    !canDispatch &&
+    !canMarkDelivered &&
+    !canCancel &&
+    !canAddPayment
 
   // Load sellers when the confirm form opens.
   React.useEffect(() => {
@@ -300,6 +316,11 @@ export function OnlineOrderActionsBar({
         {/* Action buttons (hidden while a form is open) */}
         {openAction === null && !nothingAvailable ? (
           <div className="flex flex-wrap gap-2">
+            {canAddPayment ? (
+              <Button onClick={() => setPayOpen(true)} disabled={isPending}>
+                Add payment
+              </Button>
+            ) : null}
             {canConfirm ? (
               <Button onClick={() => setOpenAction('confirm')} disabled={isPending}>
                 Confirm order
@@ -329,6 +350,14 @@ export function OnlineOrderActionsBar({
             ) : null}
           </div>
         ) : null}
+
+        <AddPaymentDialog
+          open={payOpen}
+          onOpenChange={setPayOpen}
+          saleId={saleId}
+          suggestedAmountCents={outstandingCents}
+          moneyAccounts={moneyAccounts}
+        />
       </CardContent>
     </Card>
   )

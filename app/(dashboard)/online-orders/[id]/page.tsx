@@ -7,6 +7,7 @@ import { notFound } from 'next/navigation'
 import { AlertTriangle } from 'lucide-react'
 import { requireRole } from '@/lib/auth/guard'
 import { getOnlineOrderById } from '@/lib/online-orders'
+import { listMoneyAccounts } from '@/lib/sales'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   Table,
@@ -91,6 +92,8 @@ export default async function OnlineOrderDetailPage({
   const { id } = await params
   const order = await getOnlineOrderById(id)
   if (!order) notFound()
+  const moneyAccounts = await listMoneyAccounts()
+  const outstandingCents = (order.totalCents ?? 0) - order.paidCents
 
   // Integrity checks
   const itemsSubtotal = order.items.reduce(
@@ -186,6 +189,8 @@ export default async function OnlineOrderDetailPage({
         trackingStatus={order.trackingStatus}
         saleStatus={order.saleStatus}
         fulfillmentMethod={order.fulfillmentMethod}
+        outstandingCents={outstandingCents}
+        moneyAccounts={moneyAccounts}
       />
 
       {/* Two-column info */}
@@ -193,7 +198,7 @@ export default async function OnlineOrderDetailPage({
         {/* Customer & Delivery */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Customer & delivery</CardTitle>
+            <CardTitle className="text-base">Customer &amp; delivery</CardTitle>
           </CardHeader>
           <CardContent>
             <dl className="grid grid-cols-1 gap-3 text-sm">
