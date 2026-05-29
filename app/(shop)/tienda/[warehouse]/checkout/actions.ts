@@ -7,7 +7,6 @@
 // get_storefront_quote()) compute fees and the loyalty-tier discount server-side.
 
 import { createClient } from '@/lib/supabase/server'
-import { createAdminClient } from '@/lib/supabase/admin'
 import { resolveStoreWarehouse } from '@/lib/store/catalog'
 import { getStripe } from '@/lib/stripe'
 
@@ -189,23 +188,30 @@ export async function startStripeCheckout(input: {
   try {
     if (!input.saleId) return { ok: false, error: 'no sale id from order' }
 
-    // Read the order with the service-role client so the amount is authoritative
-    // (a customer session may not be allowed to read the sale row directly).
-    const admin = createAdminClient()
-    const { data: sale, error } = await admin
-      .from('sales')
-      .select('id, status, total_cents, payment_fee_cents, invoice_number, payment_method')
-      .eq('id', input.saleId)
-      .single()
+    // Read the order's authoritative amount via a SECURITY DEFINER function
+    // (the sales table is locked down; this is the same pattern the storefront
+    // already uses). No service-role key needed.
+    const supabase = await createClient()
+    const { data, error } = await supabase.rpc('get_online_order_for_payment', {
+      p_sale_id: input.saleId,
+    })
+    if (error) return { ok: false, error: 'order read failed: ' + error.message }
 
-    if (error || !sale) return { ok: false, error: 'sale read failed: ' + (error?.message ?? 'no row') }
+    const sale = data as {
+      ok?: boolean
+      invoice_number?: string
+      status?: string
+      payment_method?: string
+      amount_cents?: number
+    } | null
+
+    if (!sale?.ok) return { ok: false, error: 'order not found' }
     if (sale.payment_method !== 'stripe') return { ok: false, error: 'payment_method is ' + String(sale.payment_method) }
     if (!['draft', 'confirmed', 'partially_paid'].includes(String(sale.status))) {
       return { ok: false, error: 'order status is ' + String(sale.status) }
     }
 
-    const amountDue =
-      (sale.total_cents ?? 0) + (sale.payment_fee_cents ?? 0)
+    const amountDue = sale.amount_cents ?? 0
     if (amountDue <= 0) return { ok: false, error: 'amount is ' + String(amountDue) }
 
     const origin = input.origin.replace(/\/+$/, '')
@@ -225,7 +231,7 @@ export async function startStripeCheckout(input: {
         },
       ],
       // The webhook reads sale_id to know which order to mark paid.
-      metadata: { sale_id: sale.id, invoice_number: invoice },
+      metadata: { sale_id: input.saleId, invoice_number: invoice },
       success_url: `${origin}/tienda/${input.warehouseSlug}/checkout/gracias?inv=${encodeURIComponent(invoice)}`,
       cancel_url: `${origin}/tienda/${input.warehouseSlug}/checkout?cancelled=1`,
     })
