@@ -5,7 +5,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 //   /login, /auth  → admin authentication
 //   /tienda        → public customer storefront (browse, cart, checkout,
 //                    and the customer account/login page at /tienda/.../cuenta)
-const PUBLIC_PREFIXES = ['/login', '/auth', '/tienda']
+const PUBLIC_PREFIXES = ['/login', '/auth', '/tienda', '/api/webhooks']
 
 // Where to send a logged-in CUSTOMER who strays toward an admin page.
 // The /tienda landing lets them pick a store.
