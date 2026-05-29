@@ -187,7 +187,7 @@ export async function startStripeCheckout(input: {
   origin: string
 }): Promise<StripeCheckoutResult> {
   try {
-    if (!input.saleId) return { ok: false, error: 'missing sale' }
+    if (!input.saleId) return { ok: false, error: 'no sale id from order' }
 
     // Read the order with the service-role client so the amount is authoritative
     // (a customer session may not be allowed to read the sale row directly).
@@ -198,15 +198,15 @@ export async function startStripeCheckout(input: {
       .eq('id', input.saleId)
       .single()
 
-    if (error || !sale) return { ok: false, error: 'sale not found' }
-    if (sale.payment_method !== 'stripe') return { ok: false, error: 'not a stripe order' }
+    if (error || !sale) return { ok: false, error: 'sale read failed: ' + (error?.message ?? 'no row') }
+    if (sale.payment_method !== 'stripe') return { ok: false, error: 'payment_method is ' + String(sale.payment_method) }
     if (!['draft', 'confirmed', 'partially_paid'].includes(String(sale.status))) {
-      return { ok: false, error: 'order not payable' }
+      return { ok: false, error: 'order status is ' + String(sale.status) }
     }
 
     const amountDue =
       (sale.total_cents ?? 0) + (sale.payment_fee_cents ?? 0)
-    if (amountDue <= 0) return { ok: false, error: 'invalid amount' }
+    if (amountDue <= 0) return { ok: false, error: 'amount is ' + String(amountDue) }
 
     const origin = input.origin.replace(/\/+$/, '')
     const invoice = sale.invoice_number ?? ''
@@ -230,7 +230,7 @@ export async function startStripeCheckout(input: {
       cancel_url: `${origin}/tienda/${input.warehouseSlug}/checkout?cancelled=1`,
     })
 
-    if (!session.url) return { ok: false, error: 'no checkout url' }
+    if (!session.url) return { ok: false, error: 'stripe returned no url' }
     return { ok: true, url: session.url }
   } catch (e) {
     console.error('[startStripeCheckout] threw:', e)
