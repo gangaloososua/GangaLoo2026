@@ -19,17 +19,11 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { ChevronRight, CornerDownRight, Folder, GripVertical, Pencil, Plus, Trash2 } from 'lucide-react'
-import Link from 'next/link'
+import { CornerDownRight, Folder, GripVertical, Pencil, Plus, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { CategoryDialog } from './category-dialog'
 import { DeleteCategoryDialog } from './delete-dialog'
-import {
-  reorderCategories,
-  listProductsInCategory,
-  type Category,
-  type CategoryProduct,
-} from './actions'
+import { reorderCategories, type Category } from './actions'
 
 function SortableRow({
   cat,
@@ -50,126 +44,54 @@ function SortableRow({
     opacity: isDragging ? 0.5 : 1,
   }
   const isMain = level === 'main'
-
-  // round-: expand a category to see the products in it (loaded on first open).
-  const [expanded, setExpanded] = useState(false)
-  const [loading, setLoading] = useState(false)
-  const [loaded, setLoaded] = useState(false)
-  const [products, setProducts] = useState<CategoryProduct[]>([])
-
-  async function toggleExpand() {
-    const next = !expanded
-    setExpanded(next)
-    if (next && !loaded) {
-      setLoading(true)
-      try {
-        const rows = await listProductsInCategory(cat.id)
-        setProducts(rows)
-        setLoaded(true)
-      } catch {
-        // leave unloaded so it retries on the next open
-      } finally {
-        setLoading(false)
-      }
-    }
-  }
-
   return (
-    <div>
-      <div
-        ref={setNodeRef}
-        style={style}
-        className={[
-          'flex items-center gap-3 rounded-md border bg-card p-3',
-          isMain ? 'font-semibold' : 'ml-8 bg-muted/30 text-sm',
-        ].join(' ')}
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={[
+        'flex items-center gap-3 rounded-md border bg-card p-3',
+        isMain ? 'font-semibold' : 'ml-8 bg-muted/30 text-sm',
+      ].join(' ')}
+    >
+      <button
+        type="button"
+        className="cursor-grab touch-none text-muted-foreground hover:text-foreground"
+        {...attributes}
+        {...listeners}
+        aria-label="Drag to reorder"
       >
-        <button
-          type="button"
-          className="cursor-grab touch-none text-muted-foreground hover:text-foreground"
-          {...attributes}
-          {...listeners}
-          aria-label="Drag to reorder"
-        >
-          <GripVertical className="h-4 w-4" />
-        </button>
-        <button
-          type="button"
-          onClick={toggleExpand}
-          className="text-muted-foreground hover:text-foreground"
-          aria-label={expanded ? 'Hide products' : 'Show products'}
-          aria-expanded={expanded}
-        >
-          <ChevronRight
-            className={'h-4 w-4 transition-transform ' + (expanded ? 'rotate-90' : '')}
-          />
-        </button>
-        {isMain ? (
-          <Folder className="h-4 w-4 shrink-0 text-muted-foreground" />
-        ) : (
-          <CornerDownRight className="h-4 w-4 shrink-0 text-muted-foreground" />
-        )}
-        <button
-          type="button"
-          onClick={toggleExpand}
-          className="flex-1 truncate text-left hover:underline"
-        >
-          {cat.name}
-        </button>
-        <span className="shrink-0 text-xs font-normal tabular-nums text-muted-foreground">
-          {cat.product_count} {cat.product_count === 1 ? 'product' : 'products'}
-        </span>
-        {!cat.is_active && (
-          <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-xs font-normal text-muted-foreground">
-            Inactive
-          </span>
-        )}
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => onEdit(cat)}
-          aria-label="Edit"
-        >
-          <Pencil className="h-4 w-4" />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => onDelete(cat)}
-          aria-label="Delete"
-        >
-          <Trash2 className="h-4 w-4" />
-        </Button>
-      </div>
-
-      {expanded && (
-        <div className={(isMain ? 'ml-8' : 'ml-16') + ' mt-1'}>
-          {loading ? (
-            <div className="rounded-md border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
-              Loading products…
-            </div>
-          ) : products.length === 0 ? (
-            <div className="rounded-md border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
-              No products in this category.
-            </div>
-          ) : (
-            <div className="divide-y rounded-md border bg-muted/20">
-              {products.map((p) => (
-                <Link
-                  key={p.id}
-                  href={`/products/${p.id}`}
-                  className="flex items-center justify-between gap-3 px-3 py-2 text-sm font-normal hover:bg-muted/50"
-                >
-                  <span className="truncate">{p.name}</span>
-                  <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
-                    {p.sku ?? '—'}
-                  </span>
-                </Link>
-              ))}
-            </div>
-          )}
-        </div>
+        <GripVertical className="h-4 w-4" />
+      </button>
+      {isMain ? (
+        <Folder className="h-4 w-4 shrink-0 text-muted-foreground" />
+      ) : (
+        <CornerDownRight className="h-4 w-4 shrink-0 text-muted-foreground" />
       )}
+      <span className="flex-1 truncate">{cat.name}</span>
+      <span className="shrink-0 text-xs font-normal tabular-nums text-muted-foreground">
+        {cat.product_count} {cat.product_count === 1 ? 'product' : 'products'}
+      </span>
+      {!cat.is_active && (
+        <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-xs font-normal text-muted-foreground">
+          Inactive
+        </span>
+      )}
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={() => onEdit(cat)}
+        aria-label="Edit"
+      >
+        <Pencil className="h-4 w-4" />
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={() => onDelete(cat)}
+        aria-label="Delete"
+      >
+        <Trash2 className="h-4 w-4" />
+      </Button>
     </div>
   )
 }

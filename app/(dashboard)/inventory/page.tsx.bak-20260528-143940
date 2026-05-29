@@ -6,16 +6,15 @@ import {
   fetchInventoryDashboardStats,
   fetchStockByWarehouse,
   fetchStockByCategory,
-  fetchIncomingByProduct,
   listCategoriesForFilter,
   type StockMovementFilters,
 } from '@/lib/inventory'
 import { listWarehousesForFilter } from '@/lib/sales'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { StockOnHandTable } from './stock-on-hand-table'
 import { MovementsLedger } from './movements-ledger'
 import { InventoryDashboard } from './inventory-dashboard'
 import { AdjustmentForm } from './adjustment-form'
-import { InventoryTabs } from './inventory-tabs'
 import { localeForRole, t } from '@/lib/i18n/dictionary'
 
 export const dynamic = 'force-dynamic'
@@ -82,7 +81,6 @@ export default async function InventoryPage({
     movements,
     warehouses,
     categories,
-    incomingByProduct,
   ] = await Promise.all([
     fetchInventoryDashboardStats(),
     fetchStockByWarehouse(),
@@ -91,14 +89,13 @@ export default async function InventoryPage({
     fetchStockMovements(filters),
     listWarehousesForFilter(),
     listCategoriesForFilter(),
-    fetchIncomingByProduct(),
   ])
 
   // If any history filter is active, open the History tab by default so the
   // user sees the result of the filter they just applied.
   const hasHistoryFilter =
     !!sp.warehouse || !!sp.kind || !!sp.category || !!sp.product || !!sp.from || !!sp.to
-  const initialTab = hasHistoryFilter ? 'history' : 'dashboard'
+  const defaultTab = hasHistoryFilter ? 'history' : 'dashboard'
 
   return (
     <div className="space-y-4">
@@ -109,25 +106,32 @@ export default async function InventoryPage({
         </p>
       </div>
 
-      <InventoryTabs
-        initialTab={initialTab}
-        dashboard={
+      <Tabs key={defaultTab} defaultValue={defaultTab}>
+        <TabsList>
+          <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
+          <TabsTrigger value="stock">Stock on hand</TabsTrigger>
+          <TabsTrigger value="history">History</TabsTrigger>
+          <TabsTrigger value="adjust">Adjust stock</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="dashboard" className="pt-4">
           <InventoryDashboard
             stats={stats}
             byWarehouse={byWarehouse}
             byCategory={byCategory}
           />
-        }
-        stock={
+        </TabsContent>
+
+        <TabsContent value="stock" className="pt-4">
           <StockOnHandTable
             rows={stock}
             warehouses={warehouses}
             categories={categories.filter((c) => c.parentId === null)}
-            incomingByProduct={incomingByProduct}
             enableHistoryLink
           />
-        }
-        history={
+        </TabsContent>
+
+        <TabsContent value="history" className="pt-4">
           <MovementsLedger
             rows={movements}
             warehouses={warehouses}
@@ -141,9 +145,11 @@ export default async function InventoryPage({
               to: sp.to ?? '',
             }}
           />
-        }
-        adjust={<AdjustmentForm warehouses={warehouses} />}
-      />
+        </TabsContent>
+        <TabsContent value="adjust" className="pt-4">
+          <AdjustmentForm warehouses={warehouses} />
+        </TabsContent>
+      </Tabs>
     </div>
   )
 }

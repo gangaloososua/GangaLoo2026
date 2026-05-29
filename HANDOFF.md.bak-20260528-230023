@@ -1,0 +1,150 @@
+# GangaLoo — Session Handoff
+
+_Last updated: end of the "inventory polish + USD-account payment fix" session, 2026-05-28._
+
+---
+
+## 0. Who & what
+
+- **Project:** GangaLoo admin app (hair extensions, wigs, frontals) — inventory,
+  sales, purchases, money accounts. Dominican Republic.
+- **Owner / only user:** **Bernhard Perkins**, business owner, **non-technical**.
+  Owner login `gangaloososua@gmail.com`. Owner profile:
+  `profile_id 17b11149-5480-4716-8a55-5f7905c94543`,
+  `auth_user_id 3f135a05-76fb-4859-9009-3a0b606815c1`.
+- **How to work with him:** ONE step per reply, plain language, no jargon. Always
+  read the real file/function before editing. Never touch money or stock without
+  looking first and confirming the plan. Offer checkpoints; sessions run long.
+- **Repo (local):** `C:\Users\Perkins\Documents\Apps\GangaLoo New 05-26\gangaloo-admin`
+- **DB migrations live in:** `db\migrations\` (NOT supabase/migrations). Naming:
+  `round-NN<letter>-description.sql`. Latest before this session: `round-40a`.
+  This session added **`round-40b`**.
+- **Stack:** Next.js + Turbopack, shadcn/ui, Supabase (SSR). PowerShell on Windows.
+
+---
+
+## 1. Working conventions (prevent repeated mistakes)
+
+- **Delivering files:** generate → `present_files` → lands in `$HOME\Downloads` →
+  give a PowerShell block to move into the repo. Overwrites: back up first with a
+  timestamped `.bak-<stamp>` next to the original.
+- **PowerShell gotchas hit this session:**
+  - `[id]` folders need `-LiteralPath` (brackets are wildcards otherwise).
+  - Recursive greps over the whole tree hang on `node_modules` — always prune it.
+  - The Supabase SQL editor **swallows `RAISE NOTICE`** output and runs without a
+    JWT, so owner-gated RPCs reject and reversible `DO`-block tests can't show
+    results. Verify money/stock changes **through the real UI** as the logged-in
+    owner instead.
+  - Owner-gated RPCs in the SQL editor need a JWT claim first, run in the SAME
+    batch: `set local request.jwt.claims = '{"sub":"3f135a05-...","role":"authenticated"}';`
+    then the call.
+  - i18n dictionary (`lib/i18n/dictionary.ts`) has EN (~line 342) and ES (~line
+    675) blocks with identical ASCII anchors; patch the second occurrence first
+    (by index) so the first index stays valid. Avoid accented anchors.
+
+---
+
+## 2. STATE — what was done THIS session
+
+All verified. Code files replaced have `.bak-<timestamp>` backups beside them.
+
+**INVENTORY — transfer-bug investigation & heal (data only, no code bug in live transfer):**
+ - Symptom: SKU-38699661504 showed stock 0, should be 1. Root cause traced:
+   OLD transfer code (pre-Round-26d) wrote both `transfer_out`/`transfer_in`
+   movements but never created the DESTINATION inventory lot — so lots (which
+   drive all stock displays via `v_inventory_current`/`fetchStockOnHand`) read
+   short while the movement ledger looked right.
+ - The CURRENT `receive_stock_transfer` RPC is CORRECT (creates dest lots). The
+   damage was historical — transfers received 2026-05-06 (transfer_ids
+   c1df0f13, cd3fdc17, 2fe278d9, 34484008) under the old code. Round-26d already
+   fixed the live code; verified by a live test transfer that worked.
+ - Healed affected products by reconciling lots to PHYSICAL COUNTS the owner
+   supplied (NOT to the ledger — the ledger had impossible values like Maranatha
+   −1 and inflated Montellano +2/+3 from stacked old+new transfers). SKU-…504
+   fixed by hand-inserting its Montellano lot; others were already correct from
+   the owner's later test transfers.
+ - LEFTOVER (cosmetic, NOT fixed, safe to ignore): the `stock_movements` ledger
+   still has phantom rows from the old transfers, so the Movements *history* tab
+   math looks off if scrolled back to May. Stock numbers are all correct. If ever
+   wanted, fix is a one-time reconciliation posting `adjustment_in/out` rows
+   (deletes nothing). Also: many qty-0/cost-0 placeholder "purchase_in" lots
+   exist from migration — harmless clutter.
+
+**INVENTORY — Stock-on-hand search** (`lib/inventory.ts`, `stock-on-hand-table.tsx`):
+ - Added `productSku` to `StockOnHandRow` (fetched via `products(name, sku)`).
+ - Search box in the filter grid matches name OR sku, case-insensitive.
+ - i18n: `inv.search` / `inv.searchPlaceholder` (EN + ES).
+
+**INVENTORY — tab navigation fix** (`inventory/page.tsx` + new `inventory-tabs.tsx`):
+ - BUG: clicking a product link in Stock-on-hand "did nothing / scrolled to top";
+   only a refresh opened History. Cause: `<Tabs key={defaultTab} defaultValue=>`
+   — defaultValue only applies on mount, so client nav didn't switch tabs.
+ - FIX: new client wrapper `InventoryTabs` holds the active tab as controlled
+   state and syncs from the URL via `useSearchParams` (a `product`/filter param
+   forces the History tab). Page now passes the 4 panels as props.
+
+**INVENTORY — Incoming column** (`lib/inventory.ts`, `stock-on-hand-table.tsx`, `page.tsx`):
+ - New `fetchIncomingByProduct()` → `Record<product_id, qty>` summing open-PO
+   item qty (statuses `pending`, `paid_supplier` — same as dashboard, so numbers
+   reconcile). Product-level, NOT per-warehouse (owner chose single column).
+ - Table shows "Incoming" column after Total (sky-blue `+N` / `—`), category
+   subtotals, and surfaces 0-on-hand products that have incoming.
+ - i18n: `inv.incoming` (EN "Incoming" / ES "En camino").
+ - POSSIBLE FOLLOW-UP: per-warehouse incoming (POs carry `warehouse_id`).
+
+**INVENTORY — clickable movement rows** (`lib/inventory.ts`, `movements-tab.tsx`):
+ - `StockMovementRow` gained `transferId` (direct `stock_movements.transfer_id`)
+   and `purchaseOrderId` (via `inventory_lots(purchase_order_items(purchase_order_id))`
+   embed — both FKs confirmed to exist).
+ - `movements-tab.tsx` `linkFor(m)` helper: sale→/sales, transfer→/transfers,
+   purchase_in→/purchases. Adjustments/initial stay static. Shared loader, so
+   the inventory History ledger gets clickable rows too. Old migrated purchases
+   with no PO-item link correctly stay non-clickable.
+
+**MONEY — USD-account supplier-payment currency fix** (`round-40b`, VERIFIED LIVE):
+ - BUG: paying/correcting a PO from a USD money account posted the PESO total
+   (`dop_paid_total`) into the dollar account un-converted (e.g. −3956.25 instead
+   of −63.30), inflating it ~by the FX rate. "Konto Aliexpress GangaLoo" (USD,
+   id `3172735b-60ad-46ca-abac-efe18fc633f0`) read −US$10,454 instead of US$19.07.
+ - ROOT CAUSE: shared helper `_allocate_supplier_payment` always posted
+   `dop_paid_total` regardless of account currency.
+ - FIX (round-40b, APPLIED + saved to db/migrations): helper now looks up the
+   paying account currency. DOP → post pesos (unchanged). USD → post
+   `dop_paid_total / exchange_rate` (the dollar value). PO header + per-line DOP
+   landed costs unchanged (inventory costing stays pesos). Fixes ALL three paths
+   (mark_paid_supplier, pay_supplier_for_received, correct_supplier_payment).
+ - The owner's preferred UX (keep entering DOP-paid + rate, system deducts the
+   converted USD) — this is what was implemented. Form (`actions-bar.tsx`)
+   needed NO change: its account pickers already list all accounts.
+ - Aliexpress account reconciled to US$19.07 via `set_account_opening(acct, 0)`
+   (owner-gated; the ONE function allowed to edit balance_cents directly).
+ - VERIFIED through the UI: correcting the Aliexpress POs now shows −US$63.30 /
+   60.37 / 46.63, account holds US$19.07.
+
+---
+
+## 3. Money-system facts worth keeping
+
+- Money in CENTS (bigint). Movements all live in the `transactions` table
+  (there is NO separate movements table). `account_statement(account_id)` RPC
+  builds the per-account statement; it does NO currency conversion — it reads
+  `amount_cents` raw, so the amount must be stored in the account's own currency.
+- `transactions.source_*` columns tag the movement type (purchase_order, sale,
+  sale_payment, transfer, commission_payout, courier_payment).
+- Stored `balance_cents` can drift from computed (opening + sum movements);
+  `set_account_opening` re-syncs it. The Movimientos modal shows an amber drift
+  note when stored ≠ computed.
+
+---
+
+## 4. OPEN ITEMS / possible follow-ups (none urgent)
+
+1. Per-warehouse Incoming split in Stock-on-hand (data supports it).
+2. Cosmetic ledger tidy for the old 2026-05-06 transfer phantom rows (stock is
+   already correct; would only clean the Movements history math).
+3. Migration-era qty-0/cost-0 placeholder lots — harmless clutter, could be
+   swept if ever desired.
+
+---
+
+## PICK UP AT: [REPLACE THIS LINE — or leave to get options]

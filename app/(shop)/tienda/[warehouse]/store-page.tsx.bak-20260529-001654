@@ -11,16 +11,6 @@ const NAVY = '#0A2A66'
 const RED = '#CE1126'
 const INK = '#16181d'
 const MUTED = '#6b7280'
-const SWATCH: Record<string, string> = {
-  'negro': '#1a1a1a',
-  '#2 marron oscuro': '#3a2415',
-  'marron oscuro': '#3a2415',
-  '#4 marron': '#6b4423',
-  'marron': '#6b4423',
-}
-function swatchFor(value: string): string | null {
-  return SWATCH[value.trim().toLowerCase()] ?? null
-}
 const PAGE = 24
 
 function price(cents: number) {
@@ -284,14 +274,6 @@ export function StorePage({ catalog, stores = [] }: { catalog: StoreCatalog; sto
     setVisible(PAGE)
   }
 
-  const clearAllAttributes = () => {
-    setSelectedValues(() => {
-      const next = new Set<string>()
-      writeUrl(next)
-      return next
-    })
-    setVisible(PAGE)
-  }
   const handleAdd = (p: StoreProduct) => {
     cart.add(warehouse.slug, { id: p.id, slug: p.slug, name: p.name, imageUrl: p.imageUrl, priceCents: p.priceCents })
     setBump(true)
@@ -545,29 +527,6 @@ export function StorePage({ catalog, stores = [] }: { catalog: StoreCatalog; sto
             onClear={() => clearAttribute(attr.id)}
           />
         ))}
-  {!searching && attributes.length > 0 && (
-        <div className="mx-auto flex w-full max-w-[1100px] flex-wrap items-center gap-2 px-4 pb-4 sm:flex">
-          {attributes.map((attr) => (
-            <AttributeDropdown
-              key={attr.id}
-              attr={attr}
-              selected={selectedValues}
-              onToggle={toggleValue}
-              onClear={() => clearAttribute(attr.id)}
-            />
-          ))}
-          {selectedValues.size > 0 && (
-            <button
-              type="button"
-              onClick={clearAllAttributes}
-              className="ml-1 text-[12px] underline"
-              style={{ color: MUTED }}
-            >
-              Limpiar todo
-            </button>
-          )}
-        </div>
-      )}
 
       {!searching && offers.length > 0 && activeCat === 'all' && (
         <section className="mx-auto w-full max-w-[1100px] px-4 pb-7">
@@ -638,11 +597,11 @@ export function StorePage({ catalog, stores = [] }: { catalog: StoreCatalog; sto
               {categories.length > 0 && (
                 <>
                   <p className="px-4 pb-1 pt-4 text-[11px] font-semibold uppercase tracking-wide" style={{ color: MUTED }}>{MENU_T[locale].browse}</p>
-                  <button type="button" onClick={() => jumpToCategory('all')} className="flex w-full items-center px-4 py-3 text-left text-[14px]" style={{ color: activeCat === 'all' ? NAVY : INK, fontWeight: activeCat === 'all' ? 600 : 400, background: activeCat === 'all' ? '#f0f4fb' : 'transparent' }}>
+                  <button type="button" onClick={() => jumpToCategory('all')} className="flex w-full items-center px-4 py-2.5 text-left text-[13px]" style={{ color: activeCat === 'all' ? NAVY : INK, fontWeight: activeCat === 'all' ? 600 : 400, background: activeCat === 'all' ? '#f0f4fb' : 'transparent' }}>
                     {ts(locale, 'shop.all')}
                   </button>
                   {categories.map((c) => (
-                    <button key={c.id} type="button" onClick={() => jumpToCategory(c.id)} className="flex w-full items-center px-4 py-3 text-left text-[14px]" style={{ color: activeCat === c.id ? NAVY : INK, fontWeight: activeCat === c.id ? 600 : 400, background: activeCat === c.id ? '#f0f4fb' : 'transparent' }}>
+                    <button key={c.id} type="button" onClick={() => jumpToCategory(c.id)} className="flex w-full items-center px-4 py-2.5 text-left text-[13px]" style={{ color: activeCat === c.id ? NAVY : INK, fontWeight: activeCat === c.id ? 600 : 400, background: activeCat === c.id ? '#f0f4fb' : 'transparent' }}>
                       {c.name}
                     </button>
                   ))}
@@ -651,7 +610,7 @@ export function StorePage({ catalog, stores = [] }: { catalog: StoreCatalog; sto
 
               {attributes.map((attr) => (
                 <div key={attr.id}>
-                  <p className="mt-2 border-t px-4 pb-1.5 pt-4 text-[13px] font-semibold" style={{ color: NAVY, borderColor: '#eceef2' }}>{attr.name}</p>
+                  <p className="px-4 pb-1 pt-4 text-[11px] font-semibold uppercase tracking-wide" style={{ color: MUTED }}>{attr.name}</p>
                   {attr.values.map((v) => {
                     const on = selectedValues.has(v.id)
                     return (
@@ -659,7 +618,7 @@ export function StorePage({ catalog, stores = [] }: { catalog: StoreCatalog; sto
                         key={v.id}
                         type="button"
                         onClick={() => jumpToValue(v.id)}
-                        className="flex w-full items-center px-4 py-3 text-left text-[14px]"
+                        className="flex w-full items-center px-4 py-2.5 text-left text-[13px]"
                         style={{ color: on ? NAVY : INK, fontWeight: on ? 600 : 400, background: on ? '#f0f4fb' : 'transparent' }}
                       >
                         <span className="flex-1">{v.value}</span>
@@ -794,91 +753,6 @@ function CategoryBar({
   )
 }
 
-function AttributeDropdown({
-  attr,
-  selected,
-  onToggle,
-  onClear,
-}: {
-  attr: { id: string; name: string; slug?: string; values: { id: string; value: string; slug?: string }[] }
-  selected: Set<string>
-  onToggle: (valueId: string) => void
-  onClear: () => void
-}) {
-  const [open, setOpen] = useState(false)
-  const ref = useRef<HTMLDivElement>(null)
-  const count = attr.values.filter((v) => selected.has(v.id)).length
-  const isColor = attr.name.trim().toLowerCase().includes('color')
-
-  useEffect(() => {
-    if (!open) return
-    const onDown = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
-    }
-    document.addEventListener('mousedown', onDown)
-    return () => document.removeEventListener('mousedown', onDown)
-  }, [open])
-
-  return (
-    <div className="relative" ref={ref}>
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="flex h-10 items-center gap-2 whitespace-nowrap rounded-lg px-5 text-[13px] transition active:scale-95"
-        style={
-          count > 0
-            ? { background: '#fff', color: NAVY, fontWeight: 600, border: `1.5px solid ${NAVY}` }
-            : { background: '#fff', color: INK, border: '1px solid #d7dde6' }
-        }
-      >
-        <span>{attr.name}</span>
-        {count > 0 && (
-          <span className="flex min-w-[17px] items-center justify-center rounded-full px-1 text-[10px] font-semibold" style={{ height: 17, background: NAVY, color: '#fff' }}>
-            {count}
-          </span>
-        )}
-        <Icon d={ICON.chevron} size={14} />
-      </button>
-
-      {open && (
-        <div className="absolute left-0 top-full z-50 mt-1.5 min-w-[200px] rounded-xl bg-white py-2 shadow-lg" style={{ border: '1px solid #eceef2' }}>
-          {count > 0 && (
-            <button
-              type="button"
-              onClick={() => { onClear(); }}
-              className="mb-1 w-full px-3 py-1.5 text-left text-[12px]"
-              style={{ color: MUTED }}
-            >
-              {attr.name} limpiar
-            </button>
-          )}
-          {attr.values.map((v) => {
-            const on = selected.has(v.id)
-            const sw = isColor ? swatchFor(v.value) : null
-            return (
-              <button
-                key={v.id}
-                type="button"
-                onClick={() => onToggle(v.id)}
-                className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-[13px]"
-                style={{ color: on ? NAVY : INK, fontWeight: on ? 600 : 400, background: on ? '#f0f4fb' : 'transparent' }}
-              >
-                {isColor && (
-                  <span
-                    className="flex-shrink-0 rounded-full"
-                    style={{ width: 18, height: 18, background: sw ?? '#d7dde6', border: on ? `2px solid ${NAVY}` : '1px solid rgba(0,0,0,.15)' }}
-                  />
-                )}
-                <span className="flex-1">{v.value}</span>
-                {on && <Icon d="M5 12l4 4 10-10" size={14} />}
-              </button>
-            )
-          })}
-        </div>
-      )}
-    </div>
-  )
-}
 function AttributeBar({
   attr,
   selected,
@@ -894,7 +768,7 @@ function AttributeBar({
 }) {
   const anySelected = attr.values.some((v) => selected.has(v.id))
   return (
-    <div className="relative mx-auto w-full max-w-[1100px] px-4 pb-3 sm:hidden">
+    <div className="relative mx-auto w-full max-w-[1100px] px-4 pb-3">
       <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide" style={{ color: MUTED }}>
         {attr.name}
       </p>
@@ -910,7 +784,7 @@ function AttributeBar({
 
 function Chip({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
   return (
-    <button onClick={onClick} className="flex h-10 items-center whitespace-nowrap rounded-lg px-5 text-[13px] transition active:scale-95" style={active ? { background: NAVY, color: '#fff', border: `1px solid ${NAVY}` } : { background: '#fff', color: INK, border: '1px solid #d7dde6' }}>
+    <button onClick={onClick} className="whitespace-nowrap rounded-full px-4 py-2 text-[12px] transition" style={active ? { background: NAVY, color: '#fff', border: `1px solid ${NAVY}` } : { background: '#fff', color: INK, border: '1px solid #d7dde6' }}>
       {label}
     </button>
   )

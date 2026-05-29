@@ -19,7 +19,6 @@ import {
   getPurchaseOrderItems,
   getLotTrailForOrder,
   getTransportSummaryForOrder,
-  getSupplierPaymentsForOrder,
 } from '@/lib/purchases'
 import {
   derivedStatus,
@@ -34,7 +33,6 @@ import { listAccountCategories } from '@/lib/transactions'
 
 import { PurchaseDetailLineRow } from './detail-line-row'
 import { PurchaseActionsBar } from './actions-bar'
-import { SupplierPaymentsList } from './supplier-payments-list'
 
 export const dynamic = 'force-dynamic'
 
@@ -169,13 +167,12 @@ export default async function PurchaseDetailPage({
   const order = await getPurchaseOrder(id)
   if (!order) notFound()
 
-  const [items, lotTrail, transport, moneyAccounts, categories, supplierPayments] = await Promise.all([
+  const [items, lotTrail, transport, moneyAccounts, categories] = await Promise.all([
     getPurchaseOrderItems(order.id),
     getLotTrailForOrder(order.id),
     getTransportSummaryForOrder(order.id),
     listMoneyAccounts(),
     listAccountCategories(),
-    getSupplierPaymentsForOrder(order.id),
   ])
   const expenseCategories = categories.filter((c) => c.type === 'expense')
 
@@ -192,11 +189,6 @@ export default async function PurchaseDetailPage({
     ? order.official_rate_at_payment
     : null
   const storedRate = order.exchange_rate && order.exchange_rate > 0 ? order.exchange_rate : null
-
-  // round-41a: partial payments — dollars covered so far and what's still open.
-  const usdCovered = supplierPayments.reduce((s, p) => s + p.usd_covered, 0)
-  const usdRemaining = Math.max(usdTotal - usdCovered, 0)
-  const hasPartialPayments = supplierPayments.length > 0
 
   function lineAuditMismatch(line: typeof items[number]): boolean {
     if (line.dop_unit_landed_cost == null) return false
@@ -246,8 +238,6 @@ export default async function PurchaseDetailPage({
             alreadyPaid={order.dop_paid_total != null}
             halfPaid={order.dop_paid_total != null && order.dop_paid_total > 0 && order.paid_at_dop == null}
             hasTransport={transport.allocation_count > 0}
-            usdTotalForPay={usdTotal}
-            usdCoveredForPay={usdCovered}
           />
         </div>
       </div>
@@ -390,30 +380,6 @@ export default async function PurchaseDetailPage({
                     </>
                   )}
                 </dl>
-              ) : hasPartialPayments ? (
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Paid so far</span>
-                    <span className="tabular-nums">${formatNumber(usdCovered)}</span>
-                  </div>
-                  <div className="flex justify-between font-semibold">
-                    <span>Still open</span>
-                    <span className="tabular-nums">${formatNumber(usdRemaining)}</span>
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    Of ${formatNumber(usdTotal)} total. Use the &ldquo;Pay supplier&rdquo;
-                    button to add another payment.
-                  </div>
-                  <SupplierPaymentsList
-                    orderId={order.id}
-                    payments={supplierPayments.map((p) => ({
-                      id: p.id,
-                      account_name: p.account_name,
-                      dop_amount: p.dop_amount,
-                      paid_at: p.paid_at,
-                    }))}
-                  />
-                </div>
               ) : (
                 <div className="text-sm text-muted-foreground italic">
                   Not paid yet

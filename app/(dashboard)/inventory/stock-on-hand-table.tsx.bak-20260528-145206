@@ -23,9 +23,6 @@ type Props = {
   warehouses?: WarehouseOption[]
   categories?: CategoryOption[]
   enableHistoryLink?: boolean
-  // Optional: product_id -> incoming (ordered, not arrived) qty. When provided,
-  // an "Incoming" column is shown after Total. Product-level, not per-warehouse.
-  incomingByProduct?: Record<string, number>
   // Optional: shared with the owner's Stock-on-hand tab. Defaults to English
   // so callers that don't pass it are unaffected.
   locale?: Locale
@@ -46,14 +43,12 @@ type ProductLine = {
   categoryName: string
   qtyByWarehouse: Map<string, number>
   total: number
-  incoming: number
 }
 type Group = {
   categoryId: string
   categoryName: string
   products: ProductLine[]
   subtotal: number
-  incomingSubtotal: number
 }
 
 const DEFAULT_LOW = 5
@@ -63,7 +58,6 @@ export function StockOnHandTable({
   warehouses,
   categories,
   enableHistoryLink = false,
-  incomingByProduct,
   locale = 'en',
 }: Props) {
   const [search, setSearch] = useState('')
@@ -126,13 +120,7 @@ export function StockOnHandTable({
       const catKey = r.categoryId ?? '__uncategorized__'
       let g = byCat.get(catKey)
       if (!g) {
-        g = {
-          categoryId: catKey,
-          categoryName: r.categoryName,
-          products: [],
-          subtotal: 0,
-          incomingSubtotal: 0,
-        }
+        g = { categoryId: catKey, categoryName: r.categoryName, products: [], subtotal: 0 }
         byCat.set(catKey, g)
         order.push(catKey)
       }
@@ -145,7 +133,6 @@ export function StockOnHandTable({
           categoryName: r.categoryName,
           qtyByWarehouse: new Map(),
           total: 0,
-          incoming: incomingByProduct?.[r.productId] ?? 0,
         }
         lineByProduct.set(r.productId, line)
         g.products.push(line)
@@ -166,9 +153,7 @@ export function StockOnHandTable({
         let total = 0
         for (const w of columnWarehouses) total += line.qtyByWarehouse.get(w) ?? 0
         line.total = total
-        // Show a product if it has stock in a shown column, OR has incoming
-        // stock on the way, OR showOut is on.
-        if (total > 0 || line.incoming > 0 || showOut) keptProducts.push(line)
+        if (total > 0 || showOut) keptProducts.push(line)
       }
       if (keptProducts.length === 0) continue
       keptProducts.sort((a, b) => a.productName.localeCompare(b.productName))
@@ -176,11 +161,10 @@ export function StockOnHandTable({
         ...g,
         products: keptProducts,
         subtotal: keptProducts.reduce((s, p) => s + p.total, 0),
-        incomingSubtotal: keptProducts.reduce((s, p) => s + p.incoming, 0),
       })
     }
     return result
-  }, [catFiltered, columnWarehouses, showOut, incomingByProduct])
+  }, [catFiltered, columnWarehouses, showOut])
 
   // Summary: count cells (product-at-warehouse) across shown columns.
   const counts = useMemo(() => {
@@ -208,7 +192,6 @@ export function StockOnHandTable({
   }
 
   const showTotalCol = columnWarehouses.length > 1
-  const showIncomingCol = !!incomingByProduct
 
   return (
     <div className="space-y-4">
@@ -310,11 +293,6 @@ export function StockOnHandTable({
                   <h3 className="text-sm font-medium">{g.categoryName}</h3>
                   <span className="text-xs text-muted-foreground tabular-nums">
                     {fmtInt(g.subtotal)} {t(locale, 'inv.units')}
-                    {showIncomingCol && g.incomingSubtotal > 0 ? (
-                      <span className="text-sky-600">
-                        {' '}· +{fmtInt(g.incomingSubtotal)} {t(locale, 'inv.incoming').toLowerCase()}
-                      </span>
-                    ) : null}
                   </span>
                 </div>
                 <div className="rounded-md border">
@@ -329,9 +307,6 @@ export function StockOnHandTable({
                         ))}
                         {showTotalCol ? (
                           <TableHead className="text-right">{t(locale, 'inv.total')}</TableHead>
-                        ) : null}
-                        {showIncomingCol ? (
-                          <TableHead className="text-right">{t(locale, 'inv.incoming')}</TableHead>
                         ) : null}
                       </TableRow>
                     </TableHeader>
@@ -364,11 +339,6 @@ export function StockOnHandTable({
                           {showTotalCol ? (
                             <TableCell className="text-right tabular-nums font-medium">
                               {fmtInt(pr.total)}
-                            </TableCell>
-                          ) : null}
-                          {showIncomingCol ? (
-                            <TableCell className="text-right tabular-nums text-sky-600">
-                              {pr.incoming > 0 ? '+' + fmtInt(pr.incoming) : '—'}
                             </TableCell>
                           ) : null}
                         </TableRow>

@@ -128,11 +128,6 @@ export type StockMovementRow = {
   // tab to make those rows clickable -> /sales/<saleId>.
   saleId: string | null
   saleInvoiceNumber: string | null
-  // Set on transfer_in / transfer_out movements -> /transfers/<transferId>.
-  transferId: string | null
-  // Set on purchase_in movements (resolved via the lot's PO item)
-  // -> /purchases/<purchaseOrderId>.
-  purchaseOrderId: string | null
 }
 
 export type StockMovementFilters = {
@@ -153,7 +148,7 @@ export async function fetchStockMovements(
   let query = supabase
     .from('stock_movements')
     .select(
-      'id, occurred_at, product_id, warehouse_id, kind, qty_delta, unit_cost_dop, adjustment_reason, transfer_id, products(name), warehouses(name), profiles(full_name), sale_items(sale_id, sales(id, invoice_number)), inventory_lots(purchase_order_items(purchase_order_id))',
+      'id, occurred_at, product_id, warehouse_id, kind, qty_delta, unit_cost_dop, adjustment_reason, products(name), warehouses(name), profiles(full_name), sale_items(sale_id, sales(id, invoice_number))',
     )
     .order('occurred_at', { ascending: false })
     .limit(MOVEMENT_LIMIT)
@@ -200,16 +195,12 @@ export async function fetchStockMovements(
     qty_delta: number
     unit_cost_dop: number | null
     adjustment_reason: string | null
-    transfer_id: string | null
     products: { name: string } | null
     warehouses: { name: string } | null
     profiles: { full_name: string | null } | null
     sale_items: {
       sale_id: string | null
       sales: { id: string; invoice_number: string } | null
-    } | null
-    inventory_lots: {
-      purchase_order_items: { purchase_order_id: string | null } | null
     } | null
   }>).map((m) => ({
     id: m.id,
@@ -225,9 +216,6 @@ export async function fetchStockMovements(
     createdByName: m.profiles?.full_name ?? null,
     saleId: m.sale_items?.sales?.id ?? null,
     saleInvoiceNumber: m.sale_items?.sales?.invoice_number ?? null,
-    transferId: m.transfer_id ?? null,
-    purchaseOrderId:
-      m.inventory_lots?.purchase_order_items?.purchase_order_id ?? null,
   }))
 }
 
@@ -359,36 +347,6 @@ export async function fetchInventoryDashboardStats(): Promise<InventoryDashboard
     incomingUnits,
     incomingValueDop,
   }
-}
-
-// Incoming (ordered, not yet arrived) units per product, summed across all
-// open purchase orders. Uses the SAME open-PO statuses as the dashboard so
-// the numbers reconcile. Returned as product_id -> qty for the stock view's
-// "Incoming" column. Product-level (not split by warehouse).
-export async function fetchIncomingByProduct(): Promise<Record<string, number>> {
-  const supabase = await createClient()
-
-  const { data: openPos, error: poErr } = await supabase
-    .from('purchase_orders')
-    .select('id')
-    .in('status', INCOMING_STATUSES as unknown as string[])
-  if (poErr) throw poErr
-  const openPoIds = (openPos ?? []).map((p) => (p as { id: string }).id)
-  if (openPoIds.length === 0) return {}
-
-  const { data: items, error: itemsErr } = await supabase
-    .from('purchase_order_items')
-    .select('product_id, qty, purchase_order_id')
-    .in('purchase_order_id', openPoIds)
-  if (itemsErr) throw itemsErr
-
-  const byProduct: Record<string, number> = {}
-  for (const it of (items ?? []) as Array<{ product_id: string; qty: number }>) {
-    const qty = Number(it.qty) || 0
-    if (qty === 0) continue
-    byProduct[it.product_id] = (byProduct[it.product_id] ?? 0) + qty
-  }
-  return byProduct
 }
 
 // ---------------------------------------------------------------------------

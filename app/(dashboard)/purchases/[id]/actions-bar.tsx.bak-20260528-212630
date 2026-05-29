@@ -42,10 +42,10 @@ import {
   markLost,
   markReceived,
   markCancelled,
+  markPaidSupplier,
   correctSupplierPayment,
   paySupplierForReceived,
   completePaymentRecord,
-  addSupplierPayment,
 } from '../actions'
 import type {
   PurchaseStatus,
@@ -69,9 +69,6 @@ type Props = {
   // round-40: any transport allocated? Hides the Edit button for pending orders
   // that already have transport spread, since editing items would invalidate it.
   hasTransport?: boolean
-  // round-41a: running totals for the part-payment summary in the Pay dialog.
-  usdTotalForPay?: number
-  usdCoveredForPay?: number
 }
 
 function alreadyReceivedQty(lineId: string, lotTrail: Map<string, LotTrailEntry[]>): number {
@@ -122,8 +119,6 @@ export function PurchaseActionsBar({
   alreadyPaid,
   halfPaid,
   hasTransport,
-  usdTotalForPay,
-  usdCoveredForPay,
 }: Props) {
   const router = useRouter()
 
@@ -298,22 +293,10 @@ export function PurchaseActionsBar({
       categoryId: payCategory,
     }
     const res = status === 'pending'
-      ? await addSupplierPayment({
-          orderId,
-          dopAmount:                Number(payDopTotal),
-          exchangeRate:             Number(payExchange),
-          officialRateAtPayment:    Number(payOfficial),
-          supplierPaymentAccountId: payAccount,
-          paidAt:                   new Date(payAt).toISOString(),
-          categoryId:               payCategory,
-        })
+      ? await markPaidSupplier(payload)
       : await paySupplierForReceived(payload)
     if (!res.ok) { toast.error(res.error); setBusyAction(null); return }
-    toast.success(
-      status === 'pending'
-        ? 'Payment recorded.'
-        : 'Supplier payment recorded. Cost basis allocated across lines.',
-    )
+    toast.success('Supplier payment recorded. Cost basis allocated across lines.')
     setPayOpen(false); setBusyAction(null); router.refresh()
   }
 
@@ -487,20 +470,12 @@ export function PurchaseActionsBar({
               <AlertDialogDescription asChild>
                 <div className="space-y-2 text-sm">
                   <div>
-                    Record what you paid the supplier this time. You can pay in
-                    parts &mdash; enter just this payment now and the rest later,
-                    from the same or a different account.
+                    Record the DOP you paid the supplier. This will allocate the
+                    payment across the order&apos;s lines and compute the bank fee
+                    (the spread between your negotiated and the official exchange rates).
                   </div>
-                  {status === 'pending' && usdTotalForPay != null && (
-                    <div className="rounded-md border bg-muted/30 px-3 py-2 text-xs tabular-nums text-foreground">
-                      Order total ${usdTotalForPay.toFixed(2)} &middot; Already paid $
-                      {(usdCoveredForPay ?? 0).toFixed(2)} &middot; Still open $
-                      {Math.max(usdTotalForPay - (usdCoveredForPay ?? 0), 0).toFixed(2)}
-                    </div>
-                  )}
                   <div className="text-muted-foreground">
-                    When your payments cover the order total it flips to{' '}
-                    <span className="font-medium">Paid supplier</span> on its own.
+                    Status flips to <span className="font-medium">Paid supplier</span>.
                     From there you can record receipts.
                   </div>
                 </div>

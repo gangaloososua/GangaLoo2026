@@ -1,0 +1,103 @@
+-- ============================================================================
+-- Round 41b: Cancel reverses part-payments (no stranded money).
+--
+-- PROBLEM: mark_cancelled only flipped status (+ optional manual refund). With
+-- round-41a, a part-paid order sits in 'pending' but has real money recorded
+-- against it. Cancelling it left that money deducted from the accounts with no
+-- way back (and the function even refuses a manual refund on a pending order).
+--
+-- FIX: when cancelling a 'pending' order, first reverse every part-payment on
+-- it (reverse_transaction restores each account's balance + deletes the ledger
+-- line), then delete the part rows, then mark cancelled. Money goes back to the
+-- accounts it came from, in their own currencies.
+--
+-- SCOPE: auto-reversal applies ONLY to 'pending' orders (the part-payment
+-- state). Fully-paid ('paid_supplier') orders keep the existing manual
+-- "Record a refund" behaviour unchanged — exactly like any other paid order.
+-- Everything else in this function is byte-identical to the original.
+-- ============================================================================
+
+CREATE OR REPLACE FUNCTION public.mark_cancelled(
+  p_purchase_order_id uuid,
+  p_dop_refund_total numeric DEFAULT NULL::numeric,
+  p_refund_at_dop timestamp with time zone DEFAULT NULL::timestamp with time zone,
+  p_refund_account_id uuid DEFAULT NULL::uuid
+)
+ RETURNS void
+ LANGUAGE plpgsql
+AS $function$
+declare
+  v_status         public.purchase_status;
+  v_refund_count   integer;
+  v_pp             record;   -- round-41b: part-payment rows to reverse
+begin
+  -- Status lookup + cancellable check
+  select status into v_status
+    from public.purchase_orders
+    where id = p_purchase_order_id;
+
+  if not found then
+    raise exception 'purchase order % not found', p_purchase_order_id;
+  end if;
+
+  if v_status not in ('pending', 'paid_supplier') then
+    raise exception 'cannot cancel: order % is in status %, expected pending or paid_supplier',
+                    p_purchase_order_id, v_status;
+  end if;
+
+  -- "All three or none" rule for refund inputs
+  v_refund_count :=
+    (case when p_dop_refund_total  is not null then 1 else 0 end)
+  + (case when p_refund_at_dop     is not null then 1 else 0 end)
+  + (case when p_refund_account_id is not null then 1 else 0 end);
+
+  if v_refund_count not in (0, 3) then
+    raise exception 'refund inputs must be all-null or all-set (got % of 3)', v_refund_count;
+  end if;
+
+  -- Refund-on-pending refused (the manual refund box is for paid orders;
+  -- pending part-payments are returned automatically below).
+  if v_refund_count = 3 and v_status = 'pending' then
+    raise exception 'cannot record refund: order % is in status pending, no payment was made',
+                    p_purchase_order_id;
+  end if;
+
+  -- Refund amount validation
+  if p_dop_refund_total is not null and p_dop_refund_total <= 0 then
+    raise exception 'dop_refund_total must be > 0 (got %)', p_dop_refund_total;
+  end if;
+
+  -- round-41b: cancelling a PENDING order returns any part-payments to the
+  -- accounts they came from, then clears the part rows. (Part-payments only
+  -- exist on pending orders; finalized orders use the manual refund box.)
+  if v_status = 'pending' then
+    for v_pp in
+      select id, transaction_id
+        from public.purchase_order_payments
+        where purchase_order_id = p_purchase_order_id
+    loop
+      if v_pp.transaction_id is not null then
+        perform public.reverse_transaction(v_pp.transaction_id);
+      end if;
+    end loop;
+
+    delete from public.purchase_order_payments
+      where purchase_order_id = p_purchase_order_id;
+  end if;
+
+  -- Status flip + optional refund record. Done in one UPDATE so
+  -- partial writes are impossible.
+  update public.purchase_orders
+    set status            = 'cancelled',
+        completed_at      = now(),
+        dop_refund_total  = p_dop_refund_total,
+        refund_at_dop     = p_refund_at_dop,
+        refund_account_id = p_refund_account_id,
+        updated_at        = now()
+    where id = p_purchase_order_id;
+end;
+$function$;
+
+-- ============================================================================
+-- End round 41b.
+-- ============================================================================

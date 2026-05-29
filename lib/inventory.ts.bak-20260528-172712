@@ -128,11 +128,6 @@ export type StockMovementRow = {
   // tab to make those rows clickable -> /sales/<saleId>.
   saleId: string | null
   saleInvoiceNumber: string | null
-  // Set on transfer_in / transfer_out movements -> /transfers/<transferId>.
-  transferId: string | null
-  // Set on purchase_in movements (resolved via the lot's PO item)
-  // -> /purchases/<purchaseOrderId>.
-  purchaseOrderId: string | null
 }
 
 export type StockMovementFilters = {
@@ -153,7 +148,7 @@ export async function fetchStockMovements(
   let query = supabase
     .from('stock_movements')
     .select(
-      'id, occurred_at, product_id, warehouse_id, kind, qty_delta, unit_cost_dop, adjustment_reason, transfer_id, products(name), warehouses(name), profiles(full_name), sale_items(sale_id, sales(id, invoice_number)), inventory_lots(purchase_order_items(purchase_order_id))',
+      'id, occurred_at, product_id, warehouse_id, kind, qty_delta, unit_cost_dop, adjustment_reason, products(name), warehouses(name), profiles(full_name), sale_items(sale_id, sales(id, invoice_number))',
     )
     .order('occurred_at', { ascending: false })
     .limit(MOVEMENT_LIMIT)
@@ -200,16 +195,12 @@ export async function fetchStockMovements(
     qty_delta: number
     unit_cost_dop: number | null
     adjustment_reason: string | null
-    transfer_id: string | null
     products: { name: string } | null
     warehouses: { name: string } | null
     profiles: { full_name: string | null } | null
     sale_items: {
       sale_id: string | null
       sales: { id: string; invoice_number: string } | null
-    } | null
-    inventory_lots: {
-      purchase_order_items: { purchase_order_id: string | null } | null
     } | null
   }>).map((m) => ({
     id: m.id,
@@ -225,9 +216,6 @@ export async function fetchStockMovements(
     createdByName: m.profiles?.full_name ?? null,
     saleId: m.sale_items?.sales?.id ?? null,
     saleInvoiceNumber: m.sale_items?.sales?.invoice_number ?? null,
-    transferId: m.transfer_id ?? null,
-    purchaseOrderId:
-      m.inventory_lots?.purchase_order_items?.purchase_order_id ?? null,
   }))
 }
 

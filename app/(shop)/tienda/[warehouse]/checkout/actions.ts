@@ -7,7 +7,9 @@
 // get_storefront_quote()) compute fees and the loyalty-tier discount server-side.
 
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { resolveStoreWarehouse } from '@/lib/store/catalog'
+import { getStripe } from '@/lib/stripe'
 
 export type PlaceOrderInput = {
   warehouseSlug: string
@@ -24,6 +26,7 @@ export type PlaceOrderInput = {
 export type PlaceOrderResult =
   | {
       ok: true
+      saleId: string
       invoiceNumber: string
       subtotalCents: number
       subtotalBeforeCents: number
@@ -77,6 +80,7 @@ export async function placeOnlineOrder(
 
     const res = data as {
       ok?: boolean
+      sale_id?: string
       invoice_number?: string
       subtotal_cents?: number
       subtotal_before_cents?: number
@@ -95,6 +99,7 @@ export async function placeOnlineOrder(
     }
     return {
       ok: true,
+      saleId: res.sale_id ?? '',
       invoiceNumber: res.invoice_number,
       subtotalCents: res.subtotal_cents ?? 0,
       subtotalBeforeCents: res.subtotal_before_cents ?? res.subtotal_cents ?? 0,
@@ -162,5 +167,73 @@ export async function getOrderQuote(input: {
   } catch (e) {
     console.error('[getOrderQuote] threw:', e)
     return { ok: false }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Stripe: create a hosted Checkout Session for an already-placed order.
+// ---------------------------------------------------------------------------
+// The order was just created (as an unpaid 'draft') by placeOnlineOrder. Here we
+// read its AUTHORITATIVE amount server-side (never trusting the client) and open
+// a Stripe Checkout page for that exact amount, in DOP. The order is marked paid
+// later by the Stripe webhook (which calls finalize_online_payment), never here.
+export type StripeCheckoutResult =
+  | { ok: true; url: string }
+  | { ok: false; error: string }
+
+export async function startStripeCheckout(input: {
+  saleId: string
+  warehouseSlug: string
+  origin: string
+}): Promise<StripeCheckoutResult> {
+  try {
+    if (!input.saleId) return { ok: false, error: 'missing sale' }
+
+    // Read the order with the service-role client so the amount is authoritative
+    // (a customer session may not be allowed to read the sale row directly).
+    const admin = createAdminClient()
+    const { data: sale, error } = await admin
+      .from('sales')
+      .select('id, status, total_cents, payment_fee_cents, invoice_number, payment_method')
+      .eq('id', input.saleId)
+      .single()
+
+    if (error || !sale) return { ok: false, error: 'sale not found' }
+    if (sale.payment_method !== 'stripe') return { ok: false, error: 'not a stripe order' }
+    if (!['draft', 'confirmed', 'partially_paid'].includes(String(sale.status))) {
+      return { ok: false, error: 'order not payable' }
+    }
+
+    const amountDue =
+      (sale.total_cents ?? 0) + (sale.payment_fee_cents ?? 0)
+    if (amountDue <= 0) return { ok: false, error: 'invalid amount' }
+
+    const origin = input.origin.replace(/\/+$/, '')
+    const invoice = sale.invoice_number ?? ''
+    const stripe = getStripe()
+
+    const session = await stripe.checkout.sessions.create({
+      mode: 'payment',
+      line_items: [
+        {
+          quantity: 1,
+          price_data: {
+            currency: 'dop',
+            unit_amount: amountDue, // DOP is a 2-decimal currency: amount is in cents
+            product_data: { name: invoice ? `Pedido ${invoice}` : 'Pedido GangaLoo' },
+          },
+        },
+      ],
+      // The webhook reads sale_id to know which order to mark paid.
+      metadata: { sale_id: sale.id, invoice_number: invoice },
+      success_url: `${origin}/tienda/${input.warehouseSlug}/checkout/gracias?inv=${encodeURIComponent(invoice)}`,
+      cancel_url: `${origin}/tienda/${input.warehouseSlug}/checkout?cancelled=1`,
+    })
+
+    if (!session.url) return { ok: false, error: 'no checkout url' }
+    return { ok: true, url: session.url }
+  } catch (e) {
+    console.error('[startStripeCheckout] threw:', e)
+    return { ok: false, error: e instanceof Error ? e.message : 'unknown' }
   }
 }

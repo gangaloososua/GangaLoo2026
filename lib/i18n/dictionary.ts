@@ -340,6 +340,8 @@ const en: Messages = {
   'inv.title': 'Inventory',
   'inv.sellerSubtitle': 'Current stock on hand across all warehouses.',
   'inv.warehouse': 'Warehouse',
+  'inv.search': 'Search',
+  'inv.searchPlaceholder': 'Search by name or SKU',
   'inv.allWarehouses': 'All warehouses',
   'inv.category': 'Category',
   'inv.allCategories': 'All categories',
@@ -354,6 +356,7 @@ const en: Messages = {
   'inv.units': 'units',
   'inv.product': 'Product',
   'inv.total': 'Total',
+  'inv.incoming': 'Incoming',
 }
 
 const es: Messages = {
@@ -673,6 +676,8 @@ const es: Messages = {
   'inv.title': 'Inventario',
   'inv.sellerSubtitle': 'Stock actual en todos los almacenes.',
   'inv.warehouse': 'Almacén',
+  'inv.search': 'Buscar',
+  'inv.searchPlaceholder': 'Buscar por nombre o SKU',
   'inv.allWarehouses': 'Todos los almacenes',
   'inv.category': 'Categoría',
   'inv.allCategories': 'Todas las categorías',
@@ -687,6 +692,7 @@ const es: Messages = {
   'inv.units': 'unidades',
   'inv.product': 'Producto',
   'inv.total': 'Total',
+  'inv.incoming': 'En camino',
 }
 
 const messages: Record<Locale, Messages> = { en, es }

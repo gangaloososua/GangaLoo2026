@@ -29,28 +29,6 @@ const KIND_LABELS: Record<string, string> = {
   initial: 'Initial',
 }
 
-// What document, if any, a given movement row opens when clicked.
-type RowLink = { href: string; label: string }
-
-function linkFor(m: StockMovementRow): RowLink | null {
-  // Sales (and returns tied to a sale) open the sale.
-  if (m.saleId) {
-    return {
-      href: `/sales/${m.saleId}`,
-      label: 'Open sale ' + (m.saleInvoiceNumber ?? m.saleId),
-    }
-  }
-  // Transfers open the transfer detail.
-  if ((m.kind === 'transfer_in' || m.kind === 'transfer_out') && m.transferId) {
-    return { href: `/transfers/${m.transferId}`, label: 'Open transfer' }
-  }
-  // Purchases open the purchase order (resolved via the lot's PO item).
-  if (m.kind === 'purchase_in' && m.purchaseOrderId) {
-    return { href: `/purchases/${m.purchaseOrderId}`, label: 'Open purchase order' }
-  }
-  return null
-}
-
 function fmtDate(iso: string): string {
   const d = new Date(iso)
   return d.toLocaleString('en-GB', {
@@ -128,7 +106,7 @@ export function MovementsTab({ rows, productName }: Props) {
         <p className="text-sm text-muted-foreground">
           Stock movement history for this product across all warehouses. Showing
           the most recent {rows.length} movement{rows.length === 1 ? '' : 's'}.
-          Rows tied to a sale, transfer, or purchase are clickable — open the source.
+          Rows tied to a sale are clickable — open the sale.
         </p>
         <Button
           type="button"
@@ -169,19 +147,20 @@ export function MovementsTab({ rows, productName }: Props) {
                 if (m.createdByName) reasonBits.push(m.createdByName)
                 const reasonText = reasonBits.length > 0 ? reasonBits.join(' · ') : '—'
 
-                const link = linkFor(m)
-                const rowProps = link
+                const clickable = m.saleId !== null
+                const rowProps = clickable
                   ? {
-                      onClick: () => router.push(link.href),
+                      onClick: () => router.push(`/sales/${m.saleId!}`),
                       onKeyDown: (e: React.KeyboardEvent<HTMLTableRowElement>) => {
                         if (e.key === 'Enter' || e.key === ' ') {
                           e.preventDefault()
-                          router.push(link.href)
+                          router.push(`/sales/${m.saleId!}`)
                         }
                       },
                       tabIndex: 0,
                       role: 'button' as const,
-                      'aria-label': link.label,
+                      'aria-label':
+                        'Open sale ' + (m.saleInvoiceNumber ?? m.saleId!),
                       className: 'cursor-pointer hover:bg-muted/50',
                     }
                   : {}

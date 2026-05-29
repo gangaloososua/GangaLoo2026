@@ -7,7 +7,7 @@ import { ts, type Locale } from '@/lib/i18n/shop'
 import { useCart } from '@/lib/store/cart'
 import type { StoreWarehouse } from '@/lib/store/catalog'
 import type { DeliveryFees } from '@/lib/store-config-types'
-import { placeOnlineOrder, getOrderQuote } from './actions'
+import { placeOnlineOrder, getOrderQuote, startStripeCheckout } from './actions'
 
 const NAVY = '#0A2A66'
 const RED = '#CE1126'
@@ -286,6 +286,25 @@ export function CheckoutView({
     })
     setSubmitting(false)
     if (res.ok) {
+      // Stripe: hand off to the hosted Stripe checkout page to actually pay.
+      // (The order is marked paid later by the Stripe webhook, not here.)
+      if (payment === 'stripe') {
+        setSubmitting(true)
+        const pay = await startStripeCheckout({
+          saleId: res.saleId,
+          warehouseSlug,
+          origin: typeof window !== 'undefined' ? window.location.origin : '',
+        })
+        if (pay.ok) {
+          cart.clear()
+          window.location.href = pay.url
+          return
+        }
+        setSubmitting(false)
+        setError(ts(locale, 'shop.orderError'))
+        return
+      }
+
       setInvoice(res.invoiceNumber)
       setPlacedTotal(res.totalCents)
       setPlacedShipping(res.shippingCents)

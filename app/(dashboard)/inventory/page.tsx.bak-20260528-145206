@@ -6,7 +6,6 @@ import {
   fetchInventoryDashboardStats,
   fetchStockByWarehouse,
   fetchStockByCategory,
-  fetchIncomingByProduct,
   listCategoriesForFilter,
   type StockMovementFilters,
 } from '@/lib/inventory'
@@ -82,7 +81,6 @@ export default async function InventoryPage({
     movements,
     warehouses,
     categories,
-    incomingByProduct,
   ] = await Promise.all([
     fetchInventoryDashboardStats(),
     fetchStockByWarehouse(),
@@ -91,7 +89,6 @@ export default async function InventoryPage({
     fetchStockMovements(filters),
     listWarehousesForFilter(),
     listCategoriesForFilter(),
-    fetchIncomingByProduct(),
   ])
 
   // If any history filter is active, open the History tab by default so the
@@ -123,7 +120,6 @@ export default async function InventoryPage({
             rows={stock}
             warehouses={warehouses}
             categories={categories.filter((c) => c.parentId === null)}
-            incomingByProduct={incomingByProduct}
             enableHistoryLink
           />
         }
