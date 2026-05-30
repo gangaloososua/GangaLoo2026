@@ -1,12 +1,15 @@
-import { requireRole } from '@/lib/auth/guard'
+import { requireAdminCaller } from '@/lib/auth/guard'
 import { fetchMySellerFinancials } from '@/lib/my-seller-financials'
 import { MySalesView } from './my-sales-view'
 
 export const dynamic = 'force-dynamic'
 
 export default async function MySalesPage() {
-  // Sellers and distributors only; everyone else gets a 404 (no surface leak).
-  await requireRole(['seller', 'distributor'])
+  // Any dashboard user may open this. The RPC self-scopes to the signed-in
+  // person via auth.uid(), so owners/admins (who have no seller sales of their
+  // own) simply get a "sellers only" note from the view — never another
+  // seller's data. Real data shows when a seller/distributor is signed in.
+  await requireAdminCaller()
   const data = await fetchMySellerFinancials()
 
   return (

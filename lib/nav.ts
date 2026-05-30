@@ -42,6 +42,7 @@ const OWNER_AND_DISTRIBUTOR: Role[] = ['owner', 'admin', 'distributor']
 export const navItems: NavItem[] = [
   { label: 'Dashboard',        href: '/',                     icon: LayoutDashboard, roles: ALL },
   { label: 'Sales',            href: '/sales',                icon: ShoppingCart,    roles: ALL },
+  { label: 'My Sales',         href: '/my-sales',             icon: Receipt,         roles: ALL,                  i18n: { en: 'My sales', es: 'Mis ventas' } },
   { label: 'Caja',             href: '/caja',                 icon: Calculator,      roles: ALL,                  i18n: { en: 'Register', es: 'Caja' } },
   { label: 'Online Orders',    href: '/online-orders',        icon: Globe,           roles: OWNER_ONLY },
   { label: 'Products',         href: '/products',             icon: Package,         roles: OWNER_ONLY },
