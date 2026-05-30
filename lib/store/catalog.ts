@@ -233,11 +233,45 @@ export async function fetchStoreCatalog(
 
   const ids = products.map((p) => p.id)
 
-  const { data: whSettings } = await supabase
-    .from('store_product_settings')
-    .select('product_id, is_visible, price_override_cents')
-    .eq('warehouse_id', warehouse.id)
-    .in('product_id', ids)
+  // WAVE 1 — every lookup that only needs the product ids runs concurrently
+  // (was previously one-after-another). Same data, far less waiting per switch.
+  const [
+    { data: whSettings },
+    { data: stockRows },
+    { data: dealRows },
+    { data: primaryLinks },
+    { data: pavRows },
+  ] = await Promise.all([
+    supabase
+      .from('store_product_settings')
+      .select('product_id, is_visible, price_override_cents')
+      .eq('warehouse_id', warehouse.id)
+      .in('product_id', ids),
+    supabase
+      .from('store_inventory')
+      .select('product_id, qty_on_hand')
+      .eq('warehouse_id', warehouse.id)
+      .in('product_id', ids),
+    // Active, non-expired online deal promotions (daily/weekly) for this store.
+    // store_promotions exposes only featured promotions in their live window;
+    // warehouse_id is null for "all stores" or a specific store id.
+    supabase
+      .from('store_promotions')
+      .select('product_id, warehouse_id, deal_slot, delta_percent, ends_at, priority')
+      .or(`warehouse_id.is.null,warehouse_id.eq.${warehouse.id}`)
+      .in('product_id', ids),
+    supabase
+      .from('store_product_categories')
+      .select('product_id, category_id')
+      .in('product_id', ids)
+      .eq('is_primary', true),
+    // Attribute assignments for these products (Stage 4 store views).
+    supabase
+      .from('store_product_attribute_values')
+      .select('product_id, attribute_value_id')
+      .in('product_id', ids),
+  ])
+
   const settingByProduct = new Map<
     string,
     { is_visible: boolean; price_override_cents: number | null }
@@ -249,24 +283,11 @@ export async function fetchStoreCatalog(
     })
   }
 
-  const { data: stockRows } = await supabase
-    .from('store_inventory')
-    .select('product_id, qty_on_hand')
-    .eq('warehouse_id', warehouse.id)
-    .in('product_id', ids)
   const stockByProduct = new Map<string, number>()
   for (const r of stockRows ?? []) {
     stockByProduct.set(r.product_id, Number(r.qty_on_hand) || 0)
   }
 
-  // Active, non-expired online deal promotions (daily/weekly) for this store.
-  // store_promotions exposes only featured promotions in their live window;
-  // warehouse_id is null for "all stores" or a specific store id.
-  const { data: dealRows } = await supabase
-    .from('store_promotions')
-    .select('product_id, warehouse_id, deal_slot, delta_percent, ends_at, priority')
-    .or(`warehouse_id.is.null,warehouse_id.eq.${warehouse.id}`)
-    .in('product_id', ids)
   const dealByProduct = new Map<
     string,
     { slot: 'daily' | 'weekly'; percent: number; endsAt: string | null; priority: number }
@@ -286,39 +307,35 @@ export async function fetchStoreCatalog(
     }
   }
 
-  const { data: primaryLinks } = await supabase
-    .from('store_product_categories')
-    .select('product_id, category_id')
-    .in('product_id', ids)
-    .eq('is_primary', true)
+  // Collect the ids the second wave depends on.
   const catIds = [...new Set((primaryLinks ?? []).map((r) => r.category_id))]
-  const catNameById = new Map<string, string>()
-  if (catIds.length > 0) {
-    const { data: cats } = await supabase
-      .from('store_categories')
-      .select('id, name')
-      .in('id', catIds)
-    for (const c of cats ?? []) catNameById.set(c.id, c.name)
-  }
-  const catByProduct = new Map<string, { id: string; name: string }>()
-  for (const l of primaryLinks ?? []) {
-    const name = catNameById.get(l.category_id)
-    if (name) catByProduct.set(l.product_id, { id: l.category_id, name })
-  }
 
-  // Attribute assignments for these products (Stage 4 store views). We pull the
-  // raw links, then the value + attribute metadata, keeping only ACTIVE values
-  // (matching how the rest of this layer filters is_active itself in queries).
-  const { data: pavRows } = await supabase
-    .from('store_product_attribute_values')
-    .select('product_id, attribute_value_id')
-    .in('product_id', ids)
   const valueIdsByProduct = new Map<string, string[]>()
   const allValueIds = new Set<string>()
   for (const r of pavRows ?? []) {
     if (!valueIdsByProduct.has(r.product_id)) valueIdsByProduct.set(r.product_id, [])
     valueIdsByProduct.get(r.product_id)!.push(r.attribute_value_id)
     allValueIds.add(r.attribute_value_id)
+  }
+
+  // WAVE 2 — category names (needs catIds) and attribute values (needs value
+  // ids) are independent of each other, so fetch them together too. Empty id
+  // lists return no rows (no extra cost, no error).
+  const [{ data: cats }, { data: avRows }] = await Promise.all([
+    supabase.from('store_categories').select('id, name').in('id', catIds),
+    supabase
+      .from('store_attribute_values')
+      .select('id, attribute_id, value, slug, display_order')
+      .in('id', [...allValueIds])
+      .eq('is_active', true),
+  ])
+
+  const catNameById = new Map<string, string>()
+  for (const c of cats ?? []) catNameById.set(c.id, c.name)
+  const catByProduct = new Map<string, { id: string; name: string }>()
+  for (const l of primaryLinks ?? []) {
+    const name = catNameById.get(l.category_id)
+    if (name) catByProduct.set(l.product_id, { id: l.category_id, name })
   }
 
   const valueMeta = new Map<
@@ -329,23 +346,17 @@ export async function fetchStoreCatalog(
     string,
     { id: string; name: string; slug: string; display_order: number }
   >()
-  if (allValueIds.size > 0) {
-    const { data: avRows } = await supabase
-      .from('store_attribute_values')
-      .select('id, attribute_id, value, slug, display_order')
-      .in('id', [...allValueIds])
-      .eq('is_active', true)
-    for (const v of avRows ?? []) valueMeta.set(v.id, v)
+  for (const v of avRows ?? []) valueMeta.set(v.id, v)
 
-    const attrIds = [...new Set((avRows ?? []).map((v) => v.attribute_id))]
-    if (attrIds.length > 0) {
-      const { data: aRows } = await supabase
-        .from('store_attributes')
-        .select('id, name, slug, display_order')
-        .in('id', attrIds)
-        .eq('is_active', true)
-      for (const a of aRows ?? []) attrMeta.set(a.id, a)
-    }
+  // WAVE 3 — attribute metadata (needs the attribute ids from wave 2).
+  const attrIds = [...new Set((avRows ?? []).map((v) => v.attribute_id))]
+  if (attrIds.length > 0) {
+    const { data: aRows } = await supabase
+      .from('store_attributes')
+      .select('id, name, slug, display_order')
+      .in('id', attrIds)
+      .eq('is_active', true)
+    for (const a of aRows ?? []) attrMeta.set(a.id, a)
   }
 
   const rows: StoreProduct[] = []
