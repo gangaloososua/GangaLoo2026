@@ -380,7 +380,12 @@ export async function fetchStoreCatalog(
     }
   }
   const markupFrac = guestMarkupPct / 100
-  const mk = (c: number) => Math.round(c * (1 + markupFrac))
+  // Guests: marked-up price, rounded UP to the next RD$25 (2500 cents).
+  // Members: exact price (markupFrac is 0 and no rounding).
+  const mk = (c: number) => {
+    const v = c * (1 + markupFrac)
+    return isGuest ? Math.ceil(v / 2500) * 2500 : Math.round(v)
+  }
 
   const rows: StoreProduct[] = []
   for (const p of products) {
