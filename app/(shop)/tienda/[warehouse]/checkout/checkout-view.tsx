@@ -7,7 +7,7 @@ import { ts, type Locale } from '@/lib/i18n/shop'
 import { useCart } from '@/lib/store/cart'
 import type { StoreWarehouse } from '@/lib/store/catalog'
 import type { DeliveryFees } from '@/lib/store-config-types'
-import { placeOnlineOrder, getOrderQuote, startStripeCheckout } from './actions'
+import { placeOnlineOrder, getOrderQuote, startStripeCheckout, startPaypalCheckout } from './actions'
 
 const NAVY = '#0A2A66'
 const RED = '#CE1126'
@@ -291,6 +291,26 @@ export function CheckoutView({
       if (payment === 'stripe') {
         setSubmitting(true)
         const pay = await startStripeCheckout({
+          saleId: res.saleId,
+          warehouseSlug,
+          origin: typeof window !== 'undefined' ? window.location.origin : '',
+        })
+        if (pay.ok) {
+          cart.clear()
+          window.location.href = pay.url
+          return
+        }
+        setSubmitting(false)
+        setError(ts(locale, 'shop.orderError'))
+        return
+      }
+
+      // PayPal: hand off to PayPal's approval page (charged in US$, converted
+      // from the peso total at your current rate). The order is marked paid by
+      // the return handler after PayPal confirms, not here.
+      if (payment === 'paypal') {
+        setSubmitting(true)
+        const pay = await startPaypalCheckout({
           saleId: res.saleId,
           warehouseSlug,
           origin: typeof window !== 'undefined' ? window.location.origin : '',

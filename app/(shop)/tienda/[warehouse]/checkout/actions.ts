@@ -9,6 +9,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { resolveStoreWarehouse } from '@/lib/store/catalog'
 import { getStripe } from '@/lib/stripe'
+import { createPaypalOrder } from '@/lib/paypal'
 
 export type PlaceOrderInput = {
   warehouseSlug: string
@@ -240,6 +241,88 @@ export async function startStripeCheckout(input: {
     return { ok: true, url: session.url }
   } catch (e) {
     console.error('[startStripeCheckout] threw:', e)
+    return { ok: false, error: e instanceof Error ? e.message : 'unknown' }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// PayPal: open a PayPal approval page for an already-placed order.
+// ---------------------------------------------------------------------------
+// PayPal cannot charge in pesos, so we read the order's authoritative peso total
+// server-side, convert it to US$ using YOUR current monthly exchange rate (read
+// via the anon-safe get_current_exchange_rate function), and create a PayPal
+// order for that US$ amount. The order is marked paid later by the return
+// handler (which captures the payment), never here.
+export type PaypalCheckoutResult =
+  | { ok: true; url: string }
+  | { ok: false; error: string }
+
+export async function startPaypalCheckout(input: {
+  saleId: string
+  warehouseSlug: string
+  origin: string
+}): Promise<PaypalCheckoutResult> {
+  try {
+    if (!input.saleId) return { ok: false, error: 'no sale id from order' }
+
+    const supabase = await createClient()
+
+    const { data, error } = await supabase.rpc('get_online_order_for_payment', {
+      p_sale_id: input.saleId,
+    })
+    if (error) return { ok: false, error: 'order read failed: ' + error.message }
+
+    const sale = data as {
+      ok?: boolean
+      invoice_number?: string
+      status?: string
+      payment_method?: string
+      amount_cents?: number
+    } | null
+
+    if (!sale?.ok) return { ok: false, error: 'order not found' }
+    if (sale.payment_method !== 'paypal') {
+      return { ok: false, error: 'payment_method is ' + String(sale.payment_method) }
+    }
+    if (!['draft', 'confirmed', 'partially_paid'].includes(String(sale.status))) {
+      return { ok: false, error: 'order status is ' + String(sale.status) }
+    }
+
+    const dopCents = sale.amount_cents ?? 0
+    if (dopCents <= 0) return { ok: false, error: 'amount is ' + String(dopCents) }
+
+    // Current US$ rate (pesos per 1 US$), read with the anon-safe function.
+    const { data: rateData, error: rateErr } = await supabase.rpc(
+      'get_current_exchange_rate',
+      { p_currency: 'USD' },
+    )
+    if (rateErr) return { ok: false, error: 'rate read failed: ' + rateErr.message }
+    const rateRes = rateData as { ok?: boolean; rate?: number } | null
+    const rate = Number(rateRes?.rate ?? 0)
+    if (!rateRes?.ok || !(rate > 0)) {
+      return { ok: false, error: 'no USD exchange rate set' }
+    }
+
+    // Pesos -> US$, rounded to 2 decimals (PayPal requires a 2-decimal amount).
+    const valueUSD = (dopCents / 100 / rate).toFixed(2)
+    if (!(parseFloat(valueUSD) > 0)) {
+      return { ok: false, error: 'converted amount is zero' }
+    }
+
+    const origin = input.origin.replace(/\/+$/, '')
+    const invoice = sale.invoice_number ?? ''
+
+    const order = await createPaypalOrder({
+      valueUSD,
+      saleId: input.saleId,
+      invoice,
+      returnUrl: `${origin}/tienda/${input.warehouseSlug}/checkout/paypal-return?sale=${encodeURIComponent(input.saleId)}`,
+      cancelUrl: `${origin}/tienda/${input.warehouseSlug}/checkout?cancelled=1`,
+    })
+
+    return { ok: true, url: order.approveUrl }
+  } catch (e) {
+    console.error('[startPaypalCheckout] threw:', e)
     return { ok: false, error: e instanceof Error ? e.message : 'unknown' }
   }
 }
