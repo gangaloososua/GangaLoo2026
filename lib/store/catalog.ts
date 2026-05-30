@@ -13,6 +13,11 @@ export type StoreWarehouse = {
   name: string // cleaned display name, e.g. "Maranatha"
   rawName: string // original, e.g. "1-Maranatha"
   slug: string // e.g. "maranatha"
+  whatsapp?: string | null
+  phone?: string | null
+  address?: string | null
+  city?: string | null
+  mapsUrl?: string | null
 }
 
 export type StoreProduct = {
@@ -93,7 +98,7 @@ export async function listStoreWarehouses(): Promise<StoreWarehouse[]> {
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('store_warehouses')
-    .select('id, name')
+    .select('id, name, whatsapp, phone, address, city, maps_url')
     .eq('is_active', true)
   if (error) throw error
   return (data ?? [])
@@ -102,6 +107,11 @@ export async function listStoreWarehouses(): Promise<StoreWarehouse[]> {
       name: cleanName(w.name),
       rawName: w.name,
       slug: slugify(cleanName(w.name)),
+      whatsapp: w.whatsapp ?? null,
+      phone: w.phone ?? null,
+      address: w.address ?? null,
+      city: w.city ?? null,
+      mapsUrl: w.maps_url ?? null,
     }))
     .sort((a, b) => a.rawName.localeCompare(b.rawName))
 }
@@ -190,7 +200,7 @@ export async function resolveStoreWarehouse(
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('store_warehouses')
-    .select('id, name')
+    .select('id, name, whatsapp, phone, address, city, maps_url')
     .eq('is_active', true)
   if (error) throw error
 

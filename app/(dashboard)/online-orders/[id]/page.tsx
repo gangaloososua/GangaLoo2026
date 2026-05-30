@@ -29,6 +29,9 @@ import {
 // Formatting helpers
 // ============================================================
 
+// Render all timestamps in Dominican local time (server runs in UTC).
+const TZ = 'America/Santo_Domingo'
+
 function formatDate(iso: string | null): string {
   if (!iso) return '—'
   const d = new Date(iso)
@@ -37,6 +40,7 @@ function formatDate(iso: string | null): string {
     day: '2-digit',
     month: 'short',
     year: 'numeric',
+    timeZone: TZ,
   })
 }
 
@@ -50,9 +54,10 @@ function formatDateTime(iso: string | null): string {
     year: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
+    hour12: true,
+    timeZone: TZ,
   })
 }
-
 function formatDopCents(cents: number | null): string {
   if (cents == null) return '—'
   return new Intl.NumberFormat('en-GB', {
@@ -236,6 +241,25 @@ export default async function OnlineOrderDetailPage({
                 <div className="space-y-0.5">
                   <dt className="text-xs text-muted-foreground">City</dt>
                   <dd>{order.shippingCity}</dd>
+                </div>
+              ) : null}
+              {order.deliveryAt ? (
+                <div className="space-y-0.5">
+                  <dt className="text-xs text-muted-foreground">
+                    Preferred delivery
+                  </dt>
+                  <dd>{formatDateTime(order.deliveryAt)}</dd>
+                </div>
+              ) : null}
+              {order.deliveryLat != null && order.deliveryLng != null ? (
+                <div className="space-y-0.5">
+                  <dt className="text-xs text-muted-foreground">
+                    Pinned location
+                  </dt>
+                  <dd>
+                    
+                   <a href={`https://www.google.com/maps/search/?api=1&query=${order.deliveryLat},${order.deliveryLng}`} target="_blank" rel="noopener noreferrer" className="text-primary underline underline-offset-2">View on map ({order.deliveryLat.toFixed(5)}, {order.deliveryLng.toFixed(5)})</a>
+                  </dd>
                 </div>
               ) : null}
               {order.deliveryNotes ? (

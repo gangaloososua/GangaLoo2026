@@ -5,6 +5,7 @@
 // (role is forced to 'customer' inside upsert_customer_profile).
 
 import { createClient } from '@/lib/supabase/server'
+import { notifyNewSignup } from '@/lib/notify'
 
 export type AuthResult = { ok: true } | { ok: false; error: string }
 
@@ -16,7 +17,14 @@ export async function signUpCustomer(input: {
 }): Promise<AuthResult> {
   const name = input.name?.trim()
   const email = input.email?.trim().toLowerCase()
-  const phone = input.phone?.trim() || undefined
+  // Normalize phone to digits only; prepend DR country code (1) for 10-digit
+  // numbers so it is consistent + tappable. Unusual lengths keep their digits.
+  const phoneDigits = (input.phone ?? '').replace(/\D/g, '')
+  const phone = phoneDigits
+    ? phoneDigits.length === 10
+      ? '1' + phoneDigits
+      : phoneDigits
+    : undefined
 
   if (!name) return { ok: false, error: 'NAME_REQUIRED' }
   if (!email || !email.includes('@')) return { ok: false, error: 'EMAIL_INVALID' }
@@ -47,6 +55,10 @@ export async function signUpCustomer(input: {
     if (/phone_in_use/i.test(m)) return { ok: false, error: 'PHONE_TAKEN' }
     return { ok: false, error: m }
   }
+
+  // New-customer WhatsApp alert to the owner. Fires once, on full success.
+  // notifyNewSignup never throws, so it cannot break signup.
+  await notifyNewSignup({ name, phone, email })
 
   return { ok: true }
 }

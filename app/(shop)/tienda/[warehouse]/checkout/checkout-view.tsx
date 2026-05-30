@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, type CSSProperties } from 'react'
+import { useState, useEffect, useRef, type CSSProperties } from 'react'
 import Link from 'next/link'
 import { formatDOP } from '@/lib/format'
 import { ts, type Locale } from '@/lib/i18n/shop'
@@ -13,6 +13,28 @@ const NAVY = '#0A2A66'
 const RED = '#CE1126'
 const INK = '#16181d'
 const MUTED = '#6b7280'
+
+// Delivery runs every day inside this single window. Edit to change hours.
+const DELIVERY_WINDOW = { start: '14:00', end: '17:00' }
+// Map starting center before the customer pins (Sosúa / Puerto Plata).
+const MAP_DEFAULT = { lat: 19.7536, lng: -70.5169 }
+
+// Build 30-min slots across DELIVERY_WINDOW, each with a 24h value ("14:30")
+// and a 12h AM/PM label ("2:30 PM") for display.
+function deliverySlots(): { value: string; label: string }[] {
+  const [sh, sm] = DELIVERY_WINDOW.start.split(':').map(Number)
+  const [eh, em] = DELIVERY_WINDOW.end.split(':').map(Number)
+  const out: { value: string; label: string }[] = []
+  for (let t = sh * 60 + sm; t <= eh * 60 + em; t += 30) {
+    const h = Math.floor(t / 60)
+    const m = t % 60
+    const value = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+    const ampm = h >= 12 ? 'PM' : 'AM'
+    const h12 = h % 12 === 0 ? 12 : h % 12
+    out.push({ value, label: `${h12}:${String(m).padStart(2, '0')} ${ampm}` })
+  }
+  return out
+}
 
 function price(cents: number) {
   return formatDOP(cents, { decimals: 0 })
@@ -34,6 +56,10 @@ const ICON = {
   cash: 'M2 7h20v10H2zM12 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4z',
   bank: 'M3 10l9-6 9 6M5 10v9h14v-9M9 19v-5h6v5',
   check: 'M5 12l4 4 10-10',
+  pin: 'M12 21s7-6.3 7-11a7 7 0 1 0-14 0c0 4.7 7 11 7 11zM12 12a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z',
+  calendar: 'M4 5h16v16H4zM4 9h16M8 3v4M16 3v4',
+  clock: 'M12 7v5l3 2M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18',
+  locate: 'M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM12 2v3M12 19v3M2 12h3M19 12h3',
 }
 
 // New strings kept local (the shared dictionary is added to by migrations, not
@@ -61,6 +87,16 @@ const CT = {
     bankAccountName: 'A nombre de',
     bankAccountType: 'Tipo',
     chooseStoreError: 'Elige la tienda donde vas a recoger.',
+    mapTitle: 'Ubicación en el mapa',
+    useMyLocation: 'Usar mi ubicación actual',
+    pinHint: 'Toca el mapa o arrastra el pin para marcar tu ubicación.',
+    dateLabel: 'Fecha de entrega',
+    timeLabel: 'Hora de entrega',
+    windowHint: 'Entregas todos los días de 2:00 a 5:00 PM.',
+    pinRequired: 'Marca tu ubicación en el mapa.',
+    dateRequired: 'Elige la fecha de entrega.',
+    timeRequired: 'Elige la hora de entrega.',
+    timeOutOfWindow: 'La hora debe estar entre 2:00 y 5:00 PM.',
     payment: 'Pago',
     memberDiscount: 'Descuento socio',
     surcharge: 'Recargo',
@@ -91,6 +127,16 @@ const CT = {
     bankAccountName: 'Account name',
     bankAccountType: 'Type',
     chooseStoreError: 'Choose the store where you will collect.',
+    mapTitle: 'Location on map',
+    useMyLocation: 'Use my current location',
+    pinHint: 'Tap the map or drag the pin to mark your location.',
+    dateLabel: 'Delivery date',
+    timeLabel: 'Delivery time',
+    windowHint: 'Delivery every day from 2:00 to 5:00 PM.',
+    pinRequired: 'Mark your location on the map.',
+    dateRequired: 'Choose the delivery date.',
+    timeRequired: 'Choose the delivery time.',
+    timeOutOfWindow: 'Time must be between 2:00 and 5:00 PM.',
     payment: 'Payment',
     memberDiscount: 'Member discount',
     surcharge: 'Surcharge',
@@ -122,6 +168,110 @@ function norm(s: string): string {
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .trim()
+}
+
+// Loads Leaflet from the CDN once (client-only) — no npm dependency. Shows a
+// draggable pin and reports the chosen lat/lng up to the form.
+let leafletLoading: Promise<unknown> | null = null
+function loadLeaflet(): Promise<unknown> {
+  if (typeof window === 'undefined') return Promise.reject(new Error('no window'))
+  const w = window as unknown as { L?: unknown }
+  if (w.L) return Promise.resolve(w.L)
+  if (leafletLoading) return leafletLoading
+  leafletLoading = new Promise((resolve, reject) => {
+    if (!document.querySelector('link[data-leaflet]')) {
+      const link = document.createElement('link')
+      link.rel = 'stylesheet'
+      link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'
+      link.setAttribute('data-leaflet', '1')
+      document.head.appendChild(link)
+    }
+    const script = document.createElement('script')
+    script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'
+    script.async = true
+    script.onload = () => resolve((window as unknown as { L: unknown }).L)
+    script.onerror = () => reject(new Error('leaflet load failed'))
+    document.body.appendChild(script)
+  })
+  return leafletLoading
+}
+
+function DeliveryMap({
+  lat,
+  lng,
+  onChange,
+  hint,
+  locateLabel,
+}: {
+  lat: number | null
+  lng: number | null
+  onChange: (lat: number, lng: number) => void
+  hint: string
+  locateLabel: string
+}) {
+  const mapRef = useRef<HTMLDivElement>(null)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const mapObj = useRef<any>(null)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const markerObj = useRef<any>(null)
+  const [locating, setLocating] = useState(false)
+  const onChangeRef = useRef(onChange)
+  useEffect(() => { onChangeRef.current = onChange }, [onChange])
+
+  useEffect(() => {
+    let cancelled = false
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    loadLeaflet().then((L: any) => {
+      if (cancelled || !mapRef.current || mapObj.current) return
+      L.Marker.prototype.options.icon = L.icon({
+        iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+        iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
+        shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+        iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41],
+      })
+      const start: [number, number] = lat != null && lng != null ? [lat, lng] : [MAP_DEFAULT.lat, MAP_DEFAULT.lng]
+      const map = L.map(mapRef.current).setView(start, 14)
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap', maxZoom: 19 }).addTo(map)
+      const marker = L.marker(start, { draggable: true }).addTo(map)
+      marker.on('dragend', () => { const p = marker.getLatLng(); onChangeRef.current(p.lat, p.lng) })
+      map.on('click', (e: { latlng: { lat: number; lng: number } }) => { marker.setLatLng(e.latlng); onChangeRef.current(e.latlng.lat, e.latlng.lng) })
+      mapObj.current = map
+      markerObj.current = marker
+      setTimeout(() => map.invalidateSize(), 100)
+    })
+    return () => {
+      cancelled = true
+      if (mapObj.current) { mapObj.current.remove(); mapObj.current = null; markerObj.current = null }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  useEffect(() => {
+    if (mapObj.current && markerObj.current && lat != null && lng != null) {
+      markerObj.current.setLatLng([lat, lng])
+      mapObj.current.setView([lat, lng], 15)
+    }
+  }, [lat, lng])
+
+  const useMyLocation = () => {
+    if (typeof navigator === 'undefined' || !navigator.geolocation) return
+    setLocating(true)
+    navigator.geolocation.getCurrentPosition(
+      (pos) => { setLocating(false); onChangeRef.current(pos.coords.latitude, pos.coords.longitude) },
+      () => setLocating(false),
+      { enableHighAccuracy: true, timeout: 10000 },
+    )
+  }
+
+  return (
+    <div>
+      <button type="button" onClick={useMyLocation} disabled={locating} className="mb-2 inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] disabled:opacity-50" style={{ border: `1px solid ${NAVY}`, color: NAVY, background: '#fff' }}>
+        <Icon d={ICON.locate} size={14} /> {locating ? '…' : locateLabel}
+      </button>
+      <div ref={mapRef} style={{ height: 240, width: '100%', borderRadius: 12, overflow: 'hidden', border: '1px solid #d7dde6' }} />
+      <p className="mt-1.5 text-[11px]" style={{ color: MUTED }}>{hint}</p>
+    </div>
+  )
 }
 
 export function CheckoutView({
@@ -168,6 +318,10 @@ export function CheckoutView({
   const [payment, setPayment] = useState<Payment>('cash')
   const [address, setAddress] = useState('')
   const [city, setCity] = useState('')
+  const [deliveryLat, setDeliveryLat] = useState<number | null>(null)
+  const [deliveryLng, setDeliveryLng] = useState<number | null>(null)
+  const [deliveryDate, setDeliveryDate] = useState('')
+  const [deliveryTime, setDeliveryTime] = useState('')
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [invoice, setInvoice] = useState<string | null>(null)
@@ -181,6 +335,9 @@ export function CheckoutView({
   const [placedTierName, setPlacedTierName] = useState('')
   const [placedSurcharge, setPlacedSurcharge] = useState(0)
   const [placedAmountDue, setPlacedAmountDue] = useState(0)
+  const [placedItems, setPlacedItems] = useState<{ name: string; qty: number; priceCents: number }[]>([])
+  const [placedMethod, setPlacedMethod] = useState<Method>('pickup')
+  const [placedPickupId, setPlacedPickupId] = useState('')
 
   const storeHref = `/tienda/${warehouseSlug}`
   const otherStores = stores.filter((s) => s.id !== warehouseId)
@@ -264,9 +421,15 @@ export function CheckoutView({
       setError(ts(locale, 'shop.required'))
       return
     }
-    if (method === 'delivery' && !address.trim()) {
+   if (method === 'delivery' && !address.trim()) {
       setError(ts(locale, 'shop.required'))
       return
+    }
+    if (method === 'delivery') {
+      if (deliveryLat == null || deliveryLng == null) { setError(tx.pinRequired); return }
+      if (!deliveryDate) { setError(tx.dateRequired); return }
+      if (!deliveryTime) { setError(tx.timeRequired); return }
+      if (deliveryTime < DELIVERY_WINDOW.start || deliveryTime > DELIVERY_WINDOW.end) { setError(tx.timeOutOfWindow); return }
     }
     if (method === 'pickup_other' && !pickupStoreId) {
       setError(tx.chooseStoreError)
@@ -282,6 +445,9 @@ export function CheckoutView({
       paymentMethod: payment,
       shippingAddress: method === 'delivery' ? address.trim() || undefined : undefined,
       shippingCity: method === 'delivery' ? city.trim() || undefined : undefined,
+      deliveryLat: method === 'delivery' && deliveryLat != null ? deliveryLat : undefined,
+      deliveryLng: method === 'delivery' && deliveryLng != null ? deliveryLng : undefined,
+      deliveryAt: method === 'delivery' && deliveryDate && deliveryTime ? new Date(`${deliveryDate}T${deliveryTime}`).toISOString() : undefined,
       items: cart.items.map((i) => ({ product_id: i.id, qty: i.qty })),
     })
     setSubmitting(false)
@@ -334,6 +500,9 @@ export function CheckoutView({
       setPlacedTierName(res.tierName)
       setPlacedSurcharge(res.paymentFeeCents)
       setPlacedAmountDue(res.amountDueCents)
+      setPlacedItems(cart.items.map((i) => ({ name: i.name, qty: i.qty, priceCents: i.priceCents })))
+      setPlacedMethod(method)
+      setPlacedPickupId(pickupStoreId)
       cart.clear()
       if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' })
     } else {
@@ -397,6 +566,78 @@ export function CheckoutView({
                 {bankInfo.accountType && <p><span style={{ color: MUTED }}>{tx.bankAccountType}:</span> {bankInfo.accountType}</p>}
               </div>
             )}
+            {(() => {
+              const pickupStore =
+                placedMethod === 'pickup_other'
+                  ? stores.find((s) => s.id === placedPickupId)
+                  : stores.find((s) => s.id === warehouseId)
+              if (placedMethod === 'delivery') {
+                return (
+                  <div className="mx-auto mt-3 max-w-sm rounded-xl p-3 text-left text-[13px]" style={{ background: '#fff', border: `1px solid ${NAVY}` }}>
+                    <p className="mb-1 font-semibold" style={{ color: NAVY }}>{locale === 'en' ? 'Delivery' : 'Entrega a domicilio'}</p>
+                    <p style={{ color: MUTED }}>{locale === 'en' ? 'We will deliver to the address you provided. We will contact you to coordinate.' : 'Te llevaremos a la direccion indicada. Te contactaremos para coordinar.'}</p>
+                  </div>
+                )
+              }
+              if (!pickupStore) return null
+              const mapHref =
+                pickupStore.mapsUrl ||
+                (pickupStore.address ? `https://maps.google.com/?q=${encodeURIComponent(pickupStore.address)}` : '')
+              return (
+                <div className="mx-auto mt-3 max-w-sm rounded-xl p-3 text-left text-[13px]" style={{ background: '#fff', border: `1px solid ${NAVY}` }}>
+                  <p className="mb-1 font-semibold" style={{ color: NAVY }}>{locale === 'en' ? 'Where to pick up' : 'Donde recoger'}</p>
+                  <p style={{ color: INK }}>{pickupStore.name}</p>
+                  {pickupStore.address && <p style={{ color: MUTED }}>{pickupStore.address}</p>}
+                  {pickupStore.phone && <p><span style={{ color: MUTED }}>{locale === 'en' ? 'Phone' : 'Telefono'}:</span> {pickupStore.phone}</p>}
+                  {mapHref && (
+                    <a href={mapHref} target="_blank" rel="noopener noreferrer" style={{ color: NAVY, fontWeight: 600 }}>
+                      {locale === 'en' ? 'View on map' : 'Ver en mapa'}
+                    </a>
+                  )}
+                </div>
+              )
+            })()}
+            {(() => {
+              const waStore =
+                placedMethod === 'pickup_other'
+                  ? stores.find((s) => s.id === placedPickupId)
+                  : stores.find((s) => s.id === warehouseId)
+              const waNum = (waStore?.whatsapp || '').replace(/[^0-9]/g, '')
+              if (!waNum) return null
+              const payLabel =
+                placedPayment === 'transfer' ? 'Transferencia'
+                : placedPayment === 'stripe' ? 'Tarjeta'
+                : placedPayment === 'paypal' ? 'PayPal'
+                : 'Efectivo'
+              const itemLines = placedItems
+                .map((i) => `   ${i.qty}x ${i.name} (${price(i.priceCents * i.qty)})`)
+                .join('\n')
+              const lines = [
+                '🛒 *Nuevo Pedido GangaLoo*',
+                `👤 ${name}  📞 ${phone}`,
+                `📍 Tienda: ${waStore?.name ?? ''}`,
+                `🔑 ${invoice}`,
+                '━━━━━━━━━━━━',
+                '📦 *Productos:*',
+                itemLines,
+                `💰 *Total: ${price(placedSurcharge > 0 ? placedAmountDue : placedTotal)}*`,
+                '━━━━━━━━━━━━',
+                `🚚 ${fulfillLabel()}`,
+                `💳 Pago: ${payLabel}`,
+              ]
+              const waText = encodeURIComponent(lines.join('\n'))
+              return (
+                <a
+                  href={`https://wa.me/${waNum}?text=${waText}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-4 flex items-center justify-center gap-2 rounded-full px-6 py-3 text-[14px] font-semibold text-white"
+                  style={{ background: '#25D366' }}
+                >
+                  {locale === 'en' ? 'Send my order via WhatsApp' : 'Enviar mi pedido por WhatsApp'}
+                </a>
+              )
+            })()}
             <Link href={storeHref} className="mt-4 inline-block rounded-full px-6 py-2.5 text-[13px] font-semibold text-white" style={{ background: RED }}>{ts(locale, 'shop.keepShopping')}</Link>
           </div>
         ) : cart.items.length === 0 ? (
@@ -480,6 +721,34 @@ export function CheckoutView({
                       <option value="national">{tx.regionNational} · {price(deliveryFees.nationalDeliveryCents)}</option>
                     </select>
                   </div>
+
+                  <div>
+                    <label className="mb-1 block text-[12px]" style={{ color: MUTED }}>{tx.mapTitle} *</label>
+                    <DeliveryMap
+                      lat={deliveryLat}
+                      lng={deliveryLng}
+                      onChange={(la, ln) => { setDeliveryLat(la); setDeliveryLng(ln) }}
+                      hint={tx.pinHint}
+                      locateLabel={tx.useMyLocation}
+                    />
+                  </div>
+
+                  <div className="flex gap-3">
+                    <div className="flex-1">
+                      <label className="mb-1 block text-[12px]" style={{ color: MUTED }}>{tx.dateLabel} *</label>
+                      <input type="date" value={deliveryDate} min={new Date().toISOString().slice(0, 10)} onChange={(e) => setDeliveryDate(e.target.value)} style={inputStyle} />
+                    </div>
+                    <div className="flex-1">
+                      <label className="mb-1 block text-[12px]" style={{ color: MUTED }}>{tx.timeLabel} *</label>
+                      <select value={deliveryTime} onChange={(e) => setDeliveryTime(e.target.value)} style={inputStyle}>
+                        <option value="">—</option>
+                        {deliverySlots().map((s) => (
+                          <option key={s.value} value={s.value}>{s.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                  <p className="text-[11px]" style={{ color: MUTED }}>{tx.windowHint}</p>
                 </div>
               )}
             </section>

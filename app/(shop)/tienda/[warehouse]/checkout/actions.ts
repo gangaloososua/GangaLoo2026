@@ -10,6 +10,7 @@ import { createClient } from '@/lib/supabase/server'
 import { resolveStoreWarehouse } from '@/lib/store/catalog'
 import { getStripe } from '@/lib/stripe'
 import { createPaypalOrder } from '@/lib/paypal'
+import { notifyNewOrder } from '@/lib/notify'
 
 export type PlaceOrderInput = {
   warehouseSlug: string
@@ -20,6 +21,9 @@ export type PlaceOrderInput = {
   paymentMethod: 'cash' | 'transfer' | 'stripe' | 'paypal'
   shippingAddress?: string
   shippingCity?: string
+  deliveryLat?: number
+  deliveryLng?: number
+  deliveryAt?: string
   items: { product_id: string; qty: number }[]
 }
 
@@ -64,8 +68,11 @@ export async function placeOnlineOrder(
       pickup_warehouse_id: input.pickupWarehouseId ?? null,
       delivery_region: input.deliveryRegion ?? null,
       payment_method: input.paymentMethod,
-      shipping_address: input.shippingAddress ?? null,
+    shipping_address: input.shippingAddress ?? null,
       shipping_city: input.shippingCity ?? null,
+      delivery_lat: input.deliveryLat ?? null,
+      delivery_lng: input.deliveryLng ?? null,
+      delivery_at: input.deliveryAt ?? null,
       items: input.items,
     }
 
@@ -97,6 +104,35 @@ export async function placeOnlineOrder(
       console.error('[placeOnlineOrder] unexpected result:', data)
       return { ok: false, error: 'unexpected result' }
     }
+    // Look up this warehouse's distributor CallMeBot contact (phone + key).
+    // Returns null unless the distributor has set BOTH fields, so it is safe
+    // and dormant until a distributor is onboarded.
+    let distributor: { phone: string; apikey: string } | null = null
+    try {
+      const { data: distData } = await supabase.rpc(
+        'get_warehouse_distributor_contact',
+        { p_warehouse_id: warehouse.id },
+      )
+      const d = distData as { phone?: string; apikey?: string } | null
+      if (d?.phone && d?.apikey) distributor = { phone: d.phone, apikey: d.apikey }
+    } catch (e) {
+      console.error('[placeOnlineOrder] distributor lookup failed:', e)
+    }
+
+    // Owner WhatsApp alert. Fires on every order placed (paid or not).
+    // notifyNewOrder never throws, so it cannot break checkout.
+    await notifyNewOrder({
+      orderCode: res.invoice_number,
+      warehouseName: warehouse.name,
+      distributor,
+      customerName: input.customer.name,
+      totalLabel: `RD$ ${((res.total_cents ?? 0) / 100).toLocaleString('es-DO', { minimumFractionDigits: 2 })}`,
+      fulfilment: input.fulfillment,
+      deliveryAt: input.deliveryAt
+        ? new Date(input.deliveryAt).toLocaleString('es-DO', { timeZone: 'America/Santo_Domingo', dateStyle: 'medium', timeStyle: 'short' })
+        : null,
+    })
+
     return {
       ok: true,
       saleId: res.sale_id ?? '',

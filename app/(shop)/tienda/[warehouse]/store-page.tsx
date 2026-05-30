@@ -48,6 +48,7 @@ const ICON = {
   share: 'M4 12v8h16v-8M12 15V4M8 8l4-4 4 4',
   chat: 'M4 5h16v10H8l-4 4z',
   link: 'M10 13a5 5 0 0 0 7 0l2-2a5 5 0 0 0-7-7l-1 1M14 11a5 5 0 0 0-7 0l-2 2a5 5 0 0 0 7 7l1-1',
+  filter: 'M3 5h18M6 12h12M10 19h4',
 }
 
 function ProductCard({
@@ -90,40 +91,43 @@ function ProductCard({
           )}
         </div>
 
-        <div className="p-3 pr-12">
+        <div className="px-3 pt-3">
           {p.category && (
             <p className="mb-1 text-[11px] uppercase tracking-wide" style={{ color: MUTED }}>{p.category.name}</p>
           )}
-          <p className="mb-2 text-[13px] leading-snug" style={{ color: INK, minHeight: 34 }}>{p.name}</p>
-          <div>
-            {p.isOffer && (
-              <span className="block text-[11px] line-through" style={{ color: '#9aa3b2' }}>{price(p.basePriceCents)}</span>
-            )}
-            <span className="text-[15px] font-semibold" style={{ color: p.isOffer ? RED : NAVY }}>{price(p.priceCents)}</span>
-          </div>
+          <p className="text-[13px] leading-snug" style={{ color: INK, minHeight: 34 }}>{p.name}</p>
         </div>
       </Link>
 
-      <button
-        type="button"
-        onClick={(e) => { e.preventDefault(); e.stopPropagation(); onShare(p) }}
-        aria-label={locale === 'es' ? 'Compartir' : 'Share'}
-        className="absolute bottom-3 right-14 flex h-9 w-9 items-center justify-center rounded-full bg-white transition active:scale-95"
-        style={{ border: '1px solid #eceef2', color: NAVY }}
-      >
-        <Icon d={ICON.share} size={15} />
-      </button>
-
-      <button
-        type="button"
-        onClick={() => onAdd(p)}
-        disabled={out}
-        aria-label={ts(locale, 'shop.add')}
-        className="absolute bottom-3 right-3 flex h-9 w-9 items-center justify-center rounded-full text-white transition active:scale-95 disabled:opacity-40"
-        style={{ background: NAVY }}
-      >
-        <Icon d={ICON.plus} size={18} />
-      </button>
+      <div className="flex items-center justify-between gap-1.5 px-3 pb-3 pt-1.5">
+        <div className="min-w-0 flex-1">
+          {p.isOffer && (
+            <span className="block text-[10px] leading-none line-through" style={{ color: '#9aa3b2' }}>{price(p.basePriceCents)}</span>
+          )}
+          <span className="block whitespace-nowrap text-[14px] font-semibold" style={{ color: p.isOffer ? RED : NAVY }}>{price(p.priceCents)}</span>
+        </div>
+        <div className="flex flex-shrink-0 items-center gap-1">
+          <button
+            type="button"
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); onShare(p) }}
+            aria-label={locale === 'es' ? 'Compartir' : 'Share'}
+            className="flex h-8 w-8 items-center justify-center rounded-full bg-white transition active:scale-95"
+            style={{ border: '1px solid #eceef2', color: NAVY }}
+          >
+            <Icon d={ICON.share} size={14} />
+          </button>
+          <button
+            type="button"
+            onClick={() => onAdd(p)}
+            disabled={out}
+            aria-label={ts(locale, 'shop.add')}
+            className="flex h-8 w-8 items-center justify-center rounded-full text-white transition active:scale-95 disabled:opacity-40"
+            style={{ background: NAVY }}
+          >
+            <Icon d={ICON.plus} size={16} />
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
@@ -199,6 +203,7 @@ export function StorePage({ catalog, stores = [] }: { catalog: StoreCatalog; sto
   const [bump, setBump] = useState(false)
   const [storeMenu, setStoreMenu] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [filtersOpen, setFiltersOpen] = useState(false)
   const [shareProduct, setShareProduct] = useState<StoreProduct | null>(null)
   const [shareCopied, setShareCopied] = useState(false)
 
@@ -410,18 +415,20 @@ export function StorePage({ catalog, stores = [] }: { catalog: StoreCatalog; sto
         .gl-pop { animation: glpop .35s ease }
         @keyframes gldrawer { from { transform: translateX(-100%) } to { transform: none } }
         .gl-drawer { animation: gldrawer .22s ease both }
+        @keyframes glsheet { from { transform: translateY(100%) } to { transform: none } }
+        .gl-sheet { animation: glsheet .24s ease both }
       `}</style>
 
       <header className="sticky top-0 z-30" style={{ background: NAVY, color: '#fff' }}>
         <div className="mx-auto w-full max-w-[1100px] px-4 pt-3 pb-3">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <button type="button" aria-label="menu" onClick={() => setMenuOpen(true)} className="opacity-90 transition active:scale-90"><Icon d={ICON.menu} /></button>
+            <div className="flex min-w-0 flex-1 items-center gap-2">
+              <button type="button" aria-label="menu" onClick={() => setMenuOpen(true)} className="flex-shrink-0 opacity-90 transition active:scale-90"><Icon d={ICON.menu} />   </button>
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/logo-g.png" alt="GangaLoo" className="h-9 w-9 object-contain" />
-              <span className="text-[20px] font-semibold tracking-wide whitespace-nowrap">GangaLoo <span className="font-normal opacity-90">{warehouse.name}</span></span>
+              <img src="/logo-g.png" alt="GangaLoo" className="h-9 w-9 flex-shrink-0 object-contain" />
+            <span className="truncate text-[18px] font-semibold tracking-wide sm:text-[20px]">GangaLoo <span className="hidden font-normal opacity-90 sm:inline">{warehouse.name}</span></span>
             </div>
-            <div className="flex items-center gap-4">
+            <div className="flex flex-shrink-0 items-center gap-4 pl-2">
               <div className="flex overflow-hidden rounded-full text-[11px]" style={{ border: '1px solid rgba(255,255,255,.5)' }}>
                 <button onClick={() => setLocale('es')} className="px-2.5 py-1 transition" style={locale === 'es' ? { background: '#fff', color: NAVY } : { color: '#cdd8ee' }}>ES</button>
                 <button onClick={() => setLocale('en')} className="px-2.5 py-1 transition" style={locale === 'en' ? { background: '#fff', color: NAVY } : { color: '#cdd8ee' }}>EN</button>
@@ -548,19 +555,29 @@ export function StorePage({ catalog, stores = [] }: { catalog: StoreCatalog; sto
         />
       )}
 
-      {!searching &&
-        attributes.map((attr) => (
-          <AttributeBar
-            key={attr.id}
-            attr={attr}
-            selected={selectedValues}
-            clearLabel={ts(locale, 'shop.all')}
-            onToggle={toggleValue}
-            onClear={() => clearAttribute(attr.id)}
-          />
-        ))}
-  {!searching && attributes.length > 0 && (
-        <div className="mx-auto flex w-full max-w-[1100px] flex-wrap items-center gap-2 px-4 pb-4 sm:flex">
+    {/* Mobile: a single Filtros button that opens the full-height sheet */}
+      {!searching && attributes.length > 0 && (
+        <div className="mx-auto w-full max-w-[1100px] px-4 pb-4 sm:hidden">
+          <button
+            type="button"
+            onClick={() => setFiltersOpen(true)}
+            className="flex h-11 w-full items-center justify-center gap-2 rounded-xl text-[14px] font-semibold transition active:scale-95"
+            style={{ background: '#fff', color: NAVY, border: `1.5px solid ${NAVY}` }}
+          >
+            <Icon d={ICON.filter} size={18} />
+            <span>{locale === 'es' ? 'Filtros' : 'Filters'}</span>
+            {selectedValues.size > 0 && (
+              <span className="flex min-w-[20px] items-center justify-center rounded-full px-1.5 text-[11px] font-semibold text-white" style={{ height: 20, background: RED }}>
+                {selectedValues.size}
+              </span>
+            )}
+          </button>
+        </div>
+      )}
+
+      {/* Desktop: inline dropdown bar (same as before, now desktop-only) */}
+      {!searching && attributes.length > 0 && (
+        <div className="mx-auto hidden w-full max-w-[1100px] flex-wrap items-center gap-2 px-4 pb-4 sm:flex">
           {attributes.map((attr) => (
             <AttributeDropdown
               key={attr.id}
@@ -694,6 +711,18 @@ export function StorePage({ catalog, stores = [] }: { catalog: StoreCatalog; sto
             </div>
           </div>
         </div>
+      )}
+
+     {filtersOpen && !searching && (
+        <MobileFilters
+          attributes={attributes}
+          selected={selectedValues}
+          resultCount={filtered.length}
+          onToggle={toggleValue}
+          onClearAll={clearAllAttributes}
+          onClose={() => setFiltersOpen(false)}
+          locale={locale}
+        />
       )}
 
       {shareProduct && (
@@ -893,30 +922,177 @@ function AttributeDropdown({
     </div>
   )
 }
-function AttributeBar({
-  attr,
+
+// Full-height mobile filter sheet: collapsible sections, color swatches, a size
+// strip for "Pulgadas", an active-chip row, and a sticky results button.
+function MobileFilters({
+  attributes,
   selected,
-  clearLabel,
+  resultCount,
   onToggle,
-  onClear,
+  onClearAll,
+  onClose,
+  locale,
 }: {
-  attr: { id: string; name: string; values: { id: string; value: string }[] }
+  attributes: { id: string; name: string; values: { id: string; value: string }[] }[]
   selected: Set<string>
-  clearLabel: string
+  resultCount: number
   onToggle: (valueId: string) => void
-  onClear: () => void
+  onClearAll: () => void
+  onClose: () => void
+  locale: Locale
 }) {
-  const anySelected = attr.values.some((v) => selected.has(v.id))
+  const chips: { id: string; label: string }[] = []
+  for (const a of attributes)
+    for (const v of a.values) if (selected.has(v.id)) chips.push({ id: v.id, label: v.value })
+
+  const [expanded, setExpanded] = useState<Set<string>>(() => {
+    const s = new Set<string>()
+    for (const a of attributes) if (a.values.some((v) => selected.has(v.id))) s.add(a.id)
+    return s
+  })
+  const toggleSection = (id: string) =>
+    setExpanded((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+
+  useEffect(() => {
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => { document.body.style.overflow = prev }
+  }, [])
+
+  const seeLabel =
+    locale === 'es' ? `Ver ${resultCount} productos` : `View ${resultCount} products`
+
   return (
-    <div className="relative mx-auto w-full max-w-[1100px] px-4 pb-3 sm:hidden">
-      <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide" style={{ color: MUTED }}>
-        {attr.name}
-      </p>
-      <div className="gl-chips flex gap-2 overflow-x-auto scroll-smooth">
-        <Chip label={clearLabel} active={!anySelected} onClick={onClear} />
-        {attr.values.map((v) => (
-          <Chip key={v.id} label={v.value} active={selected.has(v.id)} onClick={() => onToggle(v.id)} />
-        ))}
+    <div className="fixed inset-0 z-[60] sm:hidden">
+      <button
+        type="button"
+        aria-label={locale === 'es' ? 'Cerrar filtros' : 'Close filters'}
+        onClick={onClose}
+        className="absolute inset-0"
+        style={{ background: 'rgba(10,16,28,.45)' }}
+      />
+      <div className="gl-sheet absolute inset-x-0 bottom-0 top-[6%] flex flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl">
+        <div className="flex items-center justify-between px-4 py-3.5" style={{ borderBottom: '1px solid #eceef2' }}>
+          <button type="button" aria-label={locale === 'es' ? 'Cerrar' : 'Close'} onClick={onClose} style={{ color: MUTED }}>
+            <Icon d="M6 6l12 12M18 6L6 18" size={20} />
+          </button>
+          <span className="text-[15px] font-semibold" style={{ color: INK }}>{locale === 'es' ? 'Filtros' : 'Filters'}</span>
+          <button
+            type="button"
+            onClick={onClearAll}
+            disabled={chips.length === 0}
+            className="text-[13px] underline disabled:opacity-30"
+            style={{ color: MUTED }}
+          >
+            {locale === 'es' ? 'Limpiar' : 'Clear'}
+          </button>
+        </div>
+
+        {chips.length > 0 && (
+          <div className="flex flex-wrap gap-2 px-4 py-3" style={{ borderBottom: '1px solid #eceef2' }}>
+            {chips.map((c) => (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => onToggle(c.id)}
+                className="flex h-7 items-center gap-1.5 rounded-full px-2.5 text-[12px]"
+                style={{ background: '#eaf2ff', color: NAVY }}
+              >
+                <span>{c.label}</span>
+                <Icon d="M6 6l12 12M18 6L6 18" size={12} />
+              </button>
+            ))}
+          </div>
+        )}
+
+        <div className="flex-1 overflow-y-auto">
+          {attributes.map((attr) => {
+            const isColor = attr.name.trim().toLowerCase().includes('color')
+            const isSize = attr.name.trim().toLowerCase().includes('pulgada')
+            const open = expanded.has(attr.id)
+            const sel = attr.values.filter((v) => selected.has(v.id))
+            return (
+              <div key={attr.id} style={{ borderBottom: '1px solid #f0f1f4' }}>
+                <button
+                  type="button"
+                  onClick={() => toggleSection(attr.id)}
+                  className="flex w-full items-center justify-between px-4 py-4 text-left"
+                >
+                  <span className="text-[16px]" style={{ color: INK }}>{attr.name}</span>
+                  <span className="flex items-center gap-2">
+                    {!open && sel.length > 0 && (
+                      <span className="text-[13px]" style={{ color: NAVY, fontWeight: 600 }}>
+                        {sel.map((v) => v.value).join(', ')}
+                      </span>
+                    )}
+                    <span style={{ color: MUTED, display: 'inline-flex', transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }}>
+                      <Icon d={ICON.chevron} size={18} />
+                    </span>
+                  </span>
+                </button>
+
+                {open && (
+                  <div className="px-4 pb-4">
+                    {isColor ? (
+                      <div className="flex flex-wrap gap-4">
+                        {attr.values.map((v) => {
+                          const on = selected.has(v.id)
+                          const sw = swatchFor(v.value)
+                          return (
+                            <button key={v.id} type="button" onClick={() => onToggle(v.id)} className="flex flex-col items-center gap-1.5" style={{ width: 64 }}>
+                              <span className="rounded-full" style={{ width: 48, height: 48, background: sw ?? '#d7dde6', border: on ? `3px solid ${NAVY}` : '1px solid rgba(0,0,0,.12)' }} />
+                              <span className="text-center text-[11px] leading-tight" style={{ color: on ? INK : MUTED, fontWeight: on ? 600 : 400 }}>{v.value}</span>
+                            </button>
+                          )
+                        })}
+                      </div>
+                    ) : isSize ? (
+                      <div className="flex flex-wrap gap-2.5">
+                        {attr.values.map((v) => {
+                          const on = selected.has(v.id)
+                          return (
+                            <button key={v.id} type="button" onClick={() => onToggle(v.id)} className="flex h-12 min-w-[60px] items-center justify-center rounded-xl px-3 text-[14px] transition active:scale-95" style={on ? { border: `2px solid ${INK}`, color: INK, fontWeight: 700 } : { border: '1px solid #d7dde6', color: INK }}>
+                              {v.value}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    ) : (
+                      <div className="flex flex-col">
+                        {attr.values.map((v) => {
+                          const on = selected.has(v.id)
+                          return (
+                            <button key={v.id} type="button" onClick={() => onToggle(v.id)} className="flex items-center justify-between py-2.5 text-left text-[14px]" style={{ color: on ? NAVY : INK, fontWeight: on ? 600 : 400 }}>
+                              <span>{v.value}</span>
+                              {on && <Icon d="M5 12l4 4 10-10" size={16} />}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+
+        <div className="px-4 py-3" style={{ borderTop: '1px solid #eceef2' }}>
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex h-12 w-full items-center justify-center rounded-xl text-[15px] font-semibold text-white transition active:scale-95"
+            style={{ background: INK }}
+          >
+            {seeLabel}
+          </button>
+        </div>
       </div>
     </div>
   )

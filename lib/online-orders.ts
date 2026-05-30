@@ -166,6 +166,9 @@ export type OnlineOrderDetail = {
   shippingAddress: string | null
   shippingCity: string | null
   deliveryNotes: string | null
+  deliveryLat: number | null
+  deliveryLng: number | null
+  deliveryAt: string | null
   trackingNumber: string | null
   refundReason: string | null
 
@@ -238,6 +241,9 @@ type RawSaleDetailRow = RawSaleListRow & {
   shipping_address: string | null
   shipping_city: string | null
   delivery_notes: string | null
+  delivery_lat: number | null
+  delivery_lng: number | null
+  delivery_at: string | null
   tracking_number: string | null
   refund_reason: string | null
   updated_at: string
@@ -471,6 +477,7 @@ export async function getOnlineOrderById(
         'paid_cents, cogs_cents, gross_profit_cents, sold_at, ' +
         'confirmed_at, paid_at, dispatched_at, delivered_at, ' +
         'refunded_at, shipping_address, shipping_city, delivery_notes, ' +
+        'delivery_lat, delivery_lng, delivery_at, ' +
         'tracking_number, refund_reason, created_at, updated_at',
     )
     .eq('id', id)
@@ -755,6 +762,9 @@ export async function getOnlineOrderById(
     shippingAddress: sale.shipping_address,
     shippingCity: sale.shipping_city,
     deliveryNotes: sale.delivery_notes,
+    deliveryLat: sale.delivery_lat,
+    deliveryLng: sale.delivery_lng,
+    deliveryAt: sale.delivery_at,
     trackingNumber: sale.tracking_number,
     refundReason: sale.refund_reason,
     items,
