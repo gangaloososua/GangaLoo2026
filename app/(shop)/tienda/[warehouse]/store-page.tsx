@@ -417,7 +417,9 @@ export function StorePage({ catalog, stores = [] }: { catalog: StoreCatalog; sto
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <button type="button" aria-label="menu" onClick={() => setMenuOpen(true)} className="opacity-90 transition active:scale-90"><Icon d={ICON.menu} /></button>
-              <span className="text-[20px] font-semibold tracking-wide">GangaLoo</span>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/logo-g.png" alt="GangaLoo" className="h-9 w-9 object-contain" />
+              <span className="text-[20px] font-semibold tracking-wide whitespace-nowrap">GangaLoo <span className="font-normal opacity-90">{warehouse.name}</span></span>
             </div>
             <div className="flex items-center gap-4">
               <div className="flex overflow-hidden rounded-full text-[11px]" style={{ border: '1px solid rgba(255,255,255,.5)' }}>
@@ -623,7 +625,7 @@ export function StorePage({ catalog, stores = [] }: { catalog: StoreCatalog; sto
           />
           <div className="gl-drawer absolute left-0 top-0 flex h-full w-[82%] max-w-[320px] flex-col bg-white shadow-2xl">
             <div className="flex items-center justify-between px-4 py-4" style={{ background: NAVY, color: '#fff' }}>
-              <span className="text-[18px] font-semibold tracking-wide">GangaLoo</span>
+              <span className="text-[18px] font-semibold tracking-wide">GangaLoo <span className="font-normal opacity-90">{warehouse.name}</span></span>
               <button type="button" aria-label={locale === 'es' ? 'Cerrar' : 'Close'} onClick={() => setMenuOpen(false)} className="opacity-90 transition active:scale-90">
                 <Icon d="M6 6l12 12M18 6L6 18" size={22} />
               </button>
