@@ -1,5 +1,13 @@
 import Link from 'next/link'
-import { LineChart, Scale, Boxes, Receipt, Users, HandCoins } from 'lucide-react'
+import {
+  LineChart,
+  Scale,
+  Boxes,
+  Receipt,
+  Users,
+  HandCoins,
+  Wallet,
+} from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
 import { requireOwner } from '@/lib/auth/guard'
@@ -49,6 +57,13 @@ const REPORTS: ReportCard[] = [
     description: 'Who owes you and how overdue each balance is.',
     href: '/reports/receivables',
     icon: Receipt,
+    ready: true,
+  },
+  {
+    label: 'Who owes me',
+    description: 'Every person who owes you — customers plus sellers holding Walk-in cash — in one list.',
+    href: '/reports/who-owes',
+    icon: Wallet,
     ready: true,
   },
   {
