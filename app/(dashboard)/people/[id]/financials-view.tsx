@@ -2,14 +2,17 @@
 
 // Person financials — collapsible layout.
 //
-// Stat cards stay always-visible (the headline numbers). Each list
-// (Invoices / Payments / Commissions) is a collapsible section, closed by
-// default, with a count + total shown on the closed bar so you read the
-// headline without opening. The Invoices section has a status + period
-// filter that narrows the rows (rather than hard-grouping them).
+// Stat cards stay always-visible (the headline numbers). Each list is a
+// collapsible section, closed by default, with a count + total on the closed
+// bar so you read the headline without opening. Invoices sections carry a
+// status + period filter that narrows the rows (rather than hard-grouping).
+//
+// Customer side: their invoices + their payments + what they owe.
+// Seller side:  commissions (earned/paid/owed) AND — keyed on sales.seller_id —
+//               the invoices they SOLD and the payments collected on those.
 //
 // Client component: folding + filtering need local state. Consumes the same
-// PersonFinancials prop the server page already passes — no data-layer change.
+// PersonFinancials prop the server page already passes — no page.tsx change.
 
 import { useMemo, useState } from 'react'
 import { ChevronDown } from 'lucide-react'
@@ -25,7 +28,11 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { formatDOP, formatDate } from '@/lib/format'
-import type { PersonFinancials } from '@/lib/person-financials'
+import type {
+  PersonFinancials,
+  PersonSaleRow,
+  PersonPaymentRow,
+} from '@/lib/person-financials'
 
 const SALE_STATUS_STYLES: Record<string, string> = {
   draft: 'bg-slate-100 text-slate-700',
@@ -44,8 +51,10 @@ const SALE_STATUS_LABEL: Record<string, string> = {
   cancelled: 'Cancelled',
 }
 
+const DASH = '\u2014'
+
 // ============================================================
-// Stat card (unchanged)
+// Stat card
 // ============================================================
 
 function StatCard({
@@ -110,9 +119,7 @@ function CollapsibleSection({
             }`}
           />
           <span className="text-base font-semibold">{title}</span>
-          <span className="text-xs text-muted-foreground">
-            ({count})
-          </span>
+          <span className="text-xs text-muted-foreground">({count})</span>
         </div>
         <span className="shrink-0 text-sm font-medium tabular-nums text-muted-foreground">
           {totalLabel}
@@ -141,6 +148,13 @@ const PERIOD_LABEL: Record<PeriodFilter, string> = {
   this_year: 'This year',
 }
 
+const STATUS_FILTERS: Array<{ value: InvoiceStatusFilter; label: string }> = [
+  { value: 'all', label: 'All' },
+  { value: 'paid', label: 'Paid' },
+  { value: 'open', label: 'Open' },
+  { value: 'other', label: 'Cancelled / refunded' },
+]
+
 function periodStartDate(period: PeriodFilter): Date | null {
   if (period === 'all') return null
   const now = new Date()
@@ -153,28 +167,25 @@ function periodStartDate(period: PeriodFilter): Date | null {
 }
 
 // ============================================================
-// Main view
+// Reusable Invoices panel (used by both customer and seller sides)
+// Each instance keeps its own filter state.
 // ============================================================
 
-export function PersonFinancialsView({
-  financials,
-  role,
+function InvoicesPanel({
+  title,
+  sales,
+  emptyLabel,
 }: {
-  financials: PersonFinancials
-  role: string
+  title: string
+  sales: PersonSaleRow[]
+  emptyLabel: string
 }) {
-  const c = financials.customer
-  const s = financials.seller
-  const showCustomer = role === 'customer' || c.sales_count > 0
-  const showSeller = role === 'seller' || role === 'distributor' || s.count > 0
-
-  // Invoice filters (live inside the Invoices section)
   const [statusFilter, setStatusFilter] = useState<InvoiceStatusFilter>('all')
   const [period, setPeriod] = useState<PeriodFilter>('all')
 
-  const filteredSales = useMemo(() => {
+  const filtered = useMemo(() => {
     const start = periodStartDate(period)
-    return c.sales.filter((sale) => {
+    return sales.filter((sale) => {
       if (statusFilter === 'paid' && sale.status !== 'paid') return false
       if (
         statusFilter === 'open' &&
@@ -195,23 +206,204 @@ export function PersonFinancialsView({
       }
       return true
     })
-  }, [c.sales, statusFilter, period])
+  }, [sales, statusFilter, period])
 
-  // Closed-bar totals (always reflect the full lists, not the filter)
-  const invoicesTotal = useMemo(
-    () => sumCents(c.sales, (x) => x.total_cents),
-    [c.sales],
+  const total = useMemo(() => sumCents(sales, (x) => x.total_cents), [sales])
+  const filterActive = statusFilter !== 'all' || period !== 'all'
+
+  return (
+    <CollapsibleSection title={title} count={sales.length} totalLabel={formatDOP(total)}>
+      {sales.length === 0 ? (
+        <div className="px-4 py-3 text-sm text-muted-foreground">{emptyLabel}</div>
+      ) : (
+        <>
+          <div className="flex flex-wrap items-center gap-3 border-b bg-muted/30 px-4 py-3">
+            <div className="flex flex-wrap gap-1">
+              {STATUS_FILTERS.map((f) => (
+                <Button
+                  key={f.value}
+                  type="button"
+                  size="sm"
+                  variant={statusFilter === f.value ? 'default' : 'outline'}
+                  onClick={() => setStatusFilter(f.value)}
+                >
+                  {f.label}
+                </Button>
+              ))}
+            </div>
+            <select
+              value={period}
+              onChange={(e) => setPeriod(e.target.value as PeriodFilter)}
+              className="ml-auto flex h-8 rounded-md border border-input bg-background px-2 text-sm shadow-sm"
+            >
+              {(Object.keys(PERIOD_LABEL) as PeriodFilter[]).map((p) => (
+                <option key={p} value={p}>
+                  {PERIOD_LABEL[p]}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {filterActive ? (
+            <div className="px-4 py-2 text-xs text-muted-foreground">
+              Showing {filtered.length} of {sales.length} invoices
+            </div>
+          ) : null}
+
+          {filtered.length === 0 ? (
+            <div className="px-4 py-3 text-sm text-muted-foreground">
+              No invoices match this filter.
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Invoice</TableHead>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Total</TableHead>
+                  <TableHead className="text-right">Paid</TableHead>
+                  <TableHead className="text-right">Outstanding</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filtered.map((sale) => (
+                  <TableRow key={sale.id}>
+                    <TableCell className="font-mono text-xs">
+                      {sale.invoice_number ?? DASH}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {formatDate(sale.sold_at)}
+                    </TableCell>
+                    <TableCell>
+                      <Badge
+                        variant="secondary"
+                        className={SALE_STATUS_STYLES[sale.status] ?? ''}
+                      >
+                        {SALE_STATUS_LABEL[sale.status] ?? sale.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {formatDOP(sale.total_cents)}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums text-muted-foreground">
+                      {formatDOP(sale.paid_cents)}
+                    </TableCell>
+                    <TableCell className="text-right font-medium tabular-nums">
+                      {sale.outstanding_cents > 0 ? (
+                        <span className="text-rose-700">
+                          {formatDOP(sale.outstanding_cents)}
+                        </span>
+                      ) : (
+                        DASH
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </>
+      )}
+    </CollapsibleSection>
   )
-  const paymentsTotal = useMemo(
-    () => sumCents(c.payments, (x) => x.amount_cents),
-    [c.payments],
+}
+
+// ============================================================
+// Reusable Payments panel
+// ============================================================
+
+function PaymentsPanel({
+  title,
+  payments,
+  emptyLabel,
+}: {
+  title: string
+  payments: PersonPaymentRow[]
+  emptyLabel: string
+}) {
+  const total = useMemo(() => sumCents(payments, (x) => x.amount_cents), [payments])
+
+  return (
+    <CollapsibleSection
+      title={title}
+      count={payments.length}
+      totalLabel={formatDOP(total)}
+    >
+      {payments.length === 0 ? (
+        <div className="px-4 py-3 text-sm text-muted-foreground">{emptyLabel}</div>
+      ) : (
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Date</TableHead>
+              <TableHead>Invoice</TableHead>
+              <TableHead>Method</TableHead>
+              <TableHead>Reference</TableHead>
+              <TableHead className="text-right">Amount</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {payments.map((p) => (
+              <TableRow key={p.id}>
+                <TableCell className="text-muted-foreground">
+                  {formatDate(p.paid_at)}
+                </TableCell>
+                <TableCell className="font-mono text-xs">
+                  {p.invoice_number ?? DASH}
+                </TableCell>
+                <TableCell className="capitalize">{p.method}</TableCell>
+                <TableCell className="text-muted-foreground">
+                  {p.reference ?? DASH}
+                </TableCell>
+                <TableCell className="text-right tabular-nums">
+                  {formatDOP(p.amount_cents)}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      )}
+    </CollapsibleSection>
   )
+}
+
+// ============================================================
+// Main view
+// ============================================================
+
+export function PersonFinancialsView({
+  financials,
+  role,
+}: {
+  financials: PersonFinancials
+  role: string
+}) {
+  const c = financials.customer
+  const s = financials.seller
+
+  // Defensive defaults: if the RPC hasn't been migrated yet, the new seller
+  // fields are undefined — treat them as empty rather than crashing.
+  const sellerSales = s.sales ?? []
+  const sellerPayments = s.payments ?? []
+  const sellerSoldCount = s.sold_count ?? 0
+  const sellerOpenCount = s.open_count ?? 0
+  const sellerLifetimeSold = s.lifetime_sold_cents ?? 0
+  const sellerSoldOutstanding = s.sold_outstanding_cents ?? 0
+  const sellerCollected = s.collected_cents ?? 0
+  const sellerPaymentsCount = s.payments_count ?? 0
+
+  const showCustomer = role === 'customer' || c.sales_count > 0
+  const showSeller =
+    role === 'seller' ||
+    role === 'distributor' ||
+    s.count > 0 ||
+    sellerSoldCount > 0
+
   const commissionsTotal = useMemo(
     () => sumCents(s.commissions, (x) => x.amount_cents),
     [s.commissions],
   )
-
-  const filterActive = statusFilter !== 'all' || period !== 'all'
 
   if (!showCustomer && !showSeller) {
     return (
@@ -222,13 +414,6 @@ export function PersonFinancialsView({
       </Card>
     )
   }
-
-  const STATUS_FILTERS: Array<{ value: InvoiceStatusFilter; label: string }> = [
-    { value: 'all', label: 'All' },
-    { value: 'paid', label: 'Paid' },
-    { value: 'open', label: 'Open' },
-    { value: 'other', label: 'Cancelled / refunded' },
-  ]
 
   return (
     <div className="space-y-6">
@@ -254,172 +439,55 @@ export function PersonFinancialsView({
             />
           </div>
 
-          {/* Invoices */}
-          <CollapsibleSection
-            title="Invoices"
-            count={c.sales.length}
-            totalLabel={formatDOP(invoicesTotal)}
-          >
-            {c.sales.length === 0 ? (
-              <div className="px-4 py-3 text-sm text-muted-foreground">
-                No invoices.
-              </div>
-            ) : (
-              <>
-                <div className="flex flex-wrap items-center gap-3 border-b bg-muted/30 px-4 py-3">
-                  <div className="flex flex-wrap gap-1">
-                    {STATUS_FILTERS.map((f) => (
-                      <Button
-                        key={f.value}
-                        type="button"
-                        size="sm"
-                        variant={statusFilter === f.value ? 'default' : 'outline'}
-                        onClick={() => setStatusFilter(f.value)}
-                      >
-                        {f.label}
-                      </Button>
-                    ))}
-                  </div>
-                  <select
-                    value={period}
-                    onChange={(e) => setPeriod(e.target.value as PeriodFilter)}
-                    className="ml-auto flex h-8 rounded-md border border-input bg-background px-2 text-sm shadow-sm"
-                  >
-                    {(Object.keys(PERIOD_LABEL) as PeriodFilter[]).map((p) => (
-                      <option key={p} value={p}>
-                        {PERIOD_LABEL[p]}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {filterActive ? (
-                  <div className="px-4 py-2 text-xs text-muted-foreground">
-                    Showing {filteredSales.length} of {c.sales.length} invoices
-                  </div>
-                ) : null}
-
-                {filteredSales.length === 0 ? (
-                  <div className="px-4 py-3 text-sm text-muted-foreground">
-                    No invoices match this filter.
-                  </div>
-                ) : (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Invoice</TableHead>
-                        <TableHead>Date</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead className="text-right">Total</TableHead>
-                        <TableHead className="text-right">Paid</TableHead>
-                        <TableHead className="text-right">Outstanding</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filteredSales.map((sale) => (
-                        <TableRow key={sale.id}>
-                          <TableCell className="font-mono text-xs">
-                            {sale.invoice_number ?? '—'}
-                          </TableCell>
-                          <TableCell className="text-muted-foreground">
-                            {formatDate(sale.sold_at)}
-                          </TableCell>
-                          <TableCell>
-                            <Badge
-                              variant="secondary"
-                              className={SALE_STATUS_STYLES[sale.status] ?? ''}
-                            >
-                              {SALE_STATUS_LABEL[sale.status] ?? sale.status}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-right tabular-nums">
-                            {formatDOP(sale.total_cents)}
-                          </TableCell>
-                          <TableCell className="text-right tabular-nums text-muted-foreground">
-                            {formatDOP(sale.paid_cents)}
-                          </TableCell>
-                          <TableCell className="text-right font-medium tabular-nums">
-                            {sale.outstanding_cents > 0 ? (
-                              <span className="text-rose-700">
-                                {formatDOP(sale.outstanding_cents)}
-                              </span>
-                            ) : (
-                              '—'
-                            )}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                )}
-              </>
-            )}
-          </CollapsibleSection>
-
-          {/* Payments */}
-          <CollapsibleSection
+          <InvoicesPanel title="Invoices" sales={c.sales} emptyLabel="No invoices." />
+          <PaymentsPanel
             title="Payments"
-            count={c.payments.length}
-            totalLabel={formatDOP(paymentsTotal)}
-          >
-            {c.payments.length === 0 ? (
-              <div className="px-4 py-3 text-sm text-muted-foreground">
-                No payments recorded.
-              </div>
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Invoice</TableHead>
-                    <TableHead>Method</TableHead>
-                    <TableHead>Reference</TableHead>
-                    <TableHead className="text-right">Amount</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {c.payments.map((p) => (
-                    <TableRow key={p.id}>
-                      <TableCell className="text-muted-foreground">
-                        {formatDate(p.paid_at)}
-                      </TableCell>
-                      <TableCell className="font-mono text-xs">
-                        {p.invoice_number ?? '—'}
-                      </TableCell>
-                      <TableCell className="capitalize">{p.method}</TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {p.reference ?? '—'}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {formatDOP(p.amount_cents)}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            )}
-          </CollapsibleSection>
+            payments={c.payments}
+            emptyLabel="No payments recorded."
+          />
         </div>
       )}
 
       {showSeller && (
         <div className="space-y-4">
           <h2 className="text-lg font-semibold">As seller</h2>
+
+          {/* Commission totals */}
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <StatCard
               label="Commissions earned"
               value={formatDOP(s.earned_cents)}
               sub={`${s.count} ${s.count === 1 ? 'commission' : 'commissions'}`}
             />
-            <StatCard label="Paid out" value={formatDOP(s.paid_cents)} />
+            <StatCard label="Commission paid out" value={formatDOP(s.paid_cents)} />
             <StatCard
-              label="Still owed"
+              label="Commission owed"
               value={formatDOP(s.owed_cents)}
               accent={s.owed_cents > 0 ? '#d97706' : undefined}
             />
           </div>
 
-          {/* Commissions */}
+          {/* Sold totals (invoices where this person is the seller) */}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <StatCard
+              label="Sold (lifetime)"
+              value={formatDOP(sellerLifetimeSold)}
+              sub={`${sellerSoldCount} ${sellerSoldCount === 1 ? 'invoice' : 'invoices'}`}
+            />
+            <StatCard
+              label="Outstanding on sales"
+              value={formatDOP(sellerSoldOutstanding)}
+              sub={`${sellerOpenCount} open`}
+              accent={sellerSoldOutstanding > 0 ? '#e11d48' : undefined}
+            />
+            <StatCard
+              label="Collected on sales"
+              value={formatDOP(sellerCollected)}
+              sub={`${sellerPaymentsCount} ${sellerPaymentsCount === 1 ? 'payment' : 'payments'}`}
+            />
+          </div>
+
+          {/* Commissions list */}
           <CollapsibleSection
             title="Commissions"
             count={s.commissions.length}
@@ -445,7 +513,7 @@ export function PersonFinancialsView({
                   {s.commissions.map((cm) => (
                     <TableRow key={cm.id}>
                       <TableCell className="font-mono text-xs">
-                        {cm.invoice_number ?? '—'}
+                        {cm.invoice_number ?? DASH}
                       </TableCell>
                       <TableCell className="text-muted-foreground">
                         {formatDate(cm.sold_at)}
@@ -475,6 +543,18 @@ export function PersonFinancialsView({
               </Table>
             )}
           </CollapsibleSection>
+
+          {/* Invoices sold + payments collected (the new bits) */}
+          <InvoicesPanel
+            title="Invoices sold"
+            sales={sellerSales}
+            emptyLabel="No invoices sold."
+          />
+          <PaymentsPanel
+            title="Payments collected"
+            payments={sellerPayments}
+            emptyLabel="No payments collected."
+          />
         </div>
       )}
     </div>

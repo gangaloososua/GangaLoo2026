@@ -2,7 +2,8 @@
 //
 // Thin wrapper around the read-only person_financials(uuid) RPC. Returns both
 // the customer side (their sales, their payments, what they owe) and the
-// seller side (commissions earned / paid / owed). All money in CENTS.
+// seller side (commissions earned / paid / owed, PLUS the invoices they sold
+// and the payments collected on those invoices). All money in CENTS.
 
 import { createClient } from '@/lib/supabase/server'
 
@@ -49,11 +50,21 @@ export type PersonFinancials = {
     payments: PersonPaymentRow[]
   }
   seller: {
+    // commissions (existing)
     earned_cents: number
     paid_cents: number
     owed_cents: number
     count: number
     commissions: PersonCommissionRow[]
+    // invoices sold + payments collected (keyed on sales.seller_id)
+    sold_count: number
+    open_count: number
+    lifetime_sold_cents: number
+    sold_outstanding_cents: number
+    collected_cents: number
+    payments_count: number
+    sales: PersonSaleRow[]
+    payments: PersonPaymentRow[]
   }
 }
 
