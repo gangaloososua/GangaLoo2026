@@ -202,7 +202,7 @@ export function StorePage({ catalog, stores = [] }: { catalog: StoreCatalog; sto
   const [shareProduct, setShareProduct] = useState<StoreProduct | null>(null)
   const [shareCopied, setShareCopied] = useState(false)
 
-  const { warehouse, products, offers, categories, attributes, dailyDeal, weeklyDeal } = catalog
+  const { warehouse, products, offers, categories, attributes, dailyDeal, weeklyDeal, isGuest, guestMarkupPct } = catalog
   const cart = useCart(warehouse.slug)
 
   // --- Shareable URL sync (slugs <-> selected value ids) ---------------------
@@ -506,6 +506,18 @@ export function StorePage({ catalog, stores = [] }: { catalog: StoreCatalog; sto
           <div className="flex-1" style={{ background: RED }} />
         </div>
       </header>
+
+      {isGuest && (guestMarkupPct ?? 0) > 0 && (
+        <a
+          href={accountHref}
+          className="block w-full text-center text-[13px] transition active:opacity-80"
+          style={{ background: '#eaf2ff', color: NAVY, padding: '8px 16px', borderBottom: '1px solid #d8e4f7' }}
+        >
+          {locale === 'es'
+            ? 'Inicia sesión y obtén mejores precios →'
+            : 'Sign in for better prices →'}
+        </a>
+      )}
 
       <section className="mx-auto w-full max-w-[1100px] px-4 pt-10 pb-5 sm:pt-12">
         <p className="mb-1 text-[11px] font-semibold uppercase tracking-[2px]" style={{ color: RED }}>{ts(locale, 'shop.eyebrow')}</p>

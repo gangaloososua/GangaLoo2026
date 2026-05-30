@@ -58,6 +58,8 @@ export type StoreCatalog = {
   attributes: StoreAttributeFacet[]
   dailyDeal: StoreDeal | null
   weeklyDeal: StoreDeal | null
+  isGuest?: boolean
+  guestMarkupPct?: number
 }
 
 export type StoreLandingDeal = {
@@ -359,6 +361,27 @@ export async function fetchStoreCatalog(
     for (const a of aRows ?? []) attrMeta.set(a.id, a)
   }
 
+  // Guest markup: visitors who are NOT logged in see prices marked up by the
+  // store's guest_markup % (logged-in clients see normal prices). Applied here
+  // so the product grid matches the checkout quote and the charge (both of which
+  // apply the same markup server-side).
+  const {
+    data: { user: authedUser },
+  } = await supabase.auth.getUser()
+  const isGuest = !authedUser
+  let guestMarkupPct = 0
+  if (isGuest) {
+    try {
+      const { data: cfg } = await supabase.rpc('get_store_public_config')
+      const raw = (cfg as { guest_markup?: unknown } | null)?.guest_markup
+      guestMarkupPct = Math.max(0, Number(raw ?? 0)) || 0
+    } catch {
+      guestMarkupPct = 0
+    }
+  }
+  const markupFrac = guestMarkupPct / 100
+  const mk = (c: number) => Math.round(c * (1 + markupFrac))
+
   const rows: StoreProduct[] = []
   for (const p of products) {
     const setting = settingByProduct.get(p.id)
@@ -396,8 +419,8 @@ export async function fetchStoreCatalog(
       sku: p.sku,
       name: p.name,
       slug: p.slug,
-      basePriceCents: compareAt,
-      priceCents: eff,
+      basePriceCents: mk(compareAt),
+      priceCents: mk(eff),
       isOffer,
       offerPercent: isOffer ? Math.round((1 - eff / compareAt) * 100) : 0,
       imageUrl: p.primary_image_url,
@@ -483,5 +506,5 @@ export async function fetchStoreCatalog(
         .map((v) => ({ id: v.id, value: v.value, slug: v.slug })),
     }))
 
-  return { warehouse, products: rows, offers, categories, attributes, dailyDeal, weeklyDeal }
+  return { warehouse, products: rows, offers, categories, attributes, dailyDeal, weeklyDeal, isGuest, guestMarkupPct }
 }
