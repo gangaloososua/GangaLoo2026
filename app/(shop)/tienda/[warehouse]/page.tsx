@@ -3,6 +3,7 @@
 // No auth: this is a public page. It resolves the warehouse from the slug,
 // loads that warehouse's catalog, and renders the client store UI.
 
+import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import {
   resolveStoreWarehouse,
@@ -12,6 +13,23 @@ import {
 import { StorePage } from './store-page'
 
 export const dynamic = 'force-dynamic'
+
+// Browser-tab + search title, per store (e.g. "GangaLoo Maranatha").
+// Overrides the app-wide default so the tab no longer shows "Create Next App".
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ warehouse: string }>
+}): Promise<Metadata> {
+  const { warehouse: slug } = await params
+  const warehouse = await resolveStoreWarehouse(slug)
+  const title = warehouse ? `GangaLoo ${warehouse.name}` : 'GangaLoo'
+  return {
+    title,
+    description:
+      'Extensiones de cabello de lujo — calidad profesional, resultados extraordinarios.',
+  }
+}
 
 export default async function WarehouseStorePage({
   params,
