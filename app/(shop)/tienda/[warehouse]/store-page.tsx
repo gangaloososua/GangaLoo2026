@@ -108,7 +108,7 @@ function ProductCard({
         type="button"
         onClick={(e) => { e.preventDefault(); e.stopPropagation(); onShare(p) }}
         aria-label={locale === 'es' ? 'Compartir' : 'Share'}
-        className="absolute bottom-3 left-3 flex h-9 w-9 items-center justify-center rounded-full bg-white transition active:scale-95"
+        className="absolute bottom-3 right-14 flex h-9 w-9 items-center justify-center rounded-full bg-white transition active:scale-95"
         style={{ border: '1px solid #eceef2', color: NAVY }}
       >
         <Icon d={ICON.share} size={15} />
