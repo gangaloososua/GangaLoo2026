@@ -14,13 +14,9 @@ import {
   type DashboardPeriodMode,
 } from '@/lib/dashboard'
 import { DashboardPeriodSwitcher } from './dashboard-period-switcher'
+import { RevenueExpenseChart } from './revenue-expense-chart'
 
 export const dynamic = 'force-dynamic'
-
-const MONTH_SHORT = [
-  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-]
 
 function parseMode(raw: string | undefined): DashboardPeriodMode {
   if (raw === 'last-30' || raw === 'this-year') return raw
@@ -154,12 +150,7 @@ export default async function DashboardPage({
       ? 'no stock'
       : `${invCovered} of ${invTotal} lots costed`
 
-  // Chart scaling
   const trend = d.monthly_trend
-  const trendMax = Math.max(
-    1,
-    ...trend.map((m) => Math.max(m.revenue_cents, m.expense_cents)),
-  )
 
   const topCats = d.expenses_by_category.slice(0, 8)
   const catMax = Math.max(1, ...topCats.map((c) => c.amount_cents))
@@ -247,33 +238,7 @@ export default async function DashboardPage({
             </div>
           </CardHeader>
           <CardContent>
-            {trend.length === 0 ? (
-              <p className="py-8 text-center text-sm text-muted-foreground">No data yet.</p>
-            ) : (
-              <div className="flex h-44 items-end gap-3">
-                {trend.map((m) => {
-                  const [, mm] = m.month.split('-')
-                  const lbl = MONTH_SHORT[Number(mm) - 1] ?? m.month
-                  return (
-                    <div key={m.month} className="flex flex-1 flex-col items-center gap-1">
-                      <div className="flex h-full w-full items-end justify-center gap-1">
-                        <div
-                          className="w-3 rounded-t bg-emerald-500"
-                          style={{ height: `${(m.revenue_cents / trendMax) * 100}%` }}
-                          title={`Revenue ${formatDOP(m.revenue_cents)}`}
-                        />
-                        <div
-                          className="w-3 rounded-t bg-rose-400"
-                          style={{ height: `${(m.expense_cents / trendMax) * 100}%` }}
-                          title={`Expenses ${formatDOP(m.expense_cents)}`}
-                        />
-                      </div>
-                      <span className="text-xs text-muted-foreground">{lbl}</span>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
+            <RevenueExpenseChart data={trend} />
           </CardContent>
         </Card>
 
