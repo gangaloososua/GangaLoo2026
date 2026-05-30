@@ -301,7 +301,7 @@ export function CheckoutView({
           return
         }
         setSubmitting(false)
-        setError(pay.error ? ('DEBUG: ' + pay.error) : ts(locale, 'shop.orderError'))
+        setError(ts(locale, 'shop.orderError'))
         return
       }
 
