@@ -81,7 +81,7 @@ function pesos(cents: number): string {
 }
 
 // Compact catalog text grouped by category, using the visitor's effective price.
-function buildCatalogText(products: StoreProduct[]): string {
+function buildCatalogText(products: StoreProduct[], storeUrl: string): string {
   if (!products.length) return ''
   const byCat = new Map<string, string[]>()
   for (const p of products) {
@@ -91,7 +91,8 @@ function buildCatalogText(products: StoreProduct[]): string {
       (p.isOffer
         ? ` (OFERTA -${p.offerPercent}%, antes ${pesos(p.basePriceCents)})`
         : '') +
-      (p.stock > 0 ? ` - ${p.stock} disponibles` : ' - agotado')
+      (p.stock > 0 ? ` - ${p.stock} disponibles` : ' - agotado') +
+      ` | Link: ${storeUrl}/${p.slug}`
     if (!byCat.has(cat)) byCat.set(cat, [])
     byCat.get(cat)!.push(line)
   }
@@ -109,6 +110,9 @@ ${bar}
 Este es el inventario ACTUAL de GangaLoo para esta sucursal. Cuando alguien
 pregunte por productos, DEBES buscar aqui y citar productos EXACTOS con nombre y
 precio. PROHIBIDO decir "visitanos" o "escribenos" si el producto aparece aqui.
+Cada producto trae su enlace directo (campo "Link:"). Cuando menciones un
+producto, comparte SU enlace directo (no solo el de la tienda) para que el
+cliente lo abra de una vez. Copia el Link tal cual aparece; no lo inventes.
 
 ${catalogText}
 ${bar}`
@@ -126,8 +130,10 @@ Cuando alguien pregunte "tienen cabellos?" o "tienen extensiones?":
 
 Cuando digan el largo (ej: "28" o "28 pulgadas"):
 -> Busca en el catalogo TODOS los productos que tengan "28" en el nombre y listalos
-   con nombre exacto y precio. Si no hay exactamente 28", muestra los mas cercanos.
--> Termina con: "Puedes verlos en nuestra tienda: ${storeUrl}"
+   con nombre exacto, precio y su enlace directo (Link:). Si no hay exactamente
+   28", muestra los mas cercanos.
+-> Da el enlace directo (Link:) de cada producto que menciones, para que el
+   cliente lo abra de una vez.
 
 Cuando pregunten por estilo (ondulado, lacio, rizado) o calidad (9a, 12a, humano,
 sintetico): busca en el catalogo y muestra las opciones disponibles con precios.
@@ -136,13 +142,15 @@ sintetico): busca en el catalogo y muestra las opciones disponibles con precios.
    - Sintetico = mas economico, menos duracion
 
 REGLAS ABSOLUTAS:
-1. Si el producto ESTA en el catalogo -> muestralo con nombre y precio EXACTO.
+1. Si el producto ESTA en el catalogo -> muestralo con nombre, precio EXACTO y su
+   enlace directo (el "Link:" que aparece en su linea).
 2. Si NO esta en el catalogo -> di "no lo veo disponible online ahora, pero puedes
    preguntar por WhatsApp: https://wa.me/18292867868".
 3. NUNCA digas "visita la tienda" sin dar el link de la tienda online o un WhatsApp.
 4. NUNCA digas "no tenemos informacion" si el catalogo tiene productos.
-5. Para enviar a la tienda online usa: ${storeUrl}
-6. Siempre termina con un link a la tienda online o un WhatsApp.
+5. Al recomendar un producto especifico, usa SIEMPRE su enlace directo (Link:). Usa
+   el enlace general ${storeUrl} solo cuando no hablas de un producto puntual.
+6. Siempre termina con un link (de producto o de tienda) o un WhatsApp.
 
 PERSONALIDAD:
 - Amable, como vendedora dominicana experta en cabello.
@@ -183,7 +191,7 @@ export async function POST(req: Request) {
     if (wh) {
       storeUrl = `${SITE}/tienda/${wh.slug}`
       const catalog = await fetchStoreCatalog(wh)
-      catalogText = buildCatalogText(catalog.products)
+      catalogText = buildCatalogText(catalog.products, storeUrl)
     }
   } catch (e) {
     console.error('[chat] catalog load failed:', e)
