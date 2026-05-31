@@ -5,7 +5,20 @@ import { NextResponse, type NextRequest } from 'next/server'
 //   /login, /auth  → admin authentication
 //   /tienda        → public customer storefront (browse, cart, checkout,
 //                    and the customer account/login page at /tienda/.../cuenta)
-const PUBLIC_PREFIXES = ['/login', '/auth', '/tienda', '/api/webhooks']
+//   /club, /ayuda, /cotizador → public marketing pages (front-of-site)
+const PUBLIC_PREFIXES = [
+  '/login',
+  '/auth',
+  '/tienda',
+  '/api/webhooks',
+  '/club',
+  '/ayuda',
+  '/cotizador',
+]
+
+// Public pages matched EXACTLY (not as a prefix). '/' must be exact — using it
+// as a prefix would make every path public.
+const PUBLIC_EXACT = ['/']
 
 // Where to send a logged-in CUSTOMER who strays toward an admin page.
 // The /tienda landing lets them pick a store.
@@ -41,9 +54,9 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser()
 
-  const isPublic = PUBLIC_PREFIXES.some((p) =>
-    request.nextUrl.pathname.startsWith(p)
-  )
+  const isPublic =
+    PUBLIC_EXACT.includes(request.nextUrl.pathname) ||
+    PUBLIC_PREFIXES.some((p) => request.nextUrl.pathname.startsWith(p))
 
   // Redirect unauthenticated users away from protected (admin) pages only.
   if (!user && !isPublic) {
