@@ -404,6 +404,9 @@ export default function AyudaPage() {
       </a>
 
       <footer className="ay-footer">
+        <p className="ay-footer-links">
+          <Link href="/returns">Política de Devoluciones</Link>
+        </p>
         <p>© {new Date().getFullYear()} GangaLoo · Sosúa, Puerto Plata, Rep. Dom.</p>
       </footer>
     </div>
@@ -593,4 +596,7 @@ const styles = `
 /* FOOTER */
 .ay-footer{ text-align:center; padding:28px 5vw; font-size:.82rem; color:var(--muted);
   border-top:1px solid var(--border); }
+.ay-footer-links{ margin-bottom:6px; }
+.ay-footer-links a{ color:var(--gold); font-weight:600; }
+.ay-footer-links a:hover{ text-decoration:underline; }
 `;
