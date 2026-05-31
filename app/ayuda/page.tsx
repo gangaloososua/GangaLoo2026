@@ -20,7 +20,6 @@ export const metadata: Metadata = {
 };
 
 // Old site base — seller/mayoreo forms + AliExpress page still live here for now.
-const OLD = "https://gangaloo.club";
 const WA = (text: string) =>
   `https://wa.me/18292867868?text=${encodeURIComponent(text)}`;
 
@@ -213,7 +212,7 @@ export default function AyudaPage() {
         <div className="ay-steps">
           <Step n={1} title="Llena la solicitud">
             Ve a{" "}
-            <a href={`${OLD}/partners.html`} target="_blank" rel="noopener noreferrer">
+            <a href="/partners">
               la solicitud de vendedores
             </a>{" "}
             y llena el formulario con tus datos.
@@ -263,7 +262,7 @@ export default function AyudaPage() {
           </Step>
           <Step n={3} title="O aplica como mayorista">
             Para precios de mayoreo permanentes y condiciones especiales, ve a{" "}
-            <a href={`${OLD}/partners.html`} target="_blank" rel="noopener noreferrer">
+            <a href="/partners">
               la solicitud de mayorista
             </a>
             .
@@ -283,9 +282,16 @@ export default function AyudaPage() {
         </InfoBox>
         <InfoBox tone="green" title="✨ Beneficios de ser miembro Club">
           <ul>
-            <li>Descuento en todos los productos de la tienda.</li>
-            <li>Beneficios de envío en tus órdenes.</li>
-            <li>Puntos de lealtad en cada compra.</li>
+            <li>
+              <strong>Envío gratis</strong> en todas tus órdenes.
+            </li>
+            <li>
+              <strong>Descuento adicional</strong> en todos los productos.
+            </li>
+            <li>
+              <strong>Tarjeta de débito gratis</strong> — aplican cargos por
+              transacción.
+            </li>
             <li>Acceso a ofertas exclusivas antes que nadie.</li>
             <li>Atención prioritaria por WhatsApp.</li>
           </ul>
@@ -365,7 +371,7 @@ export default function AyudaPage() {
             <p>Explora todos nuestros productos disponibles</p>
             <span className="btn">Ver productos →</span>
           </Link>
-          <a href={`${OLD}/partners.html`} target="_blank" rel="noopener noreferrer" className="ay-cta-card">
+          <a href="/partners" className="ay-cta-card">
             <span className="ico">🤝</span>
             <h3>Ser Vendedora</h3>
             <p>Aplica para unirte a nuestro equipo de vendedoras</p>
