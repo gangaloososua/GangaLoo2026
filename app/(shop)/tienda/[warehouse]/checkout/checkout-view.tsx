@@ -330,6 +330,7 @@ export function CheckoutView({
   const [placedPayment, setPlacedPayment] = useState<Payment>('cash')
   const [memberDiscountCents, setMemberDiscountCents] = useState(0)
   const [tierName, setTierName] = useState('')
+  const [isClubMember, setIsClubMember] = useState(false)
   const [placedMemberDiscount, setPlacedMemberDiscount] = useState(0)
   const [placedSubtotalBefore, setPlacedSubtotalBefore] = useState(0)
   const [placedTierName, setPlacedTierName] = useState('')
@@ -357,7 +358,8 @@ export function CheckoutView({
     }
     return 0
   }
-  const fee = previewFee()
+  // Club members get free shipping (server zeroes it on the charge too).
+  const fee = isClubMember ? 0 : previewFee()
   // Card surcharge (Stripe/PayPal), previewed from config; server is authoritative.
   const surchargeRate =
     payment === 'stripe'
@@ -386,6 +388,7 @@ export function CheckoutView({
       if (q.ok) {
         setMemberDiscountCents(q.memberDiscountCents)
         setTierName(q.tierName)
+        setIsClubMember(q.isClubMember)
       }
     })
     return () => { active = false }

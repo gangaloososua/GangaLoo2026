@@ -166,6 +166,7 @@ export type OrderQuoteResult =
       memberDiscountCents: number
       tierName: string
       tierDiscountPct: number
+      isClubMember: boolean
     }
   | { ok: false }
 
@@ -191,6 +192,7 @@ export async function getOrderQuote(input: {
       member_discount_cents?: number
       tier_name?: string
       tier_discount_pct?: number
+      is_club_member?: boolean
     } | null
     if (!res?.ok) return { ok: false }
     return {
@@ -199,6 +201,7 @@ export async function getOrderQuote(input: {
       memberDiscountCents: res.member_discount_cents ?? 0,
       tierName: res.tier_name ?? '',
       tierDiscountPct: Number(res.tier_discount_pct ?? 0),
+      isClubMember: res.is_club_member === true,
     }
   } catch (e) {
     console.error('[getOrderQuote] threw:', e)
