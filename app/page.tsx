@@ -53,12 +53,22 @@ const DESTINOS = [
 const SUCURSALES = [
   {
     nombre: "GangaLoo Maranatha",
-    ciudad: "Sosúa, Puerto Plata",
+    direccion: "Calle Bella Vista, Maranatha, Rep. Dom.",
+    horario: [
+      { d: "Lun – Vie", h: "10:00 AM – 2:00 PM y 4:00 PM – 7:00 PM" },
+      { d: "Sábado", h: "2:00 PM – 6:00 PM" },
+      { d: "Domingo", h: "Cerrado" },
+    ],
+    tel: "+1 (829) 286-7868",
+    wa: "18292867868",
     mapa: "https://www.google.com/maps?q=19.7299357,-70.5980177",
   },
   {
     nombre: "GangaLoo Montellano",
-    ciudad: "Puerto Plata",
+    direccion: "Pancho Mateo, Montellano, Rep. Dom.",
+    horario: [{ d: "Lun – Dom", h: "9:00 AM – 7:00 PM" }],
+    tel: "+1 (829) 841-7980",
+    wa: "18298417980",
     mapa: "https://www.google.com/maps?q=19.7411172,-70.5228458",
   },
 ];
@@ -81,7 +91,9 @@ export default function HomePage() {
       {/* NAV */}
       <header className="gl-nav">
         <Link href="/" className="gl-brand">
-          Ganga<span>Loo</span>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo-g.png" alt="GangaLoo" className="gl-logo-img" />
+          <span className="gl-brand-text">Ganga<span>Loo</span></span>
         </Link>
         <nav className="gl-nav-links">
           <Link href="/ayuda">Cómo funciona</Link>
@@ -144,18 +156,34 @@ export default function HomePage() {
         <div className="gl-stores">
           {SUCURSALES.map((s) => (
             <div key={s.nombre} className="gl-store">
-              <div>
-                <h3>{s.nombre}</h3>
-                <p>{s.ciudad}</p>
+              <h3>{s.nombre}</h3>
+              <p className="gl-store-addr">{s.direccion}</p>
+              <div className="gl-store-hours">
+                {s.horario.map((h) => (
+                  <div key={h.d} className="gl-hours-row">
+                    <span className="gl-hours-d">{h.d}</span>
+                    <span className="gl-hours-h">{h.h}</span>
+                  </div>
+                ))}
               </div>
-              <a
-                href={s.mapa}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="gl-store-map"
-              >
-                Ver en mapa →
-              </a>
+              <div className="gl-store-contact">
+                <a
+                  href={`https://wa.me/${s.wa}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="gl-store-tel"
+                >
+                  📞 {s.tel}
+                </a>
+                <a
+                  href={s.mapa}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="gl-store-map"
+                >
+                  Ver en mapa →
+                </a>
+              </div>
             </div>
           ))}
         </div>
@@ -215,8 +243,10 @@ const glStyles = `
   background:rgba(6,16,26,.85); backdrop-filter:blur(12px);
   border-bottom:1px solid var(--gl-line);
 }
-.gl-brand{ font-size:1.5rem; font-weight:800; letter-spacing:1px; color:var(--gl-gold); }
-.gl-brand span{ color:var(--gl-cream); }
+.gl-brand{ display:flex; align-items:center; gap:.55rem; font-size:1.5rem; font-weight:800; letter-spacing:1px; }
+.gl-logo-img{ height:34px; width:34px; border-radius:7px; object-fit:cover; display:block; }
+.gl-brand-text{ color:var(--gl-gold); }
+.gl-brand-text span{ color:var(--gl-cream); }
 .gl-nav-links{ display:flex; align-items:center; gap:1.5rem; }
 .gl-nav-links a{ font-size:.85rem; font-weight:600; text-transform:uppercase; letter-spacing:.5px; opacity:.85; transition:opacity .15s,color .15s; }
 .gl-nav-links a:hover{ opacity:1; color:var(--gl-gold2); }
@@ -271,10 +301,17 @@ const glStyles = `
 
 /* SUCURSALES */
 .gl-stores{ display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:1rem; }
-.gl-store{ display:flex; align-items:center; justify-content:space-between; gap:1rem; padding:1.4rem 1.5rem; border-radius:12px; background:rgba(255,255,255,.03); border:1px solid rgba(255,255,255,.07); }
-.gl-store h3{ font-size:1.05rem; font-weight:700; color:var(--gl-cream); }
-.gl-store p{ font-size:.85rem; opacity:.65; margin-top:.2rem; }
-.gl-store-map{ flex-shrink:0; font-size:.85rem; font-weight:700; color:var(--gl-gold2); white-space:nowrap; }
+.gl-store{ display:flex; flex-direction:column; gap:.55rem; padding:1.5rem 1.6rem; border-radius:12px; background:rgba(255,255,255,.03); border:1px solid rgba(255,255,255,.07); }
+.gl-store h3{ font-size:1.1rem; font-weight:800; color:var(--gl-gold); letter-spacing:.5px; }
+.gl-store-addr{ font-size:.85rem; opacity:.7; line-height:1.4; }
+.gl-store-hours{ display:flex; flex-direction:column; gap:.3rem; margin-top:.2rem; }
+.gl-hours-row{ display:flex; gap:.6rem; font-size:.85rem; line-height:1.45; }
+.gl-hours-d{ flex:0 0 84px; font-weight:700; color:var(--gl-cream); }
+.gl-hours-h{ opacity:.82; }
+.gl-store-contact{ display:flex; align-items:center; gap:1rem; flex-wrap:wrap; margin-top:.5rem; padding-top:.75rem; border-top:1px solid var(--gl-line); }
+.gl-store-tel{ font-size:.88rem; font-weight:700; color:var(--gl-cream); }
+.gl-store-tel:hover{ color:var(--gl-gold2); }
+.gl-store-map{ font-size:.85rem; font-weight:700; color:var(--gl-gold2); white-space:nowrap; margin-left:auto; }
 .gl-store-map:hover{ color:var(--gl-gold); }
 
 /* CONTACTO */
