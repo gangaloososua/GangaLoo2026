@@ -7,7 +7,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { notifyNewSignup } from '@/lib/notify'
 
-export type AuthResult = { ok: true } | { ok: false; error: string }
+export type AuthResult = { ok: true; memberNo?: string } | { ok: false; error: string }
 
 export async function signUpCustomer(input: {
   name: string
@@ -61,6 +61,19 @@ export async function signUpCustomer(input: {
     return { ok: false, error: m }
   }
 
+  // For a Club signup (plan present), assign this member's sequential number now
+  // so it can show on their card. Non-fatal: if it fails (e.g. the function
+  // isn't deployed yet), signup still succeeds and the card shows a placeholder.
+  let memberNo: string | undefined
+  if (input.plan) {
+    try {
+      const { data: noData, error: noErr } = await supabase.rpc('assign_club_member_no')
+      if (!noErr && typeof noData === 'string') memberNo = noData
+    } catch {
+      memberNo = undefined
+    }
+  }
+
   // New-customer WhatsApp alert to the owner. Fires once, on full success.
   // notifyNewSignup never throws, so it cannot break signup. When `plan` is
   // present this reads as a Club membership request.
@@ -70,9 +83,10 @@ export async function signUpCustomer(input: {
     email,
     city: input.city?.trim() || undefined,
     plan: input.plan?.trim() || undefined,
+    memberNo,
   })
 
-  return { ok: true }
+  return { ok: true, memberNo }
 }
 
 export async function signInCustomer(input: {

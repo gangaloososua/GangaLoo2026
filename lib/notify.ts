@@ -57,11 +57,13 @@ export async function notifyNewSignup(a: {
   email?: string;
   city?: string;
   plan?: string;
+  memberNo?: string;
 }): Promise<void> {
   const isClub = !!a.plan;
   const text = [
     isClub ? "🎉 Nueva solicitud de Club" : "🙋 Nuevo cliente registrado",
     `Nombre: ${a.name}`,
+    a.memberNo ? `Nº miembro: ${a.memberNo}` : null,
     a.phone ? `Tel: ${a.phone}` : null,
     a.email ? `Email: ${a.email}` : null,
     a.city ? `Ciudad: ${a.city}` : null,

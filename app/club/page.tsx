@@ -98,11 +98,10 @@ export default function ClubPage() {
   const [error, setError] = useState<string | null>(null)
   const [done, setDone] = useState(false)
 
-  // Member number shown on the card (placeholder for now).
-  const memberNo = useMemo(
-    () => 'GL-' + String(Math.floor(100000 + Math.random() * 900000)),
-    [],
-  )
+  // Real, sequential member number — assigned by the server at signup and shown
+  // on the success card. Null (placeholder) until the form is submitted.
+  const [assignedNo, setAssignedNo] = useState<string | null>(null)
+  const cardNo = assignedNo ?? 'GL-——————'
   // "Vence" (expires) date for the card — changes with the chosen plan:
   // monthly +1 month, quarterly +3, semi-annual +6. Recomputed when the plan
   // changes. (At activation the owner sets the official dates; this is the
@@ -154,6 +153,7 @@ export default function ClubPage() {
         setSubmitting(false)
         return
       }
+      if (res.memberNo) setAssignedNo(res.memberNo)
       setDone(true)
       setSubmitting(false)
       if (typeof window !== 'undefined') {
@@ -206,15 +206,16 @@ export default function ClubPage() {
               Pagar por WhatsApp para activar
             </a>
             <p className="gl-fine">
-              Guarda tu tarjeta de miembro abajo. Tus beneficios se activan al
-              confirmar el pago.
+              Guarda tu tarjeta de miembro abajo. Tu número de miembro
+              {assignedNo ? ` es ${assignedNo}` : ''} ya está reservado; tus
+              beneficios se activan al confirmar el pago.
             </p>
           </div>
 
           <div className="gl-print-keep">
             <MemberCard
               fullName={fullName || 'Tu Nombre'}
-              memberNo={memberNo}
+              memberNo={cardNo}
               vence={vence}
               photo={photo}
               planNombre={selectedPlan.nombre}
@@ -341,11 +342,11 @@ export default function ClubPage() {
 
               {/* LIVE CARD */}
               <div className="gl-card-col">
-                <p className="gl-card-hint gl-no-print">Tu tarjeta se actualiza mientras escribes:</p>
+                <p className="gl-card-hint gl-no-print">Tu tarjeta se actualiza mientras escribes. Tu número de miembro se asigna al enviar:</p>
                 <div className="gl-print-keep">
                   <MemberCard
                     fullName={fullName || 'Tu Nombre'}
-                    memberNo={memberNo}
+                    memberNo={cardNo}
                     vence={vence}
                     photo={photo}
                     planNombre={selectedPlan.nombre}
