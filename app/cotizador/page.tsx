@@ -470,9 +470,7 @@ const styles = `
 
 .cz-body{ max-width:620px; margin:0 auto; padding:22px 5vw 60px; }
 
-.cz-tabs{ display:flex; gap:8px; overflow-x:auto; padding-bottom:6px; margin-bottom:16px;
-  scrollbar-width:none; -webkit-overflow-scrolling:touch; }
-.cz-tabs::-webkit-scrollbar{ display:none; }
+.cz-tabs{ display:flex; flex-wrap:wrap; gap:8px; margin-bottom:16px; }
 .cz-tab{ flex-shrink:0; padding:9px 16px; border-radius:99px; border:1px solid var(--border);
   background:var(--surface); color:var(--muted); font-size:.85rem; font-weight:600; cursor:pointer;
   font-family:inherit; transition:all .15s; }
