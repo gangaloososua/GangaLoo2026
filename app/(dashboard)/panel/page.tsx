@@ -4,7 +4,7 @@ import { requireAdminCaller } from '@/lib/auth/guard'
 import { isSellerRole } from '@/lib/auth/roles'
 import { localeForRole } from '@/lib/i18n/dictionary'
 import { fetchSellerDashboard } from '@/lib/seller-dashboard'
-import { SellerDashboardView } from './seller-dashboard-view'
+import { SellerDashboardView } from '../seller-dashboard-view'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { formatDOP, formatDate } from '@/lib/format'
@@ -13,8 +13,8 @@ import {
   fetchDashboardOverview,
   type DashboardPeriodMode,
 } from '@/lib/dashboard'
-import { DashboardPeriodSwitcher } from './dashboard-period-switcher'
-import { RevenueExpenseChart } from './revenue-expense-chart'
+import { DashboardPeriodSwitcher } from '../dashboard-period-switcher'
+import { RevenueExpenseChart } from '../revenue-expense-chart'
 
 export const dynamic = 'force-dynamic'
 

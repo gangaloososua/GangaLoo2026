@@ -68,7 +68,7 @@ function SidebarContents({ role, onNavigate }: { role: Role; onNavigate?: () => 
   return (
     <>
       <div className="flex h-16 items-center px-6">
-        <Link href="/" onClick={onNavigate} className="text-lg font-semibold tracking-tight">
+        <Link href="/panel" onClick={onNavigate} className="text-lg font-semibold tracking-tight">
           Gangaloo Control
         </Link>
       </div>

@@ -40,7 +40,7 @@ const ALL: Role[] = ['owner', 'admin', 'seller', 'distributor']
 const OWNER_ONLY: Role[] = ['owner', 'admin']
 const OWNER_AND_DISTRIBUTOR: Role[] = ['owner', 'admin', 'distributor']
 export const navItems: NavItem[] = [
-  { label: 'Dashboard',        href: '/',                     icon: LayoutDashboard, roles: ALL },
+  { label: 'Dashboard',        href: '/panel',                icon: LayoutDashboard, roles: ALL },
   { label: 'Sales',            href: '/sales',                icon: ShoppingCart,    roles: ALL },
   { label: 'My Sales',         href: '/my-sales',             icon: Receipt,         roles: ALL,                  i18n: { en: 'My sales', es: 'Mis ventas' } },
   { label: 'Caja',             href: '/caja',                 icon: Calculator,      roles: ALL,                  i18n: { en: 'Register', es: 'Caja' } },

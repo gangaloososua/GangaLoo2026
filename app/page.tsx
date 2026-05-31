@@ -87,6 +87,7 @@ export default function HomePage() {
           <Link href="/ayuda">Cómo funciona</Link>
           <Link href="/club">Club</Link>
           <Link href="/partners">Mayoreo</Link>
+          <Link href="/panel">Admin</Link>
           <Link href="/tienda" className="gl-nav-cta">
             Tienda
           </Link>
