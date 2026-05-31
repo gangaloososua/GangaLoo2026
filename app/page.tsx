@@ -99,7 +99,7 @@ export default function HomePage() {
           <Link href="/ayuda">Cómo funciona</Link>
           <Link href="/club">Club</Link>
           <Link href="/partners">Mayoreo</Link>
-          <Link href="/panel">Admin</Link>
+          <Link href="/panel" className="gl-nav-admin">Admin</Link>
           <Link href="/tienda" className="gl-nav-cta">
             Tienda
           </Link>
@@ -252,7 +252,10 @@ const glStyles = `
 .gl-nav-links a:hover{ opacity:1; color:var(--gl-gold2); }
 .gl-nav-cta{ background:var(--gl-red); color:#fff !important; padding:9px 18px; border-radius:3px; opacity:1 !important; }
 .gl-nav-cta:hover{ background:#a50f22; color:#fff !important; }
-@media (max-width:560px){ .gl-nav-links a:not(.gl-nav-cta){ display:none; } }
+@media (max-width:560px){
+  .gl-nav-links a:not(.gl-nav-cta):not(.gl-nav-admin){ display:none; }
+  .gl-nav-links{ gap:1rem; }
+}
 
 /* HERO */
 .gl-hero{ position:relative; overflow:hidden; background:var(--gl-navy); padding:clamp(80px,18vh,160px) 5vw clamp(64px,12vh,120px); text-align:center; }
