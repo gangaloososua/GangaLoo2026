@@ -98,21 +98,25 @@ export default function ClubPage() {
   const [error, setError] = useState<string | null>(null)
   const [done, setDone] = useState(false)
 
-  // Provisional member number for the card preview. The real number is assigned
-  // by the owner on activation; this is just for the card the customer keeps.
+  // Member number shown on the card (placeholder for now).
   const memberNo = useMemo(
     () => 'GL-' + String(Math.floor(100000 + Math.random() * 900000)),
     [],
   )
-  const fechaValida = useMemo(
-    () =>
-      new Date().toLocaleDateString('es-DO', {
-        day: '2-digit',
-        month: 'short',
-        year: 'numeric',
-      }),
-    [],
-  )
+  // "Vence" (expires) date for the card — changes with the chosen plan:
+  // monthly +1 month, quarterly +3, semi-annual +6. Recomputed when the plan
+  // changes. (At activation the owner sets the official dates; this is the
+  // preview the customer keeps.)
+  const vence = useMemo(() => {
+    const months: Record<PlanId, number> = { mensual: 1, trimestral: 3, semestral: 6 }
+    const d = new Date()
+    d.setMonth(d.getMonth() + months[plan])
+    return d.toLocaleDateString('es-DO', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    })
+  }, [plan])
 
   const fullName = `${nombre} ${apellido}`.trim()
   const selectedPlan = PLANS.find((p) => p.id === plan)!
@@ -202,8 +206,8 @@ export default function ClubPage() {
               Pagar por WhatsApp para activar
             </a>
             <p className="gl-fine">
-              Guarda tu tarjeta de miembro abajo. El número es provisional hasta que se
-              active tu membresía.
+              Guarda tu tarjeta de miembro abajo. Tus beneficios se activan al
+              confirmar el pago.
             </p>
           </div>
 
@@ -211,7 +215,7 @@ export default function ClubPage() {
             <MemberCard
               fullName={fullName || 'Tu Nombre'}
               memberNo={memberNo}
-              fecha={fechaValida}
+              vence={vence}
               photo={photo}
               planNombre={selectedPlan.nombre}
             />
@@ -342,7 +346,7 @@ export default function ClubPage() {
                   <MemberCard
                     fullName={fullName || 'Tu Nombre'}
                     memberNo={memberNo}
-                    fecha={fechaValida}
+                    vence={vence}
                     photo={photo}
                     planNombre={selectedPlan.nombre}
                   />
@@ -398,7 +402,7 @@ function Field(props: {
 function MemberCard(props: {
   fullName: string
   memberNo: string
-  fecha: string
+  vence: string
   photo: string | null
   planNombre: string
 }) {
@@ -427,7 +431,7 @@ function MemberCard(props: {
       </div>
       <div className="gl-memcard-foot">
         <span>No. {props.memberNo}</span>
-        <span>Desde {props.fecha}</span>
+        <span>Vence {props.vence}</span>
       </div>
     </div>
   )
