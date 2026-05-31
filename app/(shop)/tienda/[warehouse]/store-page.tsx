@@ -69,8 +69,8 @@ function ProductCard({
   const out = p.stock <= 0
   return (
     <div className="gl-rise relative overflow-hidden rounded-2xl bg-white" style={{ border: '1px solid #eceef2', animationDelay: `${delay}ms` }}>
-      <Link href={`/tienda/${storeSlug}/${p.slug}`} className="block">
-        <div className="relative" style={{ aspectRatio: '4 / 5', background: '#ffffff' }}>
+      <div className="relative" style={{ aspectRatio: '4 / 5', background: '#ffffff' }}>
+        <Link href={`/tienda/${storeSlug}/${p.slug}`} className="block h-full w-full">
           {p.imageUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={p.imageUrl} alt={p.name} className="h-full w-full object-contain" loading="lazy" />
@@ -79,54 +79,52 @@ function ProductCard({
               <span style={{ fontFamily: 'var(--font-display)', fontSize: 34, fontStyle: 'italic' }}>G</span>
             </div>
           )}
-          {p.isOffer && (
-            <span className="absolute left-2 top-2 rounded-full px-2 py-1 text-[11px] font-semibold text-white" style={{ background: RED }}>-{p.offerPercent}%</span>
-          )}
-          {out ? (
-            <span className="absolute right-2 top-2 rounded-full px-2 py-1 text-[11px] font-medium" style={{ background: 'rgba(22,24,29,.78)', color: '#fff' }}>{ts(locale, 'shop.out')}</span>
-          ) : p.stock <= 1 ? (
-            <span className="absolute right-2 top-2 rounded-full px-2 py-1 text-[11px] font-semibold" style={{ background: '#b45309', color: '#fff' }}>{locale === 'es' ? '\u00DAltimas' : 'Only'} {p.stock}</span>
-          ) : (
-            <span className="absolute right-2 top-2 rounded-full px-2 py-1 text-[11px] font-semibold" style={{ background: '#1e9e54', color: '#fff' }}>{locale === 'es' ? 'Disponible' : 'Available'}</span>
-          )}
-        </div>
+        </Link>
+        {p.isOffer && (
+          <span className="pointer-events-none absolute left-2 top-2 rounded-full px-2 py-1 text-[11px] font-semibold text-white" style={{ background: RED }}>-{p.offerPercent}%</span>
+        )}
+        {out ? (
+          <span className="pointer-events-none absolute right-2 top-2 rounded-full px-2 py-1 text-[11px] font-medium" style={{ background: 'rgba(22,24,29,.78)', color: '#fff' }}>{ts(locale, 'shop.out')}</span>
+        ) : p.stock <= 1 ? (
+          <span className="pointer-events-none absolute right-2 top-2 rounded-full px-2 py-1 text-[11px] font-semibold" style={{ background: '#b45309', color: '#fff' }}>{locale === 'es' ? '\u00DAltimas' : 'Only'} {p.stock}</span>
+        ) : (
+          <span className="pointer-events-none absolute right-2 top-2 rounded-full px-2 py-1 text-[11px] font-semibold" style={{ background: '#1e9e54', color: '#fff' }}>{locale === 'es' ? 'Disponible' : 'Available'}</span>
+        )}
+        <button
+          type="button"
+          onClick={(e) => { e.preventDefault(); e.stopPropagation(); onShare(p) }}
+          aria-label={locale === 'es' ? 'Compartir' : 'Share'}
+          className="absolute bottom-2 left-2 flex h-8 w-8 items-center justify-center rounded-full transition active:scale-95"
+          style={{ background: 'rgba(255,255,255,.92)', border: '1px solid #eceef2', color: NAVY, boxShadow: '0 1px 4px rgba(6,16,26,.18)', backdropFilter: 'blur(4px)' }}
+        >
+          <Icon d={ICON.share} size={14} />
+        </button>
+      </div>
 
-        <div className="px-3 pt-3">
-          {p.category && (
-            <p className="mb-1 text-[11px] uppercase tracking-wide" style={{ color: MUTED }}>{p.category.name}</p>
-          )}
-          <p className="text-[13px] leading-snug" style={{ color: INK, minHeight: 34 }}>{p.name}</p>
-        </div>
+      <Link href={`/tienda/${storeSlug}/${p.slug}`} className="block px-3 pt-3">
+        {p.category && (
+          <p className="mb-1 text-[11px] uppercase tracking-wide" style={{ color: MUTED }}>{p.category.name}</p>
+        )}
+        <p className="text-[13px] leading-snug" style={{ color: INK, minHeight: 34 }}>{p.name}</p>
       </Link>
 
-      <div className="flex items-center justify-between gap-1.5 px-3 pb-3 pt-1.5">
+      <div className="flex items-center justify-between gap-2 px-3 pb-3 pt-1.5">
         <div className="min-w-0 flex-1">
           {p.isOffer && (
             <span className="block text-[10px] leading-none line-through" style={{ color: '#9aa3b2' }}>{price(p.basePriceCents)}</span>
           )}
           <span className="block whitespace-nowrap text-[14px] font-semibold" style={{ color: p.isOffer ? RED : NAVY }}>{price(p.priceCents)}</span>
         </div>
-        <div className="flex flex-shrink-0 items-center gap-1">
-          <button
-            type="button"
-            onClick={(e) => { e.preventDefault(); e.stopPropagation(); onShare(p) }}
-            aria-label={locale === 'es' ? 'Compartir' : 'Share'}
-            className="flex h-8 w-8 items-center justify-center rounded-full bg-white transition active:scale-95"
-            style={{ border: '1px solid #eceef2', color: NAVY }}
-          >
-            <Icon d={ICON.share} size={14} />
-          </button>
-          <button
-            type="button"
-            onClick={() => onAdd(p)}
-            disabled={out}
-            aria-label={ts(locale, 'shop.add')}
-            className="flex h-8 w-8 items-center justify-center rounded-full text-white transition active:scale-95 disabled:opacity-40"
-            style={{ background: NAVY }}
-          >
-            <Icon d={ICON.plus} size={16} />
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={() => onAdd(p)}
+          disabled={out}
+          aria-label={ts(locale, 'shop.add')}
+          className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-white transition active:scale-95 disabled:opacity-40"
+          style={{ background: NAVY }}
+        >
+          <Icon d={ICON.plus} size={16} />
+        </button>
       </div>
     </div>
   )
