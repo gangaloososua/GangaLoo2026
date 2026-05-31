@@ -65,6 +65,7 @@ export type StoreCatalog = {
   weeklyDeal: StoreDeal | null
   isGuest?: boolean
   guestMarkupPct?: number
+  isClubMember?: boolean
 }
 
 export type StoreLandingDeal = {
@@ -226,7 +227,7 @@ export async function fetchStoreCatalog(
 
   const { data: products, error } = await supabase
     .from('store_products')
-    .select('id, sku, name, slug, price_cents, primary_image_url')
+    .select('id, sku, name, slug, price_cents, primary_image_url, club_price_cents')
     .eq('is_active', true)
     .eq('visible_in_store', true)
     .order('name', { ascending: true })
@@ -397,6 +398,19 @@ export async function fetchStoreCatalog(
     return isGuest ? Math.ceil(v / 2500) * 2500 : Math.round(v)
   }
 
+  // Club member: a logged-in customer with the Club toggle on pays the product's
+  // club price (when one is set). Detected via a safe RPC (no direct profile read).
+  // Matches the online charge (place_storefront_order) and the register.
+  let isClubMember = false
+  if (!isGuest) {
+    try {
+      const { data: m } = await supabase.rpc('get_my_is_club_member')
+      isClubMember = m === true
+    } catch {
+      isClubMember = false
+    }
+  }
+
   const rows: StoreProduct[] = []
   for (const p of products) {
     const setting = settingByProduct.get(p.id)
@@ -404,20 +418,27 @@ export async function fetchStoreCatalog(
 
     const base = p.price_cents
     const override = setting?.price_override_cents ?? null
-    // The product's NORMAL price in this store: the per-store override if one
-    // is set, otherwise the base price.
-    const storeNormal = override != null ? override : base
+    // The non-member NORMAL price in this store: per-store override if set, else base.
+    const listNormal = override != null ? override : base
+    // Club members pay the product's club price when one is set; everyone else pays
+    // the list normal. (Loyalty still applies on top at checkout, as before.)
+    const clubPrice =
+      (p as { club_price_cents?: number | null }).club_price_cents ?? null
+    const hasClub =
+      isClubMember && clubPrice != null && clubPrice > 0 && clubPrice < listNormal
+    const memberNormal = hasClub ? (clubPrice as number) : listNormal
     const deal = dealByProduct.get(p.id)
-    // A featured deal's price: percent off the normal store price, with the
+    // A featured deal's price: percent off the member's normal price, with the
     // same 30% maximum discount cap as the in-person promotion rules.
     const dealPrice = deal
-      ? Math.round(storeNormal * Math.max(0.7, 1 - deal.percent / 100))
+      ? Math.round(memberNormal * Math.max(0.7, 1 - deal.percent / 100))
       : null
     // The "was" price to compare against and strike through:
-    //  - on a featured deal: the normal store price (so % off is honest)
+    //  - club member with a club price: the list normal (so the club saving shows)
+    //  - on a featured deal: the member normal price (so % off is honest)
     //  - on a plain override offer: the base list price
-    const compareAt = deal ? storeNormal : base
-    const eff = deal && dealPrice != null ? dealPrice : storeNormal
+    const compareAt = hasClub ? listNormal : deal ? memberNormal : base
+    const eff = deal && dealPrice != null ? dealPrice : memberNormal
     const isOffer = eff < compareAt
 
     // Keep only value ids whose value (and its attribute) are active/known, so
@@ -521,5 +542,5 @@ export async function fetchStoreCatalog(
         .map((v) => ({ id: v.id, value: v.value, slug: v.slug })),
     }))
 
-  return { warehouse, products: rows, offers, categories, attributes, dailyDeal, weeklyDeal, isGuest, guestMarkupPct }
+  return { warehouse, products: rows, offers, categories, attributes, dailyDeal, weeklyDeal, isGuest, guestMarkupPct, isClubMember }
 }
