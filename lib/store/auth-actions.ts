@@ -14,6 +14,11 @@ export async function signUpCustomer(input: {
   email: string
   password: string
   phone?: string
+  // Optional extras used by the Club signup page. When `plan` is set, the owner
+  // alert is framed as a Club membership request. Neither field changes the
+  // account itself (the Club toggle is activated manually after payment).
+  city?: string
+  plan?: string
 }): Promise<AuthResult> {
   const name = input.name?.trim()
   const email = input.email?.trim().toLowerCase()
@@ -57,8 +62,15 @@ export async function signUpCustomer(input: {
   }
 
   // New-customer WhatsApp alert to the owner. Fires once, on full success.
-  // notifyNewSignup never throws, so it cannot break signup.
-  await notifyNewSignup({ name, phone, email })
+  // notifyNewSignup never throws, so it cannot break signup. When `plan` is
+  // present this reads as a Club membership request.
+  await notifyNewSignup({
+    name,
+    phone,
+    email,
+    city: input.city?.trim() || undefined,
+    plan: input.plan?.trim() || undefined,
+  })
 
   return { ok: true }
 }

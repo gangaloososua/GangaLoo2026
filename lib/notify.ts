@@ -1,4 +1,4 @@
-﻿// lib/notify.ts — server-side WhatsApp alerts via CallMeBot. Never throws,
+// lib/notify.ts — server-side WhatsApp alerts via CallMeBot. Never throws,
 // so a WhatsApp failure can never block an order from being saved.
 
 type WaTarget = { phone: string; apikey: string };
@@ -46,16 +46,27 @@ export async function notifyNewOrder(a: {
   ]);
 }
 
+// Owner alert when a new customer registers. When `plan` is present, the
+// message is framed as a CLUB membership request (the customer's account is
+// created but their Club toggle stays OFF until the owner activates it after
+// payment). `plan` and `city` are optional, so existing callers (the regular
+// storefront signup) are unaffected.
 export async function notifyNewSignup(a: {
   name: string;
   phone?: string;
   email?: string;
+  city?: string;
+  plan?: string;
 }): Promise<void> {
+  const isClub = !!a.plan;
   const text = [
-    "🙋 Nuevo cliente registrado",
+    isClub ? "🎉 Nueva solicitud de Club" : "🙋 Nuevo cliente registrado",
     `Nombre: ${a.name}`,
     a.phone ? `Tel: ${a.phone}` : null,
     a.email ? `Email: ${a.email}` : null,
+    a.city ? `Ciudad: ${a.city}` : null,
+    a.plan ? `Plan: ${a.plan}` : null,
+    isClub ? "👉 Activa el Club (toggle en People) tras confirmar el pago." : null,
   ]
     .filter(Boolean)
     .join("\n");
