@@ -74,3 +74,34 @@ export async function notifyNewSignup(a: {
     .join("\n");
   await sendWhatsApp(OWNER, text);
 }
+
+// Owner alert for a new SELLER application (from the /partners page). Sellers are
+// a privileged role the owner sets up by hand, so this is just a lead: it sends
+// the full application to the owner's WhatsApp. Never throws.
+export async function notifySellerApplication(a: {
+  name: string;
+  email: string;
+  phone: string;
+  city?: string;
+  cedula?: string;
+  experience?: string;
+  expDetail?: string;
+  channel?: string;
+  message?: string;
+}): Promise<void> {
+  const text = [
+    "🤝 Nueva solicitud de Vendedor",
+    `Nombre: ${a.name}`,
+    `Email: ${a.email}`,
+    `Tel: ${a.phone}`,
+    a.city ? `Ciudad: ${a.city}` : null,
+    a.cedula ? `Cédula: ${a.cedula}` : null,
+    a.experience ? `Experiencia: ${a.experience}` : null,
+    a.expDetail ? `Detalle: ${a.expDetail}` : null,
+    a.channel ? `Cómo vende: ${a.channel}` : null,
+    a.message ? `Mensaje: ${a.message}` : null,
+  ]
+    .filter(Boolean)
+    .join("\n");
+  await sendWhatsApp(OWNER, text);
+}

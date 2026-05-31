@@ -5,7 +5,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 //   /login, /auth  → admin authentication
 //   /tienda        → public customer storefront (browse, cart, checkout,
 //                    and the customer account/login page at /tienda/.../cuenta)
-//   /club, /ayuda, /cotizador → public marketing pages (front-of-site)
+//   /club, /ayuda, /cotizador, /partners → public marketing pages (front-of-site)
 const PUBLIC_PREFIXES = [
   '/login',
   '/auth',
@@ -14,6 +14,7 @@ const PUBLIC_PREFIXES = [
   '/club',
   '/ayuda',
   '/cotizador',
+  '/partners',
 ]
 
 // Public pages matched EXACTLY (not as a prefix). '/' must be exact — using it
