@@ -254,7 +254,15 @@ const glStyles = `
 .gl-nav-cta:hover{ background:#a50f22; color:#fff !important; }
 @media (max-width:560px){
   .gl-nav-links a:not(.gl-nav-cta):not(.gl-nav-admin){ display:none; }
-  .gl-nav-links{ gap:1rem; }
+  .gl-nav{ padding:0 4vw; gap:.5rem; }
+  .gl-brand{ font-size:1.15rem; white-space:nowrap; flex-shrink:0; }
+  .gl-logo-img{ height:30px; width:30px; }
+  .gl-nav-links{ gap:.75rem; flex-shrink:0; }
+  .gl-nav-admin{ font-size:.72rem; }
+  .gl-nav-cta{ padding:7px 12px; font-size:.72rem; }
+}
+@media (max-width:360px){
+  .gl-brand-text{ display:none; }
 }
 
 /* HERO */
