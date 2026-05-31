@@ -11,6 +11,7 @@ import {
   XCircle,
   Banknote,
   Pencil,
+  BadgeCheck,
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -46,6 +47,7 @@ import {
   paySupplierForReceived,
   completePaymentRecord,
   addSupplierPayment,
+  waiveSupplierRemainder,
 } from '../actions'
 import type {
   PurchaseStatus,
@@ -128,7 +130,7 @@ export function PurchaseActionsBar({
   const router = useRouter()
 
   const [busyAction, setBusyAction] =
-    useState<null | 'complete' | 'lost' | 'received' | 'cancelled' | 'paid' | 'correcting' | 'completingpay'>(null)
+    useState<null | 'complete' | 'lost' | 'received' | 'cancelled' | 'paid' | 'correcting' | 'completingpay' | 'waiving'>(null)
   const [completeOpen, setCompleteOpen] = useState(false)
   const [lostOpen, setLostOpen] = useState(false)
   const [receiveOpen, setReceiveOpen] = useState(false)
@@ -136,6 +138,7 @@ export function PurchaseActionsBar({
   const [payOpen, setPayOpen] = useState(false)
   const [correctOpen, setCorrectOpen] = useState(false)
   const [cprOpen, setCprOpen] = useState(false)
+  const [waiveOpen, setWaiveOpen] = useState(false)
 
   const catBlocks = useMemo(() => buildExpenseBlocks(categories), [categories])
 
@@ -348,6 +351,14 @@ export function PurchaseActionsBar({
     setCprOpen(false); setBusyAction(null); router.refresh()
   }
 
+  async function handleWaive() {
+    setBusyAction('waiving')
+    const res = await waiveSupplierRemainder(orderId)
+    if (!res.ok) { toast.error(res.error); setBusyAction(null); return }
+    toast.success('Remaining balance waived. Order marked paid.')
+    setWaiveOpen(false); setBusyAction(null); router.refresh()
+  }
+
   // ---- Visibility ----
   const canReceive  = status === 'paid_supplier' || status === 'received'
   const canComplete = status === 'received'
@@ -361,6 +372,9 @@ export function PurchaseActionsBar({
   // The "no transport" gate matches the RPC's own guard; the user's transport
   // flow is "at receive time", so pending POs typically don't have it yet.
   const canEdit     = status === 'pending' && !hasTransport
+  // round-49a: a partly-paid pending order with a leftover sliver can be waived.
+  const usdOpen     = Math.max((usdTotalForPay ?? 0) - (usdCoveredForPay ?? 0), 0)
+  const canWaive    = status === 'pending' && (usdCoveredForPay ?? 0) > 0 && usdOpen > 0
 
   return (
     <div className="flex flex-wrap gap-2">
@@ -606,6 +620,46 @@ export function PurchaseActionsBar({
                 onClick={(e) => { e.preventDefault(); void handleMarkPaidSupplier() }}
               >
                 {busyAction === 'paid' ? 'Recording...' : 'Record payment'}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
+
+      {/* Waive remaining (round-49a) - pending orders with an open sliver */}
+      {canWaive && (
+        <AlertDialog open={waiveOpen} onOpenChange={setWaiveOpen}>
+          <AlertDialogTrigger asChild>
+            <Button type="button" variant="outline" size="sm">
+              <BadgeCheck className="mr-1.5 h-4 w-4" />
+              Waive remaining
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent className="max-w-xl">
+            <AlertDialogHeader>
+              <AlertDialogTitle>Waive the remaining ${usdOpen.toFixed(2)}?</AlertDialogTitle>
+              <AlertDialogDescription asChild>
+                <div className="space-y-2 text-sm">
+                  <div>
+                    This forgives the ${usdOpen.toFixed(2)} still open and marks the
+                    order <span className="font-medium">Paid supplier</span>, using the
+                    money you have already paid.
+                  </div>
+                  <div className="text-muted-foreground">
+                    Your recorded payments stay exactly as they are &mdash; no new
+                    payment is added and nothing extra is posted to your accounts. Use
+                    this for small rounding / exchange-rate gaps.
+                  </div>
+                </div>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={busyAction === 'waiving'}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                disabled={busyAction === 'waiving'}
+                onClick={(e) => { e.preventDefault(); void handleWaive() }}
+              >
+                {busyAction === 'waiving' ? 'Waiving...' : 'Waive & mark paid'}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>

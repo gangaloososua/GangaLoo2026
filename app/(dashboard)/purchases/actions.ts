@@ -644,3 +644,27 @@ export async function removeSupplierPayment(
   return { ok: true }
 }
 
+
+// ---------------------------------------------------------------------------
+// waiveSupplierRemainder (round-49a) — forgive a small uncovered remainder on a
+// partly-paid pending order and finalize it to 'paid_supplier' using the pesos
+// actually paid. Invents no payment and posts no extra ledger line. Owner-only.
+// ---------------------------------------------------------------------------
+
+export async function waiveSupplierRemainder(
+  orderId: string,
+): Promise<ActionResult> {
+  await requireOwner()
+
+  if (!orderId) return { ok: false, error: 'Order id is required.' }
+
+  const supabase = await createClient()
+  const { error } = await supabase.rpc('waive_supplier_remainder', {
+    p_purchase_order_id: orderId,
+  })
+  if (error) return { ok: false, error: error.message }
+
+  revalidatePath(`/purchases/${orderId}`)
+  revalidatePath('/purchases')
+  return { ok: true }
+}
