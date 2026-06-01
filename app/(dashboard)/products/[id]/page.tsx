@@ -31,8 +31,8 @@ export default async function EditProductPage({
   const supabase = await createClient()
   // Non-owners never see cost_calc — leave it out of the SELECT entirely.
   const selectFields = canSeeCosts
-    ? 'id, sku, name, slug, description, is_active, visible_in_store, price_cents, club_price_cents, commission_percent, target_payback_percent, cost_calc'
-    : 'id, sku, name, slug, description, is_active, visible_in_store, price_cents, club_price_cents, commission_percent, target_payback_percent'
+    ? 'id, sku, name, slug, description, is_active, visible_in_store, is_inventory, price_cents, club_price_cents, commission_percent, target_payback_percent, cost_calc'
+    : 'id, sku, name, slug, description, is_active, visible_in_store, is_inventory, price_cents, club_price_cents, commission_percent, target_payback_percent'
   const { data: product, error } = await supabase
     .from('products')
     .select(selectFields)
@@ -47,6 +47,7 @@ export default async function EditProductPage({
     description: string | null
     is_active: boolean
     visible_in_store: boolean
+    is_inventory: boolean
     price_cents: number
     club_price_cents: number | null
     commission_percent: number | string
@@ -90,6 +91,7 @@ export default async function EditProductPage({
         description: productTyped.description ?? '',
         is_active: productTyped.is_active,
         visible_in_store: productTyped.visible_in_store,
+        is_inventory: productTyped.is_inventory,
         price_cents: productTyped.price_cents,
         club_price_cents: productTyped.club_price_cents,
         commission_percent: Number(productTyped.commission_percent),
