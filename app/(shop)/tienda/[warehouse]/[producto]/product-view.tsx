@@ -17,6 +17,27 @@ function price(cents: number) {
   return formatDOP(cents, { decimals: 0 })
 }
 
+// Turn a YouTube link into an embeddable URL. Accepts the full watch URL
+// (youtube.com/watch?v=ID), the short youtu.be/ID form, or an /embed/ID URL.
+// Returns null if no 11-char video id can be found.
+function toYouTubeEmbed(raw: string): string | null {
+  if (!raw) return null
+  const url = raw.trim()
+  let id = ''
+  const patterns = [
+    /[?&]v=([A-Za-z0-9_-]{11})/,        // watch?v=ID
+    /youtu\.be\/([A-Za-z0-9_-]{11})/,   // youtu.be/ID
+    /\/embed\/([A-Za-z0-9_-]{11})/,     // /embed/ID
+    /\/shorts\/([A-Za-z0-9_-]{11})/,    // /shorts/ID
+  ]
+  for (const re of patterns) {
+    const m = url.match(re)
+    if (m) { id = m[1]; break }
+  }
+  if (!id) return null
+  return `https://www.youtube.com/embed/${id}`
+}
+
 function Icon({ d, size = 22 }: { d: string; size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -52,6 +73,7 @@ export function ProductView({
   const cart = useCart(warehouse.slug)
 
   const out = product.stock <= 0
+  const videoEmbed = product.videoUrl ? toYouTubeEmbed(product.videoUrl) : null
   const mainImage = product.images[active]?.url ?? null
   const cartHref = `/tienda/${warehouse.slug}/carrito`
 
@@ -147,6 +169,27 @@ export function ProductView({
                   <img src={img.url} alt={img.alt ?? product.name} className="h-full w-full object-contain" loading="lazy" />
                 </button>
               ))}
+            </div>
+          )}
+
+          {videoEmbed && (
+            <div className="mt-4">
+              <h2 className="mb-2 text-[15px] font-semibold" style={{ color: NAVY }}>
+                {locale === 'es' ? 'Video del producto' : 'Product video'}
+              </h2>
+              <div
+                className="overflow-hidden rounded-2xl"
+                style={{ position: 'relative', width: '100%', paddingBottom: '56.25%', background: '#000', border: '1px solid #eceef2' }}
+              >
+                <iframe
+                  src={videoEmbed}
+                  title={product.name}
+                  loading="lazy"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                  allowFullScreen
+                  style={{ position: 'absolute', inset: 0, height: '100%', width: '100%', border: 0 }}
+                />
+              </div>
             </div>
           )}
         </div>

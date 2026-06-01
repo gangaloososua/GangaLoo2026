@@ -18,6 +18,7 @@ export type StoreProductDetail = {
   isOffer: boolean
   offerPercent: number
   description: string | null
+  videoUrl: string | null
   category: { id: string; name: string } | null
   stock: number
   images: StoreProductImage[]
@@ -109,6 +110,19 @@ export async function fetchStoreProduct(
     if (cat) category = { id: cat.id as string, name: cat.name as string }
   }
 
+  // Video link (read-only, safe function). Non-blocking: on any hiccup we just
+  // show no video. Reads from products via a SECURITY DEFINER fn that only
+  // returns the URL for active+visible products.
+  let videoUrl: string | null = null
+  try {
+    const { data: vid } = await supabase.rpc('get_store_product_video', {
+      p_id: product.id,
+    })
+    if (typeof vid === 'string' && vid.trim().length > 0) videoUrl = vid.trim()
+  } catch {
+    /* ignore — video is optional */
+  }
+
   return {
     id: product.id as string,
     sku: product.sku as string,
@@ -119,6 +133,7 @@ export async function fetchStoreProduct(
     isOffer,
     offerPercent: isOffer ? Math.round((1 - eff / base) * 100) : 0,
     description: pickDescription(product as Record<string, unknown>),
+    videoUrl,
     category,
     stock,
     images,
