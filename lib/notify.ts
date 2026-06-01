@@ -105,3 +105,28 @@ export async function notifySellerApplication(a: {
     .join("\n");
   await sendWhatsApp(OWNER, text);
 }
+
+// Owner alert when a customer responds to a SERVICE ORDER (encargo) link,
+// choosing pickup or delivery. Sent to the owner's WhatsApp. Never throws.
+export async function notifyServiceOrderResponse(a: {
+  clientName: string;
+  platform: string;
+  fulfilment: "pickup" | "delivery";
+  balanceLabel: string;
+  date?: string | null;
+  address?: string | null;
+}): Promise<void> {
+  const isDel = a.fulfilment === "delivery";
+  const text = [
+    isDel ? "🚚 Encargo: cliente quiere ENTREGA" : "🏪 Encargo: cliente quiere RECOGER",
+    `Cliente: ${a.clientName}`,
+    a.platform ? `Tienda: ${a.platform}` : null,
+    isDel && a.date ? `📅 Fecha: ${a.date}` : null,
+    isDel && a.address ? `📍 Dirección: ${a.address}` : null,
+    `💳 Por cobrar: ${a.balanceLabel}`,
+    "👉 Revisa el panel de Encargos para confirmar.",
+  ]
+    .filter(Boolean)
+    .join("\n");
+  await sendWhatsApp(OWNER, text);
+}

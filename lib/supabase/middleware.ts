@@ -9,6 +9,8 @@ import { NextResponse, type NextRequest } from 'next/server'
 //   /chat          → public virtual-assistant page
 //   /api/chat      → public virtual-assistant endpoint (used by /chat and the
 //                    floating chat bubble on the landing + store pages)
+//   /encargo       → public personal-shopper (service order) link a customer
+//                    opens to view their invoice and choose pickup/delivery
 const PUBLIC_PREFIXES = [
   '/login',
   '/auth',
@@ -21,6 +23,7 @@ const PUBLIC_PREFIXES = [
   '/partners',
   '/returns',
   '/chat',
+  '/encargo',
 ]
 
 // Public pages matched EXACTLY (not as a prefix). '/' must be exact — using it
