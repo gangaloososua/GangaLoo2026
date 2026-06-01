@@ -24,6 +24,7 @@ import {
   Calculator,
   Search,
   QrCode,
+  ShoppingBag,
   type LucideIcon,
 } from 'lucide-react'
 import type { Role } from '@/lib/auth/roles'
@@ -45,6 +46,7 @@ export const navItems: NavItem[] = [
   { label: 'My Sales',         href: '/my-sales',             icon: Receipt,         roles: ALL,                  i18n: { en: 'My sales', es: 'Mis ventas' } },
   { label: 'Caja',             href: '/caja',                 icon: Calculator,      roles: ALL,                  i18n: { en: 'Register', es: 'Caja' } },
   { label: 'Online Orders',    href: '/online-orders',        icon: Globe,           roles: OWNER_ONLY },
+  { label: 'Service Orders',   href: '/service-orders',       icon: ShoppingBag,     roles: OWNER_ONLY,            i18n: { en: 'Service orders', es: 'Encargos' } },
   { label: 'Products',         href: '/products',             icon: Package,         roles: OWNER_ONLY },
   { label: 'Inventory',        href: '/inventory',            icon: Boxes,           roles: ALL },
   { label: 'Locations',        href: '/locations',            icon: MapPin,          roles: OWNER_AND_DISTRIBUTOR, i18n: { en: 'Locations', es: 'Locaciones' } },
