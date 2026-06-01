@@ -7,6 +7,7 @@ import {
   type ProductSearchResult,
 } from '@/lib/sales'
 import { requireOwner, requireAdminCaller } from '@/lib/auth/guard'
+import { maybeCreateEncargoFromSale } from '@/lib/pos-encargo-bridge'
 
 export type ActionResult = { ok: true } | { ok: false; error: string }
 
@@ -477,6 +478,13 @@ export async function confirmPosSale(
   }
 
   revalidatePath('/sales')
+
+  // Step 4 — POS → Encargo bridge.
+  // If this sale included a SERVICE item (a product with is_inventory=false,
+  // e.g. "Pedido de Temu/Amazon"), auto-create a linked encargo so the owner
+  // can run it through the delivery/pickup flow. NON-BLOCKING: never throws,
+  // never affects the sale result. A walk-in (no customer) is skipped inside.
+  await maybeCreateEncargoFromSale(input, row.sale_id)
 
   return {
     ok: true,
