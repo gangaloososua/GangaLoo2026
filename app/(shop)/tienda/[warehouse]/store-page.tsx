@@ -174,7 +174,8 @@ function Countdown({ endsAt, onExpire, locale, accent }: { endsAt: string; onExp
 function DealSection({ deal, locale, storeSlug, onAdd, onShare }: { deal: StoreDeal; locale: Locale; storeSlug: string; onAdd: (p: StoreProduct) => void; onShare: (p: StoreProduct) => void }) {
   const [hidden, setHidden] = useState(false)
   const onExpire = useCallback(() => setHidden(true), [])
-  if (hidden || deal.products.length === 0) return null
+  const dealInStock = deal.products.filter((p) => p.stock > 0)
+  if (hidden || dealInStock.length === 0) return null
   const accent = deal.slot === 'daily' ? RED : NAVY
   return (
     <section className="mx-auto w-full max-w-[1100px] px-4 pb-7">
@@ -183,7 +184,7 @@ function DealSection({ deal, locale, storeSlug, onAdd, onShare }: { deal: StoreD
         {deal.endsAt && <Countdown endsAt={deal.endsAt} onExpire={onExpire} locale={locale} accent={accent} />}
       </div>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-        {deal.products.slice(0, 8).map((p, i) => (
+        {dealInStock.slice(0, 8).map((p, i) => (
           <ProductCard key={p.id} p={p} locale={locale} delay={i * 35} storeSlug={storeSlug} onAdd={onAdd} onShare={onShare} />
         ))}
       </div>
@@ -371,9 +372,14 @@ export function StorePage({ catalog, stores = [] }: { catalog: StoreCatalog; sto
   const searching = trimmedQuery.length > 0
 
   const filtered = useMemo(() => {
+    // Show only in-stock products in the grid by default. Sold-out items still
+    // exist in `products` (so the chat can say "agotado" and direct product
+    // links still resolve), they're just not surfaced in the browse/search grid.
+    const inStock = (p: StoreProduct) => p.stock > 0
     // When searching, look across ALL products (ignore the category chips).
     if (searching) {
       return products.filter((p) => {
+        if (!inStock(p)) return false
         const hay = `${p.name} ${p.sku} ${p.category?.name ?? ''}`.toLowerCase()
         return hay.includes(trimmedQuery)
       })
@@ -395,7 +401,7 @@ export function StorePage({ catalog, stores = [] }: { catalog: StoreCatalog; sto
       activeCat === 'all'
         ? products
         : products.filter((p) => p.category?.id === activeCat)
-    return byCat.filter(attrOk)
+    return byCat.filter(inStock).filter(attrOk)
   }, [searching, trimmedQuery, activeCat, products, attributes, selectedValues])
 
   const shown = filtered.slice(0, visible)
@@ -598,14 +604,14 @@ export function StorePage({ catalog, stores = [] }: { catalog: StoreCatalog; sto
         </div>
       )}
 
-      {!searching && offers.length > 0 && activeCat === 'all' && (
+      {!searching && offers.filter((p) => p.stock > 0).length > 0 && activeCat === 'all' && (
         <section className="mx-auto w-full max-w-[1100px] px-4 pb-7">
           <div className="mb-3 flex items-center gap-2">
             <h2 className="text-[16px] font-semibold" style={{ color: NAVY }}>{ts(locale, 'shop.offers')} {warehouse.name}</h2>
             <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white" style={{ background: RED }}>{ts(locale, 'shop.only')}</span>
           </div>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-            {offers.slice(0, 8).map((p, i) => (
+            {offers.filter((p) => p.stock > 0).slice(0, 8).map((p, i) => (
               <ProductCard key={p.id} p={p} locale={locale} delay={i * 35} storeSlug={warehouse.slug} onAdd={handleAdd} onShare={handleShare} />
             ))}
           </div>
