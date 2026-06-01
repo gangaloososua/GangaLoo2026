@@ -22,6 +22,8 @@ type Props = {
   rows: StockOnHandRow[]
   warehouses?: WarehouseOption[]
   categories?: CategoryOption[]
+  // When true, product names link to that product's edit/detail page
+  // (owners only; sellers see plain text since they don't edit products).
   enableHistoryLink?: boolean
   // Optional: product_id -> incoming (ordered, not arrived) qty. When provided,
   // an "Incoming" column is shown after Total. Product-level, not per-warehouse.
@@ -341,7 +343,7 @@ export function StockOnHandTable({
                           <TableCell className="font-medium">
                             {enableHistoryLink ? (
                               <Link
-                                href={'/inventory?product=' + pr.productId}
+                                href={'/products/' + pr.productId}
                                 className="text-blue-600 hover:underline"
                               >
                                 {pr.productName}
