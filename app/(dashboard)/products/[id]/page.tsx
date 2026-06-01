@@ -31,8 +31,8 @@ export default async function EditProductPage({
   const supabase = await createClient()
   // Non-owners never see cost_calc — leave it out of the SELECT entirely.
   const selectFields = canSeeCosts
-    ? 'id, sku, name, slug, description, is_active, visible_in_store, is_inventory, price_cents, club_price_cents, commission_percent, target_payback_percent, cost_calc'
-    : 'id, sku, name, slug, description, is_active, visible_in_store, is_inventory, price_cents, club_price_cents, commission_percent, target_payback_percent'
+    ? 'id, sku, name, slug, description, video_url, is_active, visible_in_store, is_inventory, price_cents, club_price_cents, commission_percent, target_payback_percent, cost_calc'
+    : 'id, sku, name, slug, description, video_url, is_active, visible_in_store, is_inventory, price_cents, club_price_cents, commission_percent, target_payback_percent'
   const { data: product, error } = await supabase
     .from('products')
     .select(selectFields)
@@ -45,6 +45,7 @@ export default async function EditProductPage({
     name: string
     slug: string
     description: string | null
+    video_url: string | null
     is_active: boolean
     visible_in_store: boolean
     is_inventory: boolean
@@ -89,6 +90,7 @@ export default async function EditProductPage({
         name: productTyped.name,
         slug: productTyped.slug,
         description: productTyped.description ?? '',
+        video_url: productTyped.video_url ?? '',
         is_active: productTyped.is_active,
         visible_in_store: productTyped.visible_in_store,
         is_inventory: productTyped.is_inventory,

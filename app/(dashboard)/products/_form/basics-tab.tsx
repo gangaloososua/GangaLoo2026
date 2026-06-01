@@ -35,6 +35,7 @@ type Props = {
   initialName?: string
   initialSlug?: string
   initialDescription?: string
+  initialVideoUrl?: string
   initialIsActive?: boolean
   initialVisibleInStore?: boolean
   initialIsInventory?: boolean
@@ -45,6 +46,7 @@ export function BasicsTab({
   initialName = '',
   initialSlug = '',
   initialDescription = '',
+  initialVideoUrl = '',
   initialIsActive = true,
   initialVisibleInStore = true,
   initialIsInventory = true,
@@ -133,6 +135,21 @@ export function BasicsTab({
           rows={4}
           placeholder="Customer-facing description (optional)"
         />
+      </div>
+
+      <div className="grid gap-2">
+        <Label htmlFor="video_url">YouTube video link</Label>
+        <Input
+          id="video_url"
+          name="video_url"
+          type="url"
+          defaultValue={initialVideoUrl}
+          placeholder="https://www.youtube.com/watch?v=..."
+        />
+        <p className="text-xs text-muted-foreground">
+          Optional. Paste the full YouTube link for this product. It will play
+          on the product&apos;s page in the online store.
+        </p>
       </div>
 
       <div className="flex items-center gap-3 pt-2">

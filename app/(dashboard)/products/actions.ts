@@ -42,6 +42,7 @@ export async function createProduct(
   // Round 39: track-inventory flag. Defaults true if unchecked AND no other
   // signal, but the form always sends 'on' when checked, so missing == false.
   const isInventory = formData.get('is_inventory') === 'on'
+  const videoUrl = String(formData.get('video_url') ?? '').trim()
 
   const priceDopRaw = String(formData.get('price_dop') ?? '').trim()
   const priceDop = priceDopRaw ? parseFloat(priceDopRaw) : 0
@@ -108,6 +109,7 @@ export async function createProduct(
     name,
     slug,
     description: description || null,
+    video_url: videoUrl || null,
     is_active: isActive,
     visible_in_store: visibleInStore,
     is_inventory: isInventory,
@@ -152,6 +154,7 @@ export async function updateProduct(
   const isActive = formData.get('is_active') === 'on'
   const visibleInStore = formData.get('visible_in_store') === 'on'
   const isInventory = formData.get('is_inventory') === 'on'
+  const videoUrl = String(formData.get('video_url') ?? '').trim()
 
   const priceDop =
     parseFloat(String(formData.get('price_dop') ?? '0')) || 0
@@ -199,6 +202,7 @@ export async function updateProduct(
       name,
       slug,
       description: description || null,
+      video_url: videoUrl || null,
       is_active: isActive,
       visible_in_store: visibleInStore,
       is_inventory: isInventory,

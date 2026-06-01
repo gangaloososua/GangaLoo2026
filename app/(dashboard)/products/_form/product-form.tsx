@@ -43,6 +43,7 @@ type InitialValues = {
   name?: string
   slug?: string
   description?: string
+  video_url?: string
   is_active?: boolean
   visible_in_store?: boolean
   is_inventory?: boolean
@@ -186,6 +187,7 @@ export function ProductForm({
             initialName={initial.name}
             initialSlug={initial.slug}
             initialDescription={initial.description}
+            initialVideoUrl={initial.video_url}
             initialIsActive={initial.is_active ?? true}
             initialVisibleInStore={initial.visible_in_store ?? true}
             initialIsInventory={initial.is_inventory ?? true}
