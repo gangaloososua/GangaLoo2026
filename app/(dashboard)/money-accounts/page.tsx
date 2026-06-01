@@ -31,7 +31,9 @@ export default async function MoneyAccountsPage({
   await requireOwner()
 
   const sp = await searchParams
-  const includePrivateAndMixed = sp.private === '1'
+  // Private + mixed default to SHOWN. Only an explicit ?private=0 hides them,
+  // so a fresh page load (no param) shows them; the toggle can still turn off.
+  const includePrivateAndMixed = sp.private !== '0'
   const includeInactive = sp.inactive === '1'
   const search = sp.q?.trim() ?? ''
   const group = sp.group ?? ''

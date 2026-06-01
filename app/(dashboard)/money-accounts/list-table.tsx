@@ -143,7 +143,14 @@ export function MoneyAccountsListTable({
   }, [searchInput])
 
   function setToggle(key: 'private' | 'inactive', on: boolean) {
-    updateParam(key, on ? '1' : null)
+    // 'private' defaults to ON server-side, so OFF must be an explicit '0'
+    // (removing the param would read as the on-default). 'inactive' defaults
+    // to OFF, so removing the param when off keeps the URL clean.
+    if (key === 'private') {
+      updateParam(key, on ? null : '0')
+    } else {
+      updateParam(key, on ? '1' : null)
+    }
   }
 
   // Apply client-side filters: search and group. Privacy/active scoping
