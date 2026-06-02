@@ -1,9 +1,9 @@
 'use client'
 
 // app/(dashboard)/payroll/payroll-view.tsx
-// Owner-only Payroll view. Add staff to payroll, set each one's default
-// deduction amounts + notes, and manage their stacking pay components.
-// Attendance entry and the pay calculator are added in later steps.
+// Owner-only Payroll view. Two tabs: Employees (add staff to payroll, set
+// deduction defaults + pay components) and Attendance (whole-month grid).
+// The pay calculator is the next step.
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import {
   addEmployee,
   updateEmployee,
@@ -19,6 +20,7 @@ import {
   saveComponent,
   removeComponent,
 } from './actions'
+import { AttendanceTab } from './attendance-tab'
 import {
   FREQUENCIES,
   FREQUENCY_LABEL,
@@ -75,52 +77,64 @@ export function PayrollView({
       <div>
         <h1 className="text-2xl font-bold">Payroll</h1>
         <p className="text-sm text-muted-foreground">
-          Employees and their pay setup. Attendance and the pay calculator come
-          next. Owner only.
+          Employees, pay setup, and attendance. Owner only.
         </p>
       </div>
 
-      <div className="rounded-md border p-4">
-        <Label className="text-sm font-medium">Add an employee to payroll</Label>
-        <div className="mt-2 flex flex-wrap items-center gap-2">
-          <select
-            className={`${selectClass} max-w-xs`}
-            value={addId}
-            onChange={(e) => setAddId(e.target.value)}
-          >
-            <option value="">Select staff…</option>
-            {availableStaff.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.fullName} ({s.role})
-              </option>
-            ))}
-          </select>
-          <Button type="button" onClick={onAdd} disabled={busy || !addId}>
-            Add
-          </Button>
-        </div>
-        {availableStaff.length === 0 && (
-          <p className="mt-2 text-xs text-muted-foreground">
-            All staff are already on payroll.
-          </p>
-        )}
-      </div>
+      <Tabs defaultValue="employees">
+        <TabsList>
+          <TabsTrigger value="employees">Employees</TabsTrigger>
+          <TabsTrigger value="attendance">Attendance</TabsTrigger>
+        </TabsList>
 
-      {employees.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          No employees on payroll yet. Add one above.
-        </p>
-      ) : (
-        <div className="space-y-4">
-          {employees.map((emp) => (
-            <EmployeeCard
-              key={emp.id}
-              emp={emp}
-              components={components.filter((c) => c.employee_id === emp.id)}
-            />
-          ))}
-        </div>
-      )}
+        <TabsContent value="employees" className="space-y-6 pt-4">
+          <div className="rounded-md border p-4">
+            <Label className="text-sm font-medium">Add an employee to payroll</Label>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <select
+                className={`${selectClass} max-w-xs`}
+                value={addId}
+                onChange={(e) => setAddId(e.target.value)}
+              >
+                <option value="">Select staff…</option>
+                {availableStaff.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.fullName} ({s.role})
+                  </option>
+                ))}
+              </select>
+              <Button type="button" onClick={onAdd} disabled={busy || !addId}>
+                Add
+              </Button>
+            </div>
+            {availableStaff.length === 0 && (
+              <p className="mt-2 text-xs text-muted-foreground">
+                All staff are already on payroll.
+              </p>
+            )}
+          </div>
+
+          {employees.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              No employees on payroll yet. Add one above.
+            </p>
+          ) : (
+            <div className="space-y-4">
+              {employees.map((emp) => (
+                <EmployeeCard
+                  key={emp.id}
+                  emp={emp}
+                  components={components.filter((c) => c.employee_id === emp.id)}
+                />
+              ))}
+            </div>
+          )}
+        </TabsContent>
+
+        <TabsContent value="attendance" className="pt-4">
+          <AttendanceTab employees={employees} />
+        </TabsContent>
+      </Tabs>
     </div>
   )
 }

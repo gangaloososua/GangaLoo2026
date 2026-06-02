@@ -45,6 +45,16 @@ export type PayrollEmployeeRow = {
 
 export type StaffOption = { id: string; fullName: string; role: string }
 
+// One stored attendance mark. work_date is 'YYYY-MM-DD'.
+export type AttendanceRecord = {
+  id: string
+  employee_id: string
+  work_date: string
+  status: AttendanceStatus
+  deduction_cents: number
+  note: string | null
+}
+
 export function formatDOP(cents: number): string {
   return new Intl.NumberFormat('es-DO', {
     style: 'currency',
@@ -52,4 +62,31 @@ export function formatDOP(cents: number): string {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format((cents || 0) / 100)
+}
+
+// --- Date helpers (month is 1-12) -----------------------------------------
+
+export const MONTH_NAMES = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+]
+
+export function pad2(n: number): string {
+  return String(n).padStart(2, '0')
+}
+
+// Every day of a month as 'YYYY-MM-DD'.
+export function monthDayList(year: number, month: number): string[] {
+  const daysInMonth = new Date(year, month, 0).getDate()
+  const out: string[] = []
+  for (let d = 1; d <= daysInMonth; d++) out.push(`${year}-${pad2(month)}-${pad2(d)}`)
+  return out
+}
+
+// First day of the month and first day of the NEXT month (for >= / < range queries).
+export function monthBounds(year: number, month: number): { start: string; end: string } {
+  const start = `${year}-${pad2(month)}-01`
+  const ny = month === 12 ? year + 1 : year
+  const nm = month === 12 ? 1 : month + 1
+  return { start, end: `${ny}-${pad2(nm)}-01` }
 }
