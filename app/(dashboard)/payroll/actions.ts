@@ -1,10 +1,10 @@
 'use server'
 
 // app/(dashboard)/payroll/actions.ts
-// Server actions for Payroll (employees, pay components, attendance). The
-// payroll_* tables have RLS on with no policies, so we reach them through the
-// service-role client (createAdminClient). Every action is gated by
-// requireOwner() first. Money is stored in CENTS.
+// Server actions for Payroll (employees, pay components, attendance, advances,
+// and pay-run data loading). The payroll_* tables have RLS on with no policies,
+// so we reach them through the service-role client (createAdminClient). Every
+// action is gated by requireOwner() first. Money is stored in CENTS.
 
 import { revalidatePath } from 'next/cache'
 import { createAdminClient } from '@/lib/supabase/admin'
@@ -15,6 +15,7 @@ import {
   type PayFrequency,
   type AttendanceStatus,
   type AttendanceRecord,
+  type AdvanceRecord,
 } from '@/lib/payroll'
 
 export type ActionResult = { ok: true } | { ok: false; error: string }
@@ -38,6 +39,7 @@ export type UpdateEmployeeInput = {
   isActive: boolean
   defaultLateDeductionCents: number
   defaultAbsentDeductionCents: number
+  extraDayPayCents: number
   notes: string
 }
 
@@ -59,6 +61,7 @@ export async function updateEmployee(
         0,
         Math.round(input.defaultAbsentDeductionCents || 0),
       ),
+      extra_day_pay_cents: Math.max(0, Math.round(input.extraDayPayCents || 0)),
       notes: (input.notes || '').trim() || null,
     })
     .eq('id', input.id)
@@ -71,7 +74,6 @@ export async function removeEmployee(id: string): Promise<ActionResult> {
   await requireOwner()
   if (!id) return { ok: false, error: 'Missing employee id.' }
   const supabase = createAdminClient()
-  // Cascade deletes their pay components, attendance and advances.
   const { error } = await supabase
     .from('payroll_employees')
     .delete()
@@ -194,4 +196,89 @@ export async function saveAttendanceMonth(
   if (error) return { ok: false, error: error.message }
   revalidatePath('/payroll')
   return { ok: true }
+}
+
+// --- Advances --------------------------------------------------------------
+
+export type SaveAdvanceInput = {
+  employeeId: string
+  advanceDate: string
+  amountCents: number
+  note: string
+}
+
+export async function addAdvance(input: SaveAdvanceInput): Promise<ActionResult> {
+  await requireOwner()
+  if (!input.employeeId) return { ok: false, error: 'No employee selected.' }
+  if (!input.advanceDate) return { ok: false, error: 'Pick a date.' }
+  const amount = Math.max(0, Math.round(input.amountCents || 0))
+  if (amount <= 0) return { ok: false, error: 'Amount must be greater than zero.' }
+  const supabase = createAdminClient()
+  const { error } = await supabase.from('payroll_advances').insert({
+    employee_id: input.employeeId,
+    advance_date: input.advanceDate,
+    amount_cents: amount,
+    note: (input.note || '').trim() || null,
+  })
+  if (error) return { ok: false, error: error.message }
+  revalidatePath('/payroll')
+  return { ok: true }
+}
+
+export async function removeAdvance(id: string): Promise<ActionResult> {
+  await requireOwner()
+  if (!id) return { ok: false, error: 'Missing advance id.' }
+  const supabase = createAdminClient()
+  const { error } = await supabase.from('payroll_advances').delete().eq('id', id)
+  if (error) return { ok: false, error: error.message }
+  revalidatePath('/payroll')
+  return { ok: true }
+}
+
+// --- Pay-run data (attendance + advances within a date range) --------------
+
+export type PayRunData = {
+  attendance: AttendanceRecord[]
+  advances: AdvanceRecord[]
+}
+export type LoadPayRunResult =
+  | { ok: true; data: PayRunData }
+  | { ok: false; error: string }
+
+export async function loadPayRunData(
+  employeeId: string,
+  startDate: string,
+  endDate: string,
+): Promise<LoadPayRunResult> {
+  await requireOwner()
+  if (!employeeId) return { ok: false, error: 'No employee selected.' }
+  if (!startDate || !endDate) return { ok: false, error: 'Pick a date range.' }
+  const supabase = createAdminClient()
+
+  const [attRes, advRes] = await Promise.all([
+    supabase
+      .from('payroll_attendance')
+      .select('id, employee_id, work_date, status, deduction_cents, note')
+      .eq('employee_id', employeeId)
+      .gte('work_date', startDate)
+      .lte('work_date', endDate),
+    supabase
+      .from('payroll_advances')
+      .select('id, employee_id, advance_date, amount_cents, note')
+      .eq('employee_id', employeeId)
+      .gte('advance_date', startDate)
+      .lte('advance_date', endDate)
+      .order('advance_date', { ascending: true }),
+  ])
+
+  if (attRes.error) return { ok: false, error: attRes.error.message }
+  if (advRes.error) return { ok: false, error: advRes.error.message }
+
+  return {
+    ok: true,
+    data: {
+      attendance: (attRes.data ?? []) as unknown as AttendanceRecord[],
+      advances: (advRes.data ?? []) as unknown as AdvanceRecord[],
+    },
+  }
 }

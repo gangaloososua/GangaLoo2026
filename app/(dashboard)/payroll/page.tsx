@@ -1,12 +1,11 @@
 // app/(dashboard)/payroll/page.tsx
-// Payroll — employees + pay setup (attendance and the calculator come next).
+// Payroll — employees, pay setup, attendance, and the pay-run calculator.
 // Owner/admin only.
 //
 // Payroll_* tables are read through the service-role admin client (RLS-locked,
-// no policies). The staff NAMES live in `profiles`, which the admin client
-// can't read (base grants revoked), so we read those through the regular
-// server client — exactly how the People page does it, where the owner's RLS
-// allows it.
+// no policies). Staff NAMES live in `profiles`, which the admin client can't
+// read (base grants revoked), so we read those through the regular server
+// client — exactly how the People page does it, where the owner's RLS allows it.
 
 import { requireOwner } from '@/lib/auth/guard'
 import { createAdminClient } from '@/lib/supabase/admin'
@@ -28,6 +27,7 @@ type EmpRaw = {
   is_active: boolean
   default_late_deduction_cents: number
   default_absent_deduction_cents: number
+  extra_day_pay_cents: number
   notes: string | null
   created_at: string
 }
@@ -72,6 +72,7 @@ export default async function PayrollPage() {
       is_active: e.is_active,
       default_late_deduction_cents: e.default_late_deduction_cents,
       default_absent_deduction_cents: e.default_absent_deduction_cents,
+      extra_day_pay_cents: e.extra_day_pay_cents ?? 0,
       notes: e.notes,
       created_at: e.created_at,
       fullName: p?.full_name ?? '(unknown)',

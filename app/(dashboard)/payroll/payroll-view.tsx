@@ -1,9 +1,8 @@
 'use client'
 
 // app/(dashboard)/payroll/payroll-view.tsx
-// Owner-only Payroll view. Two tabs: Employees (add staff to payroll, set
-// deduction defaults + pay components) and Attendance (whole-month grid).
-// The pay calculator is the next step.
+// Owner-only Payroll view. Three tabs: Employees (add staff, deduction defaults,
+// extra-day pay, pay components), Attendance (month grid), and Pay run (calculator).
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
@@ -21,6 +20,7 @@ import {
   removeComponent,
 } from './actions'
 import { AttendanceTab } from './attendance-tab'
+import { PayRunTab } from './pay-run-tab'
 import {
   FREQUENCIES,
   FREQUENCY_LABEL,
@@ -77,7 +77,7 @@ export function PayrollView({
       <div>
         <h1 className="text-2xl font-bold">Payroll</h1>
         <p className="text-sm text-muted-foreground">
-          Employees, pay setup, and attendance. Owner only.
+          Employees, pay setup, attendance, and pay calculation. Owner only.
         </p>
       </div>
 
@@ -85,6 +85,7 @@ export function PayrollView({
         <TabsList>
           <TabsTrigger value="employees">Employees</TabsTrigger>
           <TabsTrigger value="attendance">Attendance</TabsTrigger>
+          <TabsTrigger value="payrun">Pay run</TabsTrigger>
         </TabsList>
 
         <TabsContent value="employees" className="space-y-6 pt-4">
@@ -134,6 +135,10 @@ export function PayrollView({
         <TabsContent value="attendance" className="pt-4">
           <AttendanceTab employees={employees} />
         </TabsContent>
+
+        <TabsContent value="payrun" className="pt-4">
+          <PayRunTab employees={employees} components={components} />
+        </TabsContent>
       </Tabs>
     </div>
   )
@@ -152,6 +157,7 @@ function EmployeeCard({
   const [absent, setAbsent] = useState(
     centsToPesos(emp.default_absent_deduction_cents),
   )
+  const [extra, setExtra] = useState(centsToPesos(emp.extra_day_pay_cents))
   const [notes, setNotes] = useState(emp.notes ?? '')
   const [saving, setSaving] = useState(false)
 
@@ -162,6 +168,7 @@ function EmployeeCard({
       isActive,
       defaultLateDeductionCents: pesosToCents(late),
       defaultAbsentDeductionCents: pesosToCents(absent),
+      extraDayPayCents: pesosToCents(extra),
       notes,
     })
     setSaving(false)
@@ -216,7 +223,7 @@ function EmployeeCard({
         </div>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid gap-3 sm:grid-cols-3">
         <div className="space-y-1">
           <Label className="text-xs">Default late deduction / day (RD$)</Label>
           <Input
@@ -241,10 +248,23 @@ function EmployeeCard({
             placeholder="0"
           />
         </div>
+        <div className="space-y-1">
+          <Label className="text-xs">Extra day pay (RD$)</Label>
+          <Input
+            type="number"
+            inputMode="decimal"
+            min="0"
+            step="1"
+            value={extra}
+            onChange={(e) => setExtra(e.target.value)}
+            placeholder="0"
+          />
+        </div>
       </div>
       <p className="text-xs text-muted-foreground">
-        These only pre-fill the box when you mark a Late/Absent day — you set the
-        actual amount per day, since it depends on the work done.
+        Deductions only pre-fill the box when you mark a Late/Absent day — you set
+        the actual amount per day. Extra day pay is added per day worked beyond the
+        normal 5 (Tue–Sat) in a pay run.
       </p>
 
       <div className="space-y-1">
