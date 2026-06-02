@@ -1,10 +1,11 @@
 'use client'
 
 // app/(dashboard)/payroll/attendance-tab.tsx
-// Whole-month attendance grid. Pick an employee + month; every day shows a
-// Present/Late/Absent control. Days are assumed worked unless marked Late or
-// Absent, which reveals a per-day deduction box (pre-filled from the employee's
-// default). "Save month" upserts the whole month at once. Money in CENTS.
+// Whole-month attendance grid. Work week is Tue–Sat; Sun & Mon default to
+// "Off" (greyed, no deduction) but can be turned into a normal work day with
+// "+ Mark" for the occasional weekend shift. Days are assumed worked unless
+// marked Late or Absent, which reveals a per-day deduction box (pre-filled from
+// the employee's default). "Save month" upserts the whole month. Money in CENTS.
 
 import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
@@ -23,7 +24,8 @@ import {
 const selectClass =
   'flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring'
 
-type DayState = { status: AttendanceStatus; deduction: string; note: string }
+// A day in the grid. `off` = a rest day (Sun/Mon) the user hasn't activated.
+type DayState = { status: AttendanceStatus; deduction: string; note: string; off: boolean }
 
 function pesosToCents(s: string): number {
   const n = Number((s || '').trim())
@@ -31,6 +33,11 @@ function pesosToCents(s: string): number {
 }
 function centsToPesos(c: number): string {
   return c ? String(c / 100) : ''
+}
+// 0 = Sun, 1 = Mon ... 6 = Sat
+function dow(dateStr: string): number {
+  const [y, m, d] = dateStr.split('-').map(Number)
+  return new Date(y, (m || 1) - 1, d || 1).getDay()
 }
 function weekday(dateStr: string): string {
   const [y, m, d] = dateStr.split('-').map(Number)
@@ -40,6 +47,11 @@ function weekday(dateStr: string): string {
 }
 function dayNum(dateStr: string): string {
   return String(Number(dateStr.split('-')[2]))
+}
+// Rest days by default: Sunday (0) and Monday (1).
+function isRestDay(dateStr: string): boolean {
+  const d = dow(dateStr)
+  return d === 0 || d === 1
 }
 
 export function AttendanceTab({
@@ -69,14 +81,21 @@ export function AttendanceTab({
     setLoading(false)
     const base: Record<string, DayState> = {}
     for (const ds of monthDayList(year, month)) {
-      base[ds] = { status: 'present', deduction: '', note: '' }
+      base[ds] = {
+        status: 'present',
+        deduction: '',
+        note: '',
+        off: isRestDay(ds), // Sun/Mon start as Off
+      }
     }
     if (res.ok) {
+      // Any saved row means that day was actually worked/recorded -> not Off.
       for (const r of res.rows) {
         base[r.work_date] = {
           status: r.status,
           deduction: r.status === 'present' ? '' : centsToPesos(r.deduction_cents),
           note: r.note ?? '',
+          off: false,
         }
       }
     } else {
@@ -89,9 +108,21 @@ export function AttendanceTab({
     load()
   }, [load])
 
+  function activateDay(date: string) {
+    setDays((prev) => {
+      const cur = prev[date] ?? { status: 'present', deduction: '', note: '', off: true }
+      return { ...prev, [date]: { ...cur, off: false } }
+    })
+  }
+  function makeOff(date: string) {
+    setDays((prev) => {
+      const cur = prev[date] ?? { status: 'present', deduction: '', note: '', off: false }
+      return { ...prev, [date]: { ...cur, off: true, status: 'present', deduction: '' } }
+    })
+  }
   function setStatus(date: string, status: AttendanceStatus) {
     setDays((prev) => {
-      const cur = prev[date] ?? { status: 'present', deduction: '', note: '' }
+      const cur = prev[date] ?? { status: 'present', deduction: '', note: '', off: false }
       let deduction = cur.deduction
       if (status === 'present') {
         deduction = ''
@@ -108,13 +139,13 @@ export function AttendanceTab({
   function setDeduction(date: string, v: string) {
     setDays((prev) => ({
       ...prev,
-      [date]: { ...(prev[date] ?? { status: 'present', deduction: '', note: '' }), deduction: v },
+      [date]: { ...(prev[date] ?? { status: 'present', deduction: '', note: '', off: false }), deduction: v },
     }))
   }
   function setNote(date: string, v: string) {
     setDays((prev) => ({
       ...prev,
-      [date]: { ...(prev[date] ?? { status: 'present', deduction: '', note: '' }), note: v },
+      [date]: { ...(prev[date] ?? { status: 'present', deduction: '', note: '', off: false }), note: v },
     }))
   }
 
@@ -141,15 +172,16 @@ export function AttendanceTab({
       return
     }
     setSaving(true)
-    const payload = dateList.map((ds) => {
-      const s = days[ds] ?? { status: 'present', deduction: '', note: '' }
-      return {
+    // Only save active (non-Off) days.
+    const payload = dateList
+      .map((ds) => ({ ds, s: days[ds] }))
+      .filter((x) => x.s && !x.s.off)
+      .map(({ ds, s }) => ({
         workDate: ds,
-        status: s.status,
-        deductionCents: pesosToCents(s.deduction),
-        note: s.note,
-      }
-    })
+        status: s!.status,
+        deductionCents: pesosToCents(s!.deduction),
+        note: s!.note,
+      }))
     const res = await saveAttendanceMonth(employeeId, payload)
     setSaving(false)
     if (res.ok) toast.success('Attendance saved')
@@ -161,7 +193,7 @@ export function AttendanceTab({
   let totalDeduction = 0
   for (const ds of dateList) {
     const s = days[ds]
-    if (!s) continue
+    if (!s || s.off) continue
     if (s.status === 'late') {
       lateCount++
       totalDeduction += pesosToCents(s.deduction)
@@ -218,8 +250,9 @@ export function AttendanceTab({
       </div>
 
       <p className="text-xs text-muted-foreground">
-        Days are assumed worked unless you mark them Late or Absent. The deduction
-        pre-fills from this employee&apos;s default — change it per day as needed.
+        Work week is Tue–Sat. Sun &amp; Mon show as Off — tap &ldquo;+ Mark&rdquo; if
+        someone worked one. Days are assumed worked unless marked Late or Absent;
+        the deduction pre-fills from this employee&apos;s default.
       </p>
 
       {loading ? (
@@ -227,7 +260,38 @@ export function AttendanceTab({
       ) : (
         <div className="space-y-1">
           {dateList.map((ds) => {
-            const s = days[ds] ?? { status: 'present', deduction: '', note: '' }
+            const s = days[ds] ?? {
+              status: 'present' as AttendanceStatus,
+              deduction: '',
+              note: '',
+              off: isRestDay(ds),
+            }
+
+            // Off day: greyed, with a "+ Mark" to activate it.
+            if (s.off) {
+              return (
+                <div
+                  key={ds}
+                  className="flex items-center gap-2 rounded border border-dashed px-3 py-2 text-sm text-muted-foreground"
+                >
+                  <div className="w-20 shrink-0">
+                    <span className="font-medium">{dayNum(ds)}</span>{' '}
+                    <span>{weekday(ds)}</span>
+                  </div>
+                  <span className="italic">Off</span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="ml-auto"
+                    onClick={() => activateDay(ds)}
+                  >
+                    + Mark
+                  </Button>
+                </div>
+              )
+            }
+
             const isException = s.status === 'late' || s.status === 'absent'
             return (
               <div
@@ -272,6 +336,14 @@ export function AttendanceTab({
                   onChange={(e) => setNote(ds, e.target.value)}
                   placeholder="Note (optional)"
                 />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => makeOff(ds)}
+                >
+                  Set Off
+                </Button>
               </div>
             )
           })}
