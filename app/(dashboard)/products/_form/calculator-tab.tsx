@@ -17,6 +17,19 @@ import {
 // keep working without touching product-form.tsx imports.
 export type CostCalcState = _CostCalcState
 
+// Real purchase-cost summary for ONE product, returned by the SQL function
+// get_product_purchase_cost_summary. Amounts are in PESOS (not cents).
+export type PurchaseCostSummary = {
+  product_id: string
+  line_count: number
+  purchase_count: number
+  total_units: number
+  total_landed_dop: number
+  weighted_avg_unit_dop: number | null
+  last_unit_dop: number | null
+  last_purchase_at: string | null
+}
+
 const EMPTY: CostCalcState = {
   base_cost_usd: null,
   shipping_usd: null,
@@ -35,6 +48,17 @@ function fmtDOP(n: number): string {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(n)
+}
+
+function fmtDate(iso: string): string {
+  const d = new Date(iso)
+  return Number.isNaN(d.getTime())
+    ? ''
+    : d.toLocaleDateString('es-DO', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+      })
 }
 
 function parseNum(s: string): number | null {
@@ -57,6 +81,7 @@ export function CalculatorTab({
   productCommissionPercent,
   productTargetPaybackPercent,
   currentRate,
+  purchaseCostSummary = null,
 }: {
   mode: Mode
   productId?: string
@@ -64,6 +89,7 @@ export function CalculatorTab({
   productCommissionPercent: number
   productTargetPaybackPercent: number | null
   currentRate: ExchangeRate | null
+  purchaseCostSummary?: PurchaseCostSummary | null
 }) {
   const router = useRouter()
 
@@ -122,13 +148,13 @@ export function CalculatorTab({
   const now = new Date()
   const curY = now.getFullYear()
   const curM = now.getMonth() + 1
-  let rateHint = 'No monthly rate set   enter manually.'
+  let rateHint = 'No monthly rate set — enter manually.'
   if (currentRate) {
     const isCurrent = currentRate.year === curY && currentRate.month === curM
     const label = `${currentRate.year}-${String(currentRate.month).padStart(2, '0')}`
     rateHint = isCurrent
       ? `Monthly planning rate: ${currentRate.rate} (${label})`
-      : `Monthly planning rate: ${currentRate.rate} (${label}   no rate set for ${curY}-${String(curM).padStart(2, '0')} yet)`
+      : `Monthly planning rate: ${currentRate.rate} (${label} — no rate set for ${curY}-${String(curM).padStart(2, '0')} yet)`
   }
 
   const canApply = calc.priceRounded != null && calc.priceRounded > 0
@@ -136,10 +162,68 @@ export function CalculatorTab({
 
   return (
     <div className="space-y-6">
+      {mode === 'edit' && purchaseCostSummary && (
+        <div className="rounded-md border border-primary/40 bg-primary/5 p-4">
+          <div className="text-xs uppercase tracking-wide text-muted-foreground">
+            What you&apos;ve actually paid
+          </div>
+          {purchaseCostSummary.weighted_avg_unit_dop != null ? (
+            <>
+              <div className="mt-1 flex flex-wrap items-baseline gap-2">
+                <span className="text-2xl font-bold">
+                  {fmtDOP(purchaseCostSummary.weighted_avg_unit_dop)}
+                </span>
+                <span className="text-sm text-muted-foreground">
+                  average cost per unit
+                </span>
+              </div>
+              <div className="mt-3 grid gap-3 text-sm sm:grid-cols-3">
+                <div>
+                  <div className="text-xs text-muted-foreground">Units bought</div>
+                  <div className="font-medium">
+                    {purchaseCostSummary.total_units}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-xs text-muted-foreground">Purchases</div>
+                  <div className="font-medium">
+                    {purchaseCostSummary.purchase_count}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-xs text-muted-foreground">
+                    Most recent cost
+                  </div>
+                  <div className="font-medium">
+                    {purchaseCostSummary.last_unit_dop != null
+                      ? fmtDOP(purchaseCostSummary.last_unit_dop)
+                      : '—'}
+                  </div>
+                </div>
+              </div>
+              <p className="mt-3 text-xs text-muted-foreground">
+                Weighted average landed cost across paid / received / completed
+                purchase orders
+                {purchaseCostSummary.last_purchase_at
+                  ? ` · last bought ${fmtDate(purchaseCostSummary.last_purchase_at)}`
+                  : ''}
+                . This is what you really paid — the boxes below are an estimate
+                for setting a new price.
+              </p>
+            </>
+          ) : (
+            <p className="mt-1 text-sm text-muted-foreground">
+              No purchases recorded yet for this product. Once you receive a
+              supplier order, your real average cost will show here.
+            </p>
+          )}
+        </div>
+      )}
+
       {mode === 'create' && (
         <div className="rounded-md border border-dashed bg-muted/30 p-3 text-sm text-muted-foreground">
           Fill the calculator here if you want — when you click <strong>Create</strong>,
-          the final rounded price will be saved as the product's unit price.
+          the final rounded price will be saved as the product&apos;s unit price.
           Leave it blank to use the manual price from the Pricing tab.
         </div>
       )}
@@ -204,7 +288,7 @@ export function CalculatorTab({
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="exchange_rate">Exchange rate (USD ? DOP)</Label>
+          <Label htmlFor="exchange_rate">Exchange rate (USD → DOP)</Label>
           <Input
             id="exchange_rate"
             type="number"
@@ -259,8 +343,8 @@ export function CalculatorTab({
           />
           <p className="text-xs text-muted-foreground">
             {mode === 'create'
-              ? "Type the seller commission % to use for this calc."
-              : "Defaults from product. Editing here is what-if only   doesn't change the saved value."}
+              ? 'Type the seller commission % to use for this calc.'
+              : "Defaults from product. Editing here is what-if only — doesn't change the saved value."}
           </p>
         </div>
 
@@ -287,7 +371,7 @@ export function CalculatorTab({
               {calc.landed != null ? fmtDOP(calc.landed) : ' '}
             </div>
             <p className="mt-1 text-xs text-muted-foreground">
-              (base + shipping) * (1 + tax%) - discount, then * rate + transport
+              (base + shipping) × (1 + tax%) − discount, then × rate + transport
             </p>
           </div>
           <div>
@@ -298,7 +382,7 @@ export function CalculatorTab({
               {calc.price != null ? fmtDOP(calc.price) : ' '}
             </div>
             <p className="mt-1 text-xs text-muted-foreground">
-              landed   (1 + margin%)   (1 - commission%)
+              landed × (1 + margin%) × (1 − commission%)
             </p>
           </div>
           <div>
@@ -309,7 +393,7 @@ export function CalculatorTab({
               {calc.priceRounded != null ? fmtDOP(calc.priceRounded) : ' '}
             </div>
             <p className="mt-1 text-xs text-muted-foreground">
-              Up to next 25 (=3000), 50 (=5000), or 100. What gets applied.
+              Up to next 25 (≤3000), 50 (≤5000), or 100. What gets applied.
             </p>
           </div>
         </div>

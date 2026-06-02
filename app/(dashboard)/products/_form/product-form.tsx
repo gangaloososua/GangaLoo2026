@@ -23,7 +23,11 @@ import { CategoriesTab } from './categories-tab'
 import { AttributesTab } from './attributes-tab'
 import { ImagesTab } from './images-tab'
 import { WarehousesTab } from './warehouses-tab'
-import { CalculatorTab, type CostCalcState } from './calculator-tab'
+import {
+  CalculatorTab,
+  type CostCalcState,
+  type PurchaseCostSummary,
+} from './calculator-tab'
 import { MovementsTab } from './movements-tab'
 import { DeleteDialog } from './delete-dialog'
 import type {
@@ -68,6 +72,7 @@ type Props = {
   costCalc?: CostCalcState | null
   canSeeCosts?: boolean
   currentRate?: ExchangeRate | null
+  purchaseCostSummary?: PurchaseCostSummary | null
   movements?: StockMovementRow[]
   allAttributes?: ProductAttributeOption[]
   productAttributeValueIds?: string[]
@@ -89,6 +94,7 @@ export function ProductForm({
   costCalc = null,
   canSeeCosts = false,
   currentRate = null,
+  purchaseCostSummary = null,
   movements = [],
   allAttributes = [],
   productAttributeValueIds = [],
@@ -249,6 +255,7 @@ export function ProductForm({
               productCommissionPercent={initial.commission_percent ?? 0}
               productTargetPaybackPercent={initial.target_payback_percent ?? null}
               currentRate={currentRate}
+              purchaseCostSummary={purchaseCostSummary}
             />
           </TabsContent>
         )}

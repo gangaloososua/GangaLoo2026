@@ -1,6 +1,8 @@
 import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { ProductForm } from '../_form/product-form'
+import type { PurchaseCostSummary } from '../_form/calculator-tab'
 import {
   fetchProductCategories,
   fetchAllCategoriesFlat,
@@ -66,6 +68,7 @@ export default async function EditProductPage({
     movements,
     allAttributes,
     productAttributeValueIds,
+    purchaseCostSummary,
   ] = await Promise.all([
     fetchProductCategories(productTyped.id),
     fetchAllCategoriesFlat(),
@@ -79,6 +82,16 @@ export default async function EditProductPage({
       : Promise.resolve([]),
     listActiveAttributesWithValues(),
     getProductAttributeValueIds(productTyped.id),
+    // Owner-only: real weighted-average purchase cost. Read through the
+    // service-role admin client because the SQL function is granted only to
+    // service_role (never anon/authenticated), so costs can't leak to staff.
+    canSeeCosts
+      ? createAdminClient()
+          .rpc('get_product_purchase_cost_summary', {
+            p_product_id: productTyped.id,
+          })
+          .then(({ data }) => (data as PurchaseCostSummary | null) ?? null)
+      : Promise.resolve(null),
   ])
   return (
     <ProductForm
@@ -110,6 +123,7 @@ export default async function EditProductPage({
       stockByWarehouse={stockByWarehouse}
       costCalc={canSeeCosts ? (productTyped.cost_calc as never) ?? null : null}
       currentRate={currentRate}
+      purchaseCostSummary={purchaseCostSummary}
       movements={movements}
       allAttributes={allAttributes}
       productAttributeValueIds={productAttributeValueIds}
