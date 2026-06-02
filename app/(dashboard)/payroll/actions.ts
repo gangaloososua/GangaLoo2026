@@ -2,12 +2,22 @@
 
 // app/(dashboard)/payroll/actions.ts
 // Server actions for Payroll (employees, pay components, attendance, advances,
-// and pay-run data loading). The payroll_* tables have RLS on with no policies,
-// so we reach them through the service-role client (createAdminClient). Every
-// action is gated by requireOwner() first. Money is stored in CENTS.
+// and pay-run data loading).
+//
+// CLIENT CHOICE:
+// - payroll_* CRUD + reads go through the service-role admin client
+//   (createAdminClient), since those tables are RLS-locked with no policies.
+// - Advance POST/REMOVE go through the REGULAR server client (createClient),
+//   because they call post_payroll_advance / remove_payroll_advance, which
+//   (like the supplier-payment RPCs) gate on auth.uid() being owner/admin and
+//   reuse post_transaction / reverse_transaction. The admin client has no
+//   auth.uid(), so it would fail that gate.
+//
+// Every action is gated by requireOwner() first. Money is stored in CENTS.
 
 import { revalidatePath } from 'next/cache'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { createClient } from '@/lib/supabase/server'
 import { requireOwner } from '@/lib/auth/guard'
 import {
   FREQUENCIES,
@@ -198,13 +208,15 @@ export async function saveAttendanceMonth(
   return { ok: true }
 }
 
-// --- Advances --------------------------------------------------------------
+// --- Advances (post real money via the ledger RPCs, as the logged-in owner) -
 
 export type SaveAdvanceInput = {
   employeeId: string
   advanceDate: string
   amountCents: number
   note: string
+  moneyAccountId: string
+  categoryId: string
 }
 
 export async function addAdvance(input: SaveAdvanceInput): Promise<ActionResult> {
@@ -213,12 +225,19 @@ export async function addAdvance(input: SaveAdvanceInput): Promise<ActionResult>
   if (!input.advanceDate) return { ok: false, error: 'Pick a date.' }
   const amount = Math.max(0, Math.round(input.amountCents || 0))
   if (amount <= 0) return { ok: false, error: 'Amount must be greater than zero.' }
-  const supabase = createAdminClient()
-  const { error } = await supabase.from('payroll_advances').insert({
-    employee_id: input.employeeId,
-    advance_date: input.advanceDate,
-    amount_cents: amount,
-    note: (input.note || '').trim() || null,
+  if (!input.moneyAccountId) return { ok: false, error: 'Pick the account it was paid from.' }
+  if (!input.categoryId) return { ok: false, error: 'Pick an expense category.' }
+
+  // Regular server client -> runs as the logged-in owner so the RPC's
+  // auth.uid() owner/admin gate (and post_transaction's) passes.
+  const supabase = await createClient()
+  const { error } = await supabase.rpc('post_payroll_advance', {
+    p_employee_id: input.employeeId,
+    p_advance_date: input.advanceDate,
+    p_amount_cents: amount,
+    p_note: (input.note || '').trim() || null,
+    p_money_account_id: input.moneyAccountId,
+    p_category_id: input.categoryId,
   })
   if (error) return { ok: false, error: error.message }
   revalidatePath('/payroll')
@@ -228,8 +247,10 @@ export async function addAdvance(input: SaveAdvanceInput): Promise<ActionResult>
 export async function removeAdvance(id: string): Promise<ActionResult> {
   await requireOwner()
   if (!id) return { ok: false, error: 'Missing advance id.' }
-  const supabase = createAdminClient()
-  const { error } = await supabase.from('payroll_advances').delete().eq('id', id)
+  const supabase = await createClient()
+  const { error } = await supabase.rpc('remove_payroll_advance', {
+    p_advance_id: id,
+  })
   if (error) return { ok: false, error: error.message }
   revalidatePath('/payroll')
   return { ok: true }

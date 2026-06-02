@@ -4,7 +4,8 @@
 // The pay calculator. Pick an employee + date range (with quick presets), and
 // it shows: fixed pay components (× periods, editable), + extra-day pay for days
 // worked beyond the 5-day Tue–Sat baseline, − attendance deductions, − advances,
-// = net to pay. Advances are added/removed here. Money in CENTS throughout.
+// = net to pay. Advances post REAL money to the ledger (account + expense
+// category required) and are reversible. Money in CENTS throughout.
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
@@ -24,6 +25,8 @@ import {
   type PayrollEmployeeRow,
   type AttendanceRecord,
   type AdvanceRecord,
+  type MoneyAccountOption,
+  type ExpenseCategoryOption,
 } from '@/lib/payroll'
 
 const selectClass =
@@ -34,10 +37,9 @@ function pesosToCents(s: string): number {
   return Number.isFinite(n) ? Math.max(0, Math.round(n * 100)) : 0
 }
 
-// Monday of the current week, and the Sunday after.
 function thisWeek(): { start: string; end: string } {
   const now = new Date()
-  const day = now.getDay() // 0 Sun .. 6 Sat
+  const day = now.getDay()
   const diffToMon = (day + 6) % 7
   const mon = new Date(now)
   mon.setDate(now.getDate() - diffToMon)
@@ -54,7 +56,7 @@ function thisFortnight(): { start: string; end: string } {
 function thisMonth(): { start: string; end: string } {
   const now = new Date()
   const y = now.getFullYear()
-  const m = now.getMonth() // 0-based
+  const m = now.getMonth()
   const start = new Date(y, m, 1)
   const end = new Date(y, m + 1, 0)
   return { start: isoDate(start), end: isoDate(end) }
@@ -63,9 +65,13 @@ function thisMonth(): { start: string; end: string } {
 export function PayRunTab({
   employees,
   components,
+  moneyAccounts,
+  expenseCategories,
 }: {
   employees: PayrollEmployeeRow[]
   components: PayComponent[]
+  moneyAccounts: MoneyAccountOption[]
+  expenseCategories: ExpenseCategoryOption[]
 }) {
   const active = employees.filter((e) => e.is_active)
   const [employeeId, setEmployeeId] = useState(active[0]?.id ?? '')
@@ -77,13 +83,14 @@ export function PayRunTab({
   const [advances, setAdvances] = useState<AdvanceRecord[]>([])
   const [loading, setLoading] = useState(false)
 
-  // Editable per-component period counts. Keyed by component id.
   const [periods, setPeriods] = useState<Record<string, number>>({})
 
-  // New-advance form.
+  // New-advance form (now requires account + category).
   const [advDate, setAdvDate] = useState(isoDate(new Date()))
   const [advAmount, setAdvAmount] = useState('')
   const [advNote, setAdvNote] = useState('')
+  const [advAccount, setAdvAccount] = useState(moneyAccounts[0]?.id ?? '')
+  const [advCategory, setAdvCategory] = useState('')
   const [advBusy, setAdvBusy] = useState(false)
 
   const emp = employees.find((e) => e.id === employeeId) || null
@@ -92,7 +99,6 @@ export function PayRunTab({
     [components, employeeId],
   )
 
-  // Recompute default period counts whenever employee/range/components change.
   useEffect(() => {
     const next: Record<string, number> = {}
     for (const c of empComponents) next[c.id] = countPeriods(c.frequency, start, end)
@@ -135,16 +141,26 @@ export function PayRunTab({
       toast.error('Enter an advance amount.')
       return
     }
+    if (!advAccount) {
+      toast.error('Pick the account it was paid from.')
+      return
+    }
+    if (!advCategory) {
+      toast.error('Pick an expense category.')
+      return
+    }
     setAdvBusy(true)
     const res = await addAdvance({
       employeeId,
       advanceDate: advDate,
       amountCents: pesosToCents(advAmount),
       note: advNote,
+      moneyAccountId: advAccount,
+      categoryId: advCategory,
     })
     setAdvBusy(false)
     if (res.ok) {
-      toast.success('Advance added')
+      toast.success('Advance recorded (posted to accounting)')
       setAdvAmount('')
       setAdvNote('')
       load()
@@ -154,27 +170,26 @@ export function PayRunTab({
   }
 
   async function onRemoveAdvance(id: string) {
+    if (!confirm('Remove this advance? Its accounting entry will be reversed.')) return
     const res = await removeAdvance(id)
     if (res.ok) {
-      toast.success('Advance removed')
+      toast.success('Advance removed and reversed')
       load()
     } else {
       toast.error(res.error)
     }
   }
 
-  // --- Math (all in cents) ---
   const componentLines = empComponents.map((c) => {
     const p = periods[c.id] ?? 0
     return { c, periods: p, subtotal: c.amount_cents * p }
   })
   const payTotal = componentLines.reduce((s, l) => s + l.subtotal, 0)
 
-  // Worked days = present or late records in range; baseline = Tue–Sat dates in range.
   const inRange = dateRangeList(start, end)
   const baselineDays = inRange.filter((d) => isBaselineWorkDay(d)).length
   const workedDays = attendance.filter(
-    (a) => (a.status === 'present' || a.status === 'late'),
+    (a) => a.status === 'present' || a.status === 'late',
   ).length
   const extraDays = Math.max(0, workedDays - baselineDays)
   const extraDayRate = emp?.extra_day_pay_cents ?? 0
@@ -218,38 +233,21 @@ export function PayRunTab({
         </div>
         <div className="space-y-1">
           <Label className="text-xs">From</Label>
-          <Input
-            type="date"
-            className="w-40"
-            value={start}
-            onChange={(e) => setStart(e.target.value)}
-          />
+          <Input type="date" className="w-40" value={start} onChange={(e) => setStart(e.target.value)} />
         </div>
         <div className="space-y-1">
           <Label className="text-xs">To</Label>
-          <Input
-            type="date"
-            className="w-40"
-            value={end}
-            onChange={(e) => setEnd(e.target.value)}
-          />
+          <Input type="date" className="w-40" value={end} onChange={(e) => setEnd(e.target.value)} />
         </div>
         <div className="flex gap-1">
-          <Button type="button" variant="outline" size="sm" onClick={() => preset('week')}>
-            This week
-          </Button>
-          <Button type="button" variant="outline" size="sm" onClick={() => preset('fortnight')}>
-            Fortnight
-          </Button>
-          <Button type="button" variant="outline" size="sm" onClick={() => preset('month')}>
-            This month
-          </Button>
+          <Button type="button" variant="outline" size="sm" onClick={() => preset('week')}>This week</Button>
+          <Button type="button" variant="outline" size="sm" onClick={() => preset('fortnight')}>Fortnight</Button>
+          <Button type="button" variant="outline" size="sm" onClick={() => preset('month')}>This month</Button>
         </div>
       </div>
 
       {loading && <p className="text-sm text-muted-foreground">Loading…</p>}
 
-      {/* Pay components */}
       <div className="rounded-md border p-4">
         <div className="mb-2 text-sm font-medium">Pay due</div>
         {componentLines.length === 0 ? (
@@ -293,12 +291,10 @@ export function PayRunTab({
           </div>
         )}
         <p className="mt-2 text-xs text-muted-foreground">
-          Period counts are auto-suggested from the date range — adjust any if a
-          period is partial.
+          Period counts are auto-suggested from the date range — adjust any if a period is partial.
         </p>
       </div>
 
-      {/* Extra day pay */}
       <div className="rounded-md border p-4 text-sm">
         <div className="mb-1 font-medium">Extra days worked</div>
         <div className="flex justify-between">
@@ -315,7 +311,6 @@ export function PayRunTab({
         )}
       </div>
 
-      {/* Deductions */}
       <div className="rounded-md border p-4 text-sm">
         <div className="mb-1 font-medium">Deductions (from attendance)</div>
         <div className="flex justify-between text-muted-foreground">
@@ -332,7 +327,6 @@ export function PayRunTab({
         </div>
       </div>
 
-      {/* Advances */}
       <div className="rounded-md border p-4">
         <div className="mb-2 text-sm font-medium">Advances in this range</div>
         {advances.length === 0 ? (
@@ -340,22 +334,14 @@ export function PayRunTab({
         ) : (
           <div className="mb-3 space-y-1">
             {advances.map((a) => (
-              <div
-                key={a.id}
-                className="flex items-center justify-between gap-2 text-sm"
-              >
+              <div key={a.id} className="flex items-center justify-between gap-2 text-sm">
                 <span className="text-muted-foreground">
                   {a.advance_date}
                   {a.note ? ` · ${a.note}` : ''}
                 </span>
                 <span className="flex items-center gap-2">
                   <span className="font-medium">− {formatDOP(a.amount_cents)}</span>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => onRemoveAdvance(a.id)}
-                  >
+                  <Button type="button" variant="ghost" size="sm" onClick={() => onRemoveAdvance(a.id)}>
                     Remove
                   </Button>
                 </span>
@@ -367,7 +353,8 @@ export function PayRunTab({
             </div>
           </div>
         )}
-        <div className="grid items-end gap-2 sm:grid-cols-4">
+
+        <div className="grid items-end gap-2 sm:grid-cols-3">
           <div className="space-y-1">
             <Label className="text-xs">Date</Label>
             <Input type="date" value={advDate} onChange={(e) => setAdvDate(e.target.value)} />
@@ -388,13 +375,46 @@ export function PayRunTab({
             <Label className="text-xs">Note</Label>
             <Input value={advNote} onChange={(e) => setAdvNote(e.target.value)} placeholder="Optional" />
           </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Paid from account</Label>
+            <select
+              className={selectClass}
+              value={advAccount}
+              onChange={(e) => setAdvAccount(e.target.value)}
+            >
+              <option value="">Select account…</option>
+              {moneyAccounts.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name} ({a.currency}{a.scope !== 'business' ? ` · ${a.scope}` : ''})
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Expense category</Label>
+            <select
+              className={selectClass}
+              value={advCategory}
+              onChange={(e) => setAdvCategory(e.target.value)}
+            >
+              <option value="">Select category…</option>
+              {expenseCategories.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </div>
           <Button type="button" size="sm" onClick={onAddAdvance} disabled={advBusy}>
             {advBusy ? 'Adding…' : 'Add advance'}
           </Button>
         </div>
+        <p className="mt-2 text-xs text-muted-foreground">
+          Adding an advance posts it as a real expense from the chosen account.
+          Removing it reverses that entry.
+        </p>
       </div>
 
-      {/* Net */}
       <div className="rounded-md border-2 border-primary/40 bg-primary/5 p-4">
         <div className="flex items-center justify-between">
           <span className="text-sm font-medium uppercase tracking-wide text-muted-foreground">

@@ -29,6 +29,8 @@ import {
   type PayrollEmployeeRow,
   type StaffOption,
   type PayFrequency,
+  type MoneyAccountOption,
+  type ExpenseCategoryOption,
 } from '@/lib/payroll'
 
 const selectClass =
@@ -46,10 +48,14 @@ export function PayrollView({
   employees,
   components,
   availableStaff,
+  moneyAccounts,
+  expenseCategories,
 }: {
   employees: PayrollEmployeeRow[]
   components: PayComponent[]
   availableStaff: StaffOption[]
+  moneyAccounts: MoneyAccountOption[]
+  expenseCategories: ExpenseCategoryOption[]
 }) {
   const router = useRouter()
   const [addId, setAddId] = useState('')
@@ -137,7 +143,12 @@ export function PayrollView({
         </TabsContent>
 
         <TabsContent value="payrun" className="pt-4">
-          <PayRunTab employees={employees} components={components} />
+          <PayRunTab
+            employees={employees}
+            components={components}
+            moneyAccounts={moneyAccounts}
+            expenseCategories={expenseCategories}
+          />
         </TabsContent>
       </Tabs>
     </div>

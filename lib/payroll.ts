@@ -46,6 +46,15 @@ export type PayrollEmployeeRow = {
 
 export type StaffOption = { id: string; fullName: string; role: string }
 
+export type MoneyAccountOption = {
+  id: string
+  name: string
+  scope: string
+  currency: string
+}
+
+export type ExpenseCategoryOption = { id: string; name: string; scope: string }
+
 // One stored attendance mark. work_date is 'YYYY-MM-DD'.
 export type AttendanceRecord = {
   id: string
