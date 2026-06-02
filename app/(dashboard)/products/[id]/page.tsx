@@ -1,4 +1,4 @@
-import { notFound } from 'next/navigation'
+﻿import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { ProductForm } from '../_form/product-form'
@@ -31,9 +31,9 @@ export default async function EditProductPage({
   const { id } = await params
   const sp = await searchParams
   const supabase = await createClient()
-  // Non-owners never see cost_calc — leave it out of the SELECT entirely.
+  // Non-owners never see cost_calc ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â leave it out of the SELECT entirely.
   const selectFields = canSeeCosts
-    ? 'id, sku, name, slug, description, video_url, is_active, visible_in_store, is_inventory, price_cents, club_price_cents, commission_percent, target_payback_percent, cost_calc'
+    ? 'id, sku, name, slug, description, video_url, is_active, visible_in_store, is_inventory, price_cents, club_price_cents, commission_percent, target_payback_percent, cost_calc, supplier_url'
     : 'id, sku, name, slug, description, video_url, is_active, visible_in_store, is_inventory, price_cents, club_price_cents, commission_percent, target_payback_percent'
   const { data: product, error } = await supabase
     .from('products')
@@ -56,6 +56,7 @@ export default async function EditProductPage({
     commission_percent: number | string
     target_payback_percent: number | string | null
     cost_calc?: unknown
+    supplier_url?: string | null
   }
   const [
     productCategories,
@@ -104,6 +105,7 @@ export default async function EditProductPage({
         slug: productTyped.slug,
         description: productTyped.description ?? '',
         video_url: productTyped.video_url ?? '',
+        supplier_url: canSeeCosts ? (productTyped.supplier_url ?? '') : '',
         is_active: productTyped.is_active,
         visible_in_store: productTyped.visible_in_store,
         is_inventory: productTyped.is_inventory,

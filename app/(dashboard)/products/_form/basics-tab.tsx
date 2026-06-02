@@ -36,6 +36,8 @@ type Props = {
   initialSlug?: string
   initialDescription?: string
   initialVideoUrl?: string
+  initialSupplierUrl?: string
+  canSeeCosts?: boolean
   initialIsActive?: boolean
   initialVisibleInStore?: boolean
   initialIsInventory?: boolean
@@ -47,6 +49,8 @@ export function BasicsTab({
   initialSlug = '',
   initialDescription = '',
   initialVideoUrl = '',
+  initialSupplierUrl = '',
+  canSeeCosts = false,
   initialIsActive = true,
   initialVisibleInStore = true,
   initialIsInventory = true,
@@ -63,6 +67,9 @@ export function BasicsTab({
     Boolean(initialSku),
   )
   const skuSuffixRef = useRef<string>(randomSkuSuffix())
+
+  // Supplier link (owner-only). Controlled so the "Open" link updates live.
+  const [supplierUrl, setSupplierUrl] = useState(initialSupplierUrl)
 
   function handleNameChange(v: string) {
     setName(v)
@@ -82,6 +89,9 @@ export function BasicsTab({
     setSku(v)
     setSkuManuallyEdited(true)
   }
+
+  const supplierHref = supplierUrl.trim()
+  const supplierLooksValid = /^https?:\/\//i.test(supplierHref)
 
   return (
     <div className="space-y-4 max-w-2xl">
@@ -151,6 +161,36 @@ export function BasicsTab({
           on the product&apos;s page in the online store.
         </p>
       </div>
+
+      {canSeeCosts && (
+        <div className="grid gap-2">
+          <Label htmlFor="supplier_url">Supplier link</Label>
+          <Input
+            id="supplier_url"
+            name="supplier_url"
+            type="url"
+            value={supplierUrl}
+            onChange={(e) => setSupplierUrl(e.target.value)}
+            placeholder="https://supplier.com/product/..."
+          />
+          <p className="text-xs text-muted-foreground">
+            Owner-only. The product&apos;s page on your supplier&apos;s website, for quick reference.
+            {supplierLooksValid && (
+              <>
+                {' '}
+                <a
+                  href={supplierHref}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-medium text-primary underline underline-offset-2"
+                >
+                  Open supplier page ↗
+                </a>
+              </>
+            )}
+          </p>
+        </div>
+      )}
 
       <div className="flex items-center gap-3 pt-2">
         <Switch

@@ -1,4 +1,4 @@
-'use server'
+﻿'use server'
 
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
@@ -43,6 +43,7 @@ export async function createProduct(
   // signal, but the form always sends 'on' when checked, so missing == false.
   const isInventory = formData.get('is_inventory') === 'on'
   const videoUrl = String(formData.get('video_url') ?? '').trim()
+  const supplierUrl = String(formData.get('supplier_url') ?? '').trim()
 
   const priceDopRaw = String(formData.get('price_dop') ?? '').trim()
   const priceDop = priceDopRaw ? parseFloat(priceDopRaw) : 0
@@ -110,6 +111,7 @@ export async function createProduct(
     slug,
     description: description || null,
     video_url: videoUrl || null,
+    supplier_url: supplierUrl || null,
     is_active: isActive,
     visible_in_store: visibleInStore,
     is_inventory: isInventory,
@@ -155,6 +157,7 @@ export async function updateProduct(
   const visibleInStore = formData.get('visible_in_store') === 'on'
   const isInventory = formData.get('is_inventory') === 'on'
   const videoUrl = String(formData.get('video_url') ?? '').trim()
+  const supplierUrl = String(formData.get('supplier_url') ?? '').trim()
 
   const priceDop =
     parseFloat(String(formData.get('price_dop') ?? '0')) || 0
@@ -203,6 +206,7 @@ export async function updateProduct(
       slug,
       description: description || null,
       video_url: videoUrl || null,
+      supplier_url: supplierUrl || null,
       is_active: isActive,
       visible_in_store: visibleInStore,
       is_inventory: isInventory,

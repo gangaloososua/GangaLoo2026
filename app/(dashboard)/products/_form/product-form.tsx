@@ -48,6 +48,7 @@ type InitialValues = {
   slug?: string
   description?: string
   video_url?: string
+  supplier_url?: string
   is_active?: boolean
   visible_in_store?: boolean
   is_inventory?: boolean
@@ -156,7 +157,7 @@ export function ProductForm({
             Cancel
           </Button>
           <Button type="submit" disabled={pending}>
-            {pending ? 'Saving…' : mode === 'create' ? 'Create' : 'Save'}
+            {pending ? 'SavingÃ¢â‚¬Â¦' : mode === 'create' ? 'Create' : 'Save'}
           </Button>
         </div>
       </div>
@@ -194,6 +195,8 @@ export function ProductForm({
             initialSlug={initial.slug}
             initialDescription={initial.description}
             initialVideoUrl={initial.video_url}
+            initialSupplierUrl={initial.supplier_url}
+            canSeeCosts={canSeeCosts}
             initialIsActive={initial.is_active ?? true}
             initialVisibleInStore={initial.visible_in_store ?? true}
             initialIsInventory={initial.is_inventory ?? true}
