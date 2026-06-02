@@ -3,7 +3,7 @@
 // Two concerns, deliberately separated:
 //   - fetchStockOnHand(): current quantity per product per warehouse,
 //     summed from inventory_lots.qty_remaining (the authoritative live
-//     stock source the sale/lot system maintains). NO costs — this feeds
+//     stock source the sale/lot system maintains). NO costs â€” this feeds
 //     the seller/distributor stock view.
 //   - fetchStockMovements(): the owner/admin history ledger (added next).
 import { createClient } from '@/lib/supabase/server'
@@ -85,6 +85,56 @@ export async function fetchStockOnHand(
         categoryName: topId ? catName.get(topId) ?? '(unknown)' : '(uncategorized)',
         qtyOnHand: qty,
       })
+    }
+  }
+  // --- Include active, inventory-tracked products that have NO lots yet, so
+  // brand-new products appear at 0 instead of being invisible until their first
+  // stock-in. Only products with zero lots ANYWHERE are added; products that
+  // already have any lot keep their existing rows (no double-counting).
+  {
+    const { data: lotPids, error: lotPidErr } = await supabase
+      .from('inventory_lots')
+      .select('product_id')
+    if (lotPidErr) throw lotPidErr
+    const productsWithLots = new Set<string>(
+      (lotPids ?? []).map((r: { product_id: string }) => r.product_id),
+    )
+
+    const { data: activeProducts, error: apErr } = await supabase
+      .from('products')
+      .select('id, name, sku')
+      .eq('is_active', true)
+      .eq('is_inventory', true)
+    if (apErr) throw apErr
+
+    let whQuery = supabase.from('warehouses').select('id, name')
+    if (warehouseId) whQuery = whQuery.eq('id', warehouseId)
+    const { data: whRows, error: whErr } = await whQuery
+    if (whErr) throw whErr
+    const whList = (whRows ?? []) as Array<{ id: string; name: string }>
+
+    for (const p of (activeProducts ?? []) as Array<{
+      id: string
+      name: string
+      sku: string | null
+    }>) {
+      if (productsWithLots.has(p.id)) continue
+      const primary = primaryCatOf.get(p.id)
+      const topId = primary ? topLevel(primary) : null
+      for (const wh of whList) {
+        const key = p.id + '|' + wh.id
+        if (byKey.has(key)) continue
+        byKey.set(key, {
+          productId: p.id,
+          productName: p.name,
+          productSku: p.sku ?? null,
+          warehouseId: wh.id,
+          warehouseName: wh.name,
+          categoryId: topId,
+          categoryName: topId ? catName.get(topId) ?? '(unknown)' : '(uncategorized)',
+          qtyOnHand: 0,
+        })
+      }
     }
   }
   return Array.from(byKey.values())
