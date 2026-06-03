@@ -68,8 +68,13 @@ function parseNum(s: string): number | null {
   return Number.isFinite(n) ? n : null
 }
 
-function inputValue(n: number | null): string {
-  return n == null ? '' : String(n)
+// Seed the raw-text fields from a numeric state (used on first load).
+function textFromState(s: CostCalcState): Record<keyof CostCalcState, string> {
+  const out = {} as Record<keyof CostCalcState, string>
+  ;(Object.keys(s) as (keyof CostCalcState)[]).forEach((k) => {
+    out[k] = s[k] == null ? '' : String(s[k])
+  })
+  return out
 }
 
 type Mode = 'create' | 'edit'
@@ -102,14 +107,22 @@ export function CalculatorTab({
       initialState?.commission_percent ?? productCommissionPercent,
   })
 
+  // Numeric state drives the calculation and the save. `text` holds exactly what
+  // the user typed per field, so decimals like "105.80" (and partial states like
+  // "105." or "105.0") display as typed instead of being collapsed to a number
+  // on every keystroke.
   const [state, setState] = useState<CostCalcState>(buildInitial)
+  const [text, setText] = useState<Record<keyof CostCalcState, string>>(() =>
+    textFromState(buildInitial()),
+  )
   const [isSavingState, startSaveState] = useTransition()
   const [isSaveAndApply, startSaveAndApply] = useTransition()
 
   const calc = useMemo(() => computeFinalPrice(state), [state])
 
   function set<K extends keyof CostCalcState>(key: K, raw: string) {
-    setState({ ...state, [key]: parseNum(raw) })
+    setText((t) => ({ ...t, [key]: raw }))
+    setState((s) => ({ ...s, [key]: parseNum(raw) }))
   }
 
   function onSaveState() {
@@ -233,11 +246,9 @@ export function CalculatorTab({
           <Label htmlFor="base_cost_usd">Base cost (USD)</Label>
           <Input
             id="base_cost_usd"
-            type="number"
+            type="text"
             inputMode="decimal"
-            step="0.01"
-            min="0"
-            value={inputValue(state.base_cost_usd)}
+            value={text.base_cost_usd}
             onChange={(e) => set('base_cost_usd', e.target.value)}
           />
           <p className="text-xs text-muted-foreground">Supplier unit cost in USD.</p>
@@ -247,11 +258,9 @@ export function CalculatorTab({
           <Label htmlFor="shipping_usd">Inbound shipping per unit (USD)</Label>
           <Input
             id="shipping_usd"
-            type="number"
+            type="text"
             inputMode="decimal"
-            step="0.01"
-            min="0"
-            value={inputValue(state.shipping_usd)}
+            value={text.shipping_usd}
             onChange={(e) => set('shipping_usd', e.target.value)}
           />
           <p className="text-xs text-muted-foreground">International freight share, in USD.</p>
@@ -261,11 +270,9 @@ export function CalculatorTab({
           <Label htmlFor="tax_percent">Tax (%)</Label>
           <Input
             id="tax_percent"
-            type="number"
+            type="text"
             inputMode="decimal"
-            step="0.01"
-            min="0"
-            value={inputValue(state.tax_percent)}
+            value={text.tax_percent}
             onChange={(e) => set('tax_percent', e.target.value)}
           />
           <p className="text-xs text-muted-foreground">
@@ -277,11 +284,9 @@ export function CalculatorTab({
           <Label htmlFor="discount_usd">Discount (USD)</Label>
           <Input
             id="discount_usd"
-            type="number"
+            type="text"
             inputMode="decimal"
-            step="0.01"
-            min="0"
-            value={inputValue(state.discount_usd)}
+            value={text.discount_usd}
             onChange={(e) => set('discount_usd', e.target.value)}
           />
           <p className="text-xs text-muted-foreground">Per-unit supplier discount, in USD. Subtracted from cost.</p>
@@ -291,11 +296,9 @@ export function CalculatorTab({
           <Label htmlFor="exchange_rate">Exchange rate (USD → DOP)</Label>
           <Input
             id="exchange_rate"
-            type="number"
+            type="text"
             inputMode="decimal"
-            step="0.0001"
-            min="0"
-            value={inputValue(state.exchange_rate)}
+            value={text.exchange_rate}
             onChange={(e) => set('exchange_rate', e.target.value)}
           />
           <p className="text-xs text-muted-foreground">{rateHint}</p>
@@ -305,11 +308,9 @@ export function CalculatorTab({
           <Label htmlFor="transport_dop">Local transport per unit (DOP)</Label>
           <Input
             id="transport_dop"
-            type="number"
+            type="text"
             inputMode="decimal"
-            step="0.01"
-            min="0"
-            value={inputValue(state.transport_dop_per_unit)}
+            value={text.transport_dop_per_unit}
             onChange={(e) => set('transport_dop_per_unit', e.target.value)}
           />
           <p className="text-xs text-muted-foreground">Last-mile transport, already in DOP.</p>
@@ -319,11 +320,9 @@ export function CalculatorTab({
           <Label htmlFor="margin_percent">Target margin (%)</Label>
           <Input
             id="margin_percent"
-            type="number"
+            type="text"
             inputMode="decimal"
-            step="0.01"
-            min="0"
-            value={inputValue(state.margin_percent)}
+            value={text.margin_percent}
             onChange={(e) => set('margin_percent', e.target.value)}
           />
           <p className="text-xs text-muted-foreground">Applied to landed cost.</p>
@@ -333,12 +332,9 @@ export function CalculatorTab({
           <Label htmlFor="commission_percent">Commission (%)</Label>
           <Input
             id="commission_percent"
-            type="number"
+            type="text"
             inputMode="decimal"
-            step="0.01"
-            min="0"
-            max="99.99"
-            value={inputValue(state.commission_percent)}
+            value={text.commission_percent}
             onChange={(e) => set('commission_percent', e.target.value)}
           />
           <p className="text-xs text-muted-foreground">
