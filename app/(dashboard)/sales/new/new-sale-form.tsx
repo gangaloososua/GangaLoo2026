@@ -126,13 +126,22 @@ function resolveDefaultPrice(
   product: ProductSearchResult,
   customerHasClubTier: boolean
 ): number {
+  // The normal starting price: warehouse override, else club price (if the
+  // customer has a tier), else base price.
+  let price: number
   if (product.warehouse_price_override_cents != null) {
-    return product.warehouse_price_override_cents
+    price = product.warehouse_price_override_cents
+  } else if (customerHasClubTier && product.club_price_cents != null) {
+    price = product.club_price_cents
+  } else {
+    price = product.base_price_cents
   }
-  if (customerHasClubTier && product.club_price_cents != null) {
-    return product.club_price_cents
+  // sale price (round-58c): a direct per-product sale price wins if it's
+  // lower. Discount rules + loyalty then stack on top (matches online).
+  if (product.sale_price_cents != null && product.sale_price_cents > 0) {
+    price = Math.min(price, product.sale_price_cents)
   }
-  return product.base_price_cents
+  return price
 }
 
 function pickDefaultAccountId(

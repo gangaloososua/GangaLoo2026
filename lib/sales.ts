@@ -481,6 +481,7 @@ export type ProductSearchResult = {
   primary_image_url: string | null
   base_price_cents: number
   club_price_cents: number | null
+  sale_price_cents: number | null
   warehouse_price_override_cents: number | null
   commission_percent: number
   qty_on_hand: number
@@ -548,7 +549,7 @@ export async function searchProductsForSale(opts: {
   let pq = supabase
     .from('products')
     .select(
-      'id, sku, name, primary_image_url, price_cents, club_price_cents, commission_percent'
+      'id, sku, name, primary_image_url, price_cents, club_price_cents, sale_price_cents, commission_percent'
     )
     .eq('is_active', true)
   if (q) pq = pq.or(`sku.ilike.%${q}%,name.ilike.%${q}%`)
@@ -607,6 +608,8 @@ export async function searchProductsForSale(opts: {
     base_price_cents: Number(r.price_cents) || 0,
     club_price_cents:
       r.club_price_cents == null ? null : Number(r.club_price_cents),
+    sale_price_cents:
+      r.sale_price_cents == null ? null : Number(r.sale_price_cents),
     warehouse_price_override_cents: overrideMap[r.id as string] ?? null,
     commission_percent: Number(r.commission_percent) || 0,
     qty_on_hand: stockMap[r.id as string] ?? 0,

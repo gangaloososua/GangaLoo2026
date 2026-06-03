@@ -16,7 +16,7 @@ export async function findProductBySku(
 
   const { data: products, error } = await supabase
     .from('products')
-    .select('id, sku, name, primary_image_url, price_cents, club_price_cents, commission_percent')
+    .select('id, sku, name, primary_image_url, price_cents, club_price_cents, sale_price_cents, commission_percent')
     .eq('is_active', true)
     .eq('sku', sku)
     .limit(1)
@@ -55,6 +55,7 @@ export async function findProductBySku(
     primary_image_url: (r.primary_image_url as string | null) ?? null,
     base_price_cents: Number(r.price_cents) || 0,
     club_price_cents: r.club_price_cents == null ? null : Number(r.club_price_cents),
+    sale_price_cents: r.sale_price_cents == null ? null : Number(r.sale_price_cents),
     warehouse_price_override_cents: override == null ? null : Number(override),
     commission_percent: Number(r.commission_percent) || 0,
     qty_on_hand: Number(stockRes.data?.qty_on_hand) || 0,

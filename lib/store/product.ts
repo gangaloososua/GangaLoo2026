@@ -1,7 +1,9 @@
 // Loads ONE product for a warehouse store from the SAFE public views (store_*),
-// so customer browsers never touch costs/commissions. Effective price (warehouse
-// override if any), stock in that warehouse, image gallery, primary category,
-// and a description if present.
+// so customer browsers never touch costs/commissions. Effective price mirrors
+// the grid (lib/store/catalog.ts): guest markup, club price, direct sale price,
+// and featured deal -- so the product page agrees with the grid, cart, and the
+// checkout quote/charge. Stock in that warehouse, image gallery, primary
+// category, and a description if present.
 
 import { createClient } from '@/lib/supabase/server'
 import type { StoreWarehouse } from './catalog'
@@ -65,10 +67,93 @@ export async function fetchStoreProduct(
     .maybeSingle()
   if (setting && setting.is_visible === false) return null
 
+  // --- Pricing pipeline (mirrors lib/store/catalog.ts) -------------------
+  // Guest vs logged-in. Guests get a markup and NO direct sale price.
+  const {
+    data: { user: authedUser },
+  } = await supabase.auth.getUser()
+  const isGuest = !authedUser
+
+  let guestMarkupPct = 0
+  if (isGuest) {
+    try {
+      const { data: cfg } = await supabase.rpc('get_store_public_config')
+      const raw = (cfg as { guest_markup?: unknown } | null)?.guest_markup
+      guestMarkupPct = Math.max(0, Number(raw ?? 0)) || 0
+    } catch {
+      guestMarkupPct = 0
+    }
+  }
+  const markupFrac = guestMarkupPct / 100
+  // Guests: marked-up, rounded UP to the next RD$25. Logged-in: exact.
+  const mk = (c: number) => {
+    const v = c * (1 + markupFrac)
+    return isGuest ? Math.ceil(v / 2500) * 2500 : Math.round(v)
+  }
+
+  // Club member (logged-in only), via the safe RPC (no direct profile read).
+  let isClubMember = false
+  if (!isGuest) {
+    try {
+      const { data: m } = await supabase.rpc('get_my_is_club_member')
+      isClubMember = m === true
+    } catch {
+      isClubMember = false
+    }
+  }
+
   const base = product.price_cents as number
   const override = (setting?.price_override_cents ?? null) as number | null
-  const eff = override != null ? override : base
-  const isOffer = override != null && override < base
+  const listNormal = override != null ? override : base
+
+  const clubPrice =
+    (product as { club_price_cents?: number | null }).club_price_cents ?? null
+  const salePrice =
+    (product as { sale_price_cents?: number | null }).sale_price_cents ?? null
+
+  // Starting price before deals:
+  //  - guest: list normal (no sale price)
+  //  - logged-in non-member: lower of {list normal, sale price}
+  //  - member: lower of {club price, sale price}
+  let memberNormal = listNormal
+  if (isClubMember && clubPrice != null && clubPrice > 0 && clubPrice < memberNormal) {
+    memberNormal = clubPrice
+  }
+  if (!isGuest && salePrice != null && salePrice > 0 && salePrice < memberNormal) {
+    memberNormal = salePrice
+  }
+
+  // Featured deal (daily/weekly) for this store, percent off, capped 30%.
+  let dealPct = 0
+  try {
+    const { data: dealRows } = await supabase
+      .from('store_promotions')
+      .select('delta_percent, priority, warehouse_id')
+      .eq('product_id', product.id)
+      .or(`warehouse_id.is.null,warehouse_id.eq.${warehouse.id}`)
+    let bestPriority = -1
+    for (const d of dealRows ?? []) {
+      if (d.delta_percent == null) continue
+      const pr = Number(d.priority) || 0
+      if (pr > bestPriority) {
+        bestPriority = pr
+        dealPct = Number(d.delta_percent) || 0
+      }
+    }
+  } catch {
+    dealPct = 0
+  }
+
+  const eff =
+    dealPct > 0
+      ? Math.round(memberNormal * Math.max(0.7, 1 - dealPct / 100))
+      : memberNormal
+
+  // "Was" price to strike through: the list normal when the customer is
+  // getting any kind of break (club / sale / deal), else the base.
+  const compareAt = eff < listNormal ? listNormal : base
+  const isOffer = eff < compareAt
+  // -----------------------------------------------------------------------
 
   const { data: stockRow } = await supabase
     .from('store_inventory')
@@ -110,9 +195,6 @@ export async function fetchStoreProduct(
     if (cat) category = { id: cat.id as string, name: cat.name as string }
   }
 
-  // Video link (read-only, safe function). Non-blocking: on any hiccup we just
-  // show no video. Reads from products via a SECURITY DEFINER fn that only
-  // returns the URL for active+visible products.
   let videoUrl: string | null = null
   try {
     const { data: vid } = await supabase.rpc('get_store_product_video', {
@@ -120,7 +202,7 @@ export async function fetchStoreProduct(
     })
     if (typeof vid === 'string' && vid.trim().length > 0) videoUrl = vid.trim()
   } catch {
-    /* ignore — video is optional */
+    /* ignore -- video is optional */
   }
 
   return {
@@ -128,10 +210,10 @@ export async function fetchStoreProduct(
     sku: product.sku as string,
     name: product.name as string,
     slug: product.slug as string,
-    basePriceCents: base,
-    priceCents: eff,
+    basePriceCents: mk(compareAt),
+    priceCents: mk(eff),
     isOffer,
-    offerPercent: isOffer ? Math.round((1 - eff / base) * 100) : 0,
+    offerPercent: isOffer ? Math.round((1 - eff / compareAt) * 100) : 0,
     description: pickDescription(product as Record<string, unknown>),
     videoUrl,
     category,

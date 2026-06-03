@@ -227,7 +227,7 @@ export async function fetchStoreCatalog(
 
   const { data: products, error } = await supabase
     .from('store_products')
-    .select('id, sku, name, slug, price_cents, primary_image_url, club_price_cents')
+    .select('id, sku, name, slug, price_cents, primary_image_url, club_price_cents, sale_price_cents')
     .eq('is_active', true)
     .eq('visible_in_store', true)
     .order('name', { ascending: true })
@@ -426,7 +426,14 @@ export async function fetchStoreCatalog(
       (p as { club_price_cents?: number | null }).club_price_cents ?? null
     const hasClub =
       isClubMember && clubPrice != null && clubPrice > 0 && clubPrice < listNormal
-    const memberNormal = hasClub ? (clubPrice as number) : listNormal
+    let memberNormal = hasClub ? (clubPrice as number) : listNormal
+    // Direct sale price (round-58c): logged-in shoppers start from the lower
+    // of {current member/normal price, sale price}. Guests never get it.
+    const salePrice =
+      (p as { sale_price_cents?: number | null }).sale_price_cents ?? null
+    if (!isGuest && salePrice != null && salePrice > 0 && salePrice < memberNormal) {
+      memberNormal = salePrice
+    }
     const deal = dealByProduct.get(p.id)
     // A featured deal's price: percent off the member's normal price, with the
     // same 30% maximum discount cap as the in-person promotion rules.

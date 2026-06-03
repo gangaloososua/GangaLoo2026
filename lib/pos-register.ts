@@ -50,7 +50,7 @@ export async function listProductsForRegister(opts: {
   // 1) Active products (optionally filtered by text and/or category).
   let pq = supabase
     .from('products')
-    .select('id, sku, name, primary_image_url, price_cents, club_price_cents, commission_percent')
+    .select('id, sku, name, primary_image_url, price_cents, club_price_cents, sale_price_cents, commission_percent')
     .eq('is_active', true)
   if (q) pq = pq.or(`sku.ilike.%${q}%,name.ilike.%${q}%`)
   if (categoryProductIds) pq = pq.in('id', categoryProductIds)
@@ -106,6 +106,7 @@ export async function listProductsForRegister(opts: {
     primary_image_url: (r.primary_image_url as string | null) ?? null,
     base_price_cents: Number(r.price_cents) || 0,
     club_price_cents: r.club_price_cents == null ? null : Number(r.club_price_cents),
+    sale_price_cents: r.sale_price_cents == null ? null : Number(r.sale_price_cents),
     warehouse_price_override_cents: overrideMap[r.id as string] ?? null,
     commission_percent: Number(r.commission_percent) || 0,
     qty_on_hand: stockMap[r.id as string] ?? 0,

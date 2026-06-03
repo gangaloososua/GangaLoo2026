@@ -1,0 +1,8 @@
+﻿-- round-58b-storefront-sale-price.sql
+-- Online quote + charge honor products.sale_price_cents (direct per-product discount).
+-- Model: sale price is a STARTING price (stacking), applied to LOGGED-IN shoppers only
+-- (v_cust_id not null); anonymous visitors keep the regular price. Member starts from the
+-- LOWER of {club price, sale price}; non-member logged-in from the LOWER of {normal, sale}.
+-- Existing deal + loyalty percentages then stack on top, capped at 30% (unchanged).
+-- Both get_storefront_quote and place_storefront_order were reproduced WHOLE and applied
+-- live in the Supabase SQL editor; this file is the record.
