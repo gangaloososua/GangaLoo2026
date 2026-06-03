@@ -1,7 +1,7 @@
 'use client'
 
-// Round 19 — New bulk rule form
-// Round 20.1 — product-scope selector swapped for the searchable
+// Round 19 Ã¢â‚¬â€ New bulk rule form
+// Round 20.1 Ã¢â‚¬â€ product-scope selector swapped for the searchable
 //              ProductPicker (category filter + type-to-search). The
 //              product-vs-category SCOPE toggle is unchanged.
 //
@@ -52,7 +52,7 @@ export function NewBulkRuleForm({ products, categories }: Props) {
   const router = useRouter()
 
   const [name, setName] = useState('')
-  const [scopeKind, setScopeKind] = useState<'product' | 'category'>('product')
+  const [scopeKind, setScopeKind] = useState<'product' | 'category' | 'all'>('product')
   const [productId, setProductId] = useState('')
   const [categoryId, setCategoryId] = useState('')
   const [thresholdStr, setThresholdStr] = useState('10')
@@ -161,6 +161,14 @@ export function NewBulkRuleForm({ products, categories }: Props) {
               >
                 A category
               </Button>
+              <Button
+                type="button"
+                variant={scopeKind === 'all' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setScopeKind('all')}
+              >
+                All products
+              </Button>
             </div>
             <p className="text-xs text-muted-foreground">
               Category rules match a product&rsquo;s primary category.
@@ -168,7 +176,7 @@ export function NewBulkRuleForm({ products, categories }: Props) {
           </div>
 
           {/* Product or category picker */}
-          {scopeKind === 'product' ? (
+          {scopeKind === 'product' && (
             <div className="space-y-1 sm:col-span-2">
               <Label className="text-xs">
                 Product <span className="text-rose-600">*</span>
@@ -180,14 +188,15 @@ export function NewBulkRuleForm({ products, categories }: Props) {
                 onChange={setProductId}
               />
             </div>
-          ) : (
+          )}
+          {scopeKind === 'category' && (
             <div className="space-y-1 sm:col-span-2">
               <Label className="text-xs">
                 Category <span className="text-rose-600">*</span>
               </Label>
               <Select value={categoryId} onValueChange={setCategoryId}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Pick a category…" />
+                  <SelectValue placeholder="Pick a categoryÃ¢â‚¬Â¦" />
                 </SelectTrigger>
                 <SelectContent>
                   {categories.map((c) => (
@@ -296,7 +305,7 @@ export function NewBulkRuleForm({ products, categories }: Props) {
             disabled={!canSubmit}
             title={validationError ?? 'Create rule'}
           >
-            {submitting ? 'Creating…' : 'Create rule'}
+            {submitting ? 'CreatingÃ¢â‚¬Â¦' : 'Create rule'}
           </Button>
         </div>
       </CardContent>

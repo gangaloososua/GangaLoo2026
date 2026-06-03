@@ -1,6 +1,6 @@
 'use client'
 
-// Round 16.3 — Discount rules list table
+// Round 16.3 â€” Discount rules list table
 
 import * as React from 'react'
 import { useTransition } from 'react'
@@ -25,9 +25,9 @@ type Props = {
 }
 
 function formatDate(iso: string | null): string {
-  if (!iso) return '—'
+  if (!iso) return 'â€”'
   const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return '—'
+  if (Number.isNaN(d.getTime())) return 'â€”'
   return d.toLocaleDateString('en-GB', {
     day: '2-digit',
     month: 'short',
@@ -36,7 +36,7 @@ function formatDate(iso: string | null): string {
 }
 
 function formatPercent(n: number | null): string {
-  if (n == null) return '—'
+  if (n == null) return 'â€”'
   return `${n.toFixed(2)}%`
 }
 
@@ -64,18 +64,20 @@ function scopeSummary(r: DiscountRuleRow): string {
     parts.push(`Tier: ${r.scopeClubTier}`)
   if (r.scopeProductName) parts.push(`Product: ${r.scopeProductName}`)
   if (r.scopeCategoryName) parts.push(`Category: ${r.scopeCategoryName}`)
+  if (r.kind === 'bulk' && !r.scopeProductId && !r.scopeCategoryId)
+    parts.push('All products')
   if (r.scopeWarehouseName) parts.push(`Warehouse: ${r.scopeWarehouseName}`)
   if (r.scopeSourceWarehouseName)
     parts.push(`From: ${r.scopeSourceWarehouseName}`)
   if (r.scopeFulfillmentWarehouseName)
     parts.push(`To: ${r.scopeFulfillmentWarehouseName}`)
   if (r.thresholdQty != null) parts.push(`Min qty: ${r.thresholdQty}`)
-  return parts.join(' • ') || '—'
+  return parts.join(' â€¢ ') || 'â€”'
 }
 
 function windowSummary(r: DiscountRuleRow): string {
   if (!r.startsAt && !r.endsAt) return 'Always'
-  return `${formatDate(r.startsAt)} → ${formatDate(r.endsAt)}`
+  return `${formatDate(r.startsAt)} â†’ ${formatDate(r.endsAt)}`
 }
 
 function amountSummary(r: DiscountRuleRow): string {
@@ -85,7 +87,7 @@ function amountSummary(r: DiscountRuleRow): string {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     }).format(r.deltaCents / 100) + ' DOP'
-  return '—'
+  return 'â€”'
 }
 
 export function DiscountRulesListTable({ rules }: Props) {

@@ -1,6 +1,6 @@
-'use server'
+﻿'use server'
 
-// Round 16.3 — Discount rules server actions
+// Round 16.3 Ã¢â‚¬â€ Discount rules server actions
 //
 // Direct table writes (no RPC wrapper in v1). The requireRole gate
 // is the security boundary. The schema CHECK constraint guards
@@ -170,7 +170,7 @@ export async function createClubTierRule(
 // ----------------------------------------------------------------------
 export type CreateBulkRuleInput = {
   name: string
-  scopeKind: 'product' | 'category'
+  scopeKind: 'product' | 'category' | 'all'
   scopeProductId: string | null
   scopeCategoryId: string | null
   thresholdQty: number
@@ -193,8 +193,10 @@ export async function createBulkRule(
     if (!input.scopeProductId) return { ok: false, error: 'Pick a product' }
   } else if (input.scopeKind === 'category') {
     if (!input.scopeCategoryId) return { ok: false, error: 'Pick a category' }
+  } else if (input.scopeKind === 'all') {
+    // Store-wide: no product/category needed. Both scopes save as null.
   } else {
-    return { ok: false, error: 'Pick a product or a category' }
+    return { ok: false, error: 'Pick a product, a category, or all products' }
   }
 
   if (
@@ -291,7 +293,7 @@ export async function setRuleActive(
 // deleteRule
 //
 // Hard delete. Only allowed when no audit rows reference the rule
-// (FK with no ON DELETE policy → DB rejects). Soft-deactivate via
+// (FK with no ON DELETE policy Ã¢â€ â€™ DB rejects). Soft-deactivate via
 // setRuleActive(false) for the common case.
 // ----------------------------------------------------------------------
 

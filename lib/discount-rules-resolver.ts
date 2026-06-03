@@ -1,7 +1,7 @@
-// Round 16.4 — TS resolver for line discounts
-// Round 17  — club_tier support added
-// Round 19  — bulk support added (product/category scope, walk-in capable)
-// Round 20  — promotion support added; stale walk-in early return removed
+// Round 16.4 â€” TS resolver for line discounts
+// Round 17  â€” club_tier support added
+// Round 19  â€” bulk support added (product/category scope, walk-in capable)
+// Round 20  â€” promotion support added; stale walk-in early return removed
 //
 // Mirrors the SQL function `public.resolve_line_discounts`
 // (see db/migrations/round-20-promotion-01-resolver.sql for the
@@ -11,7 +11,7 @@
 //
 // !!! KEEP IN LOCK-STEP WITH THE SQL FUNCTION !!!
 // If SQL adds a new rule kind, this file must also handle it; if SQL
-// changes the cap or stacking, change here too. Spec §5 is the
+// changes the cap or stacking, change here too. Spec Â§5 is the
 // shared design contract.
 //
 // Currently supports: customer_override (Round 16), club_tier (Round 17),
@@ -19,7 +19,7 @@
 
 import type { DiscountRuleRow, DiscountRuleKind } from '@/lib/discount-rules'
 
-const CAP_FACTOR = 0.70 // 30% off max → 70% retained
+const CAP_FACTOR = 0.70 // 30% off max â†’ 70% retained
 
 // Sort key per rule kind. Lower = earlier in the stack. Round 17 puts
 // club_tier first; customer_override layers on top. Future kinds slot
@@ -108,10 +108,13 @@ export function resolveLineDiscount(
           r.scopeCategoryId !== null &&
           input.categoryId !== null &&
           r.scopeCategoryId === input.categoryId
-        return productMatch || categoryMatch
+        // Store-wide bulk rule: both scopes null = applies to every product.
+        const storeWideMatch =
+          r.scopeProductId === null && r.scopeCategoryId === null
+        return productMatch || categoryMatch || storeWideMatch
       }
-      // Round 20: promotion — time-bound product deal. No customer, no
-      // tier, no threshold → fires for everyone incl. walk-ins. The
+      // Round 20: promotion â€” time-bound product deal. No customer, no
+      // tier, no threshold â†’ fires for everyone incl. walk-ins. The
       // date-window filter above already bounds it (daily/weekly).
       if (r.kind === 'promotion') {
         return r.scopeProductId === input.productId
