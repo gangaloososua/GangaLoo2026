@@ -140,6 +140,8 @@ export async function createProduct(
     is_inventory: isInventory,
     price_cents: priceCents,
     club_price_cents: clubPriceCents,
+    sale_price_cents: salePriceCents,
+    sale_discount_pct: saleDiscountPct,
     commission_percent: commissionPercent,
     target_payback_percent: targetPaybackPercent,
   }
@@ -258,6 +260,8 @@ export async function updateProduct(
       is_inventory: isInventory,
       price_cents: priceCents,
       club_price_cents: clubPriceCents,
+      sale_price_cents: salePriceCents,
+      sale_discount_pct: saleDiscountPct,
       commission_percent: commissionPercent,
       target_payback_percent: targetPaybackPercent,
     })
