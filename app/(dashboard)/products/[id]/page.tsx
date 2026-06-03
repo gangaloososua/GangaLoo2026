@@ -1,4 +1,4 @@
-﻿import { notFound } from 'next/navigation'
+import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { ProductForm } from '../_form/product-form'
@@ -33,8 +33,8 @@ export default async function EditProductPage({
   const supabase = await createClient()
   // Non-owners never see cost_calc ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â leave it out of the SELECT entirely.
   const selectFields = canSeeCosts
-    ? 'id, sku, name, slug, description, video_url, is_active, visible_in_store, is_inventory, price_cents, club_price_cents, commission_percent, target_payback_percent, cost_calc, supplier_url'
-    : 'id, sku, name, slug, description, video_url, is_active, visible_in_store, is_inventory, price_cents, club_price_cents, commission_percent, target_payback_percent'
+    ? 'id, sku, name, slug, description, video_url, is_active, visible_in_store, is_inventory, price_cents, club_price_cents, sale_price_cents, sale_discount_pct, commission_percent, target_payback_percent, cost_calc, supplier_url'
+    : 'id, sku, name, slug, description, video_url, is_active, visible_in_store, is_inventory, price_cents, club_price_cents, sale_price_cents, sale_discount_pct, commission_percent, target_payback_percent'
   const { data: product, error } = await supabase
     .from('products')
     .select(selectFields)
@@ -53,6 +53,8 @@ export default async function EditProductPage({
     is_inventory: boolean
     price_cents: number
     club_price_cents: number | null
+    sale_price_cents: number | null
+    sale_discount_pct: number | string | null
     commission_percent: number | string
     target_payback_percent: number | string | null
     cost_calc?: unknown
@@ -111,6 +113,11 @@ export default async function EditProductPage({
         is_inventory: productTyped.is_inventory,
         price_cents: productTyped.price_cents,
         club_price_cents: productTyped.club_price_cents,
+        sale_price_cents: productTyped.sale_price_cents ?? null,
+        sale_discount_pct:
+          productTyped.sale_discount_pct != null
+            ? Number(productTyped.sale_discount_pct)
+            : null,
         commission_percent: Number(productTyped.commission_percent),
         target_payback_percent:
           productTyped.target_payback_percent != null

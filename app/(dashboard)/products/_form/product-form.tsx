@@ -54,6 +54,8 @@ type InitialValues = {
   is_inventory?: boolean
   price_cents?: number
   club_price_cents?: number | null
+  sale_price_cents?: number | null
+  sale_discount_pct?: number | null
   commission_percent?: number
   target_payback_percent?: number | null
 }
@@ -207,6 +209,8 @@ export function ProductForm({
           <PricingTab
             initialPriceCents={initial.price_cents}
             initialClubPriceCents={initial.club_price_cents}
+            initialSalePriceCents={initial.sale_price_cents}
+            initialSaleDiscountPct={initial.sale_discount_pct}
             initialCommissionPercent={initial.commission_percent}
             initialTargetPaybackPercent={initial.target_payback_percent}
           />

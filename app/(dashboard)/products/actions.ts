@@ -1,4 +1,4 @@
-﻿'use server'
+'use server'
 
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
@@ -44,6 +44,9 @@ export async function createProduct(
   const isInventory = formData.get('is_inventory') === 'on'
   const videoUrl = String(formData.get('video_url') ?? '').trim()
   const supplierUrl = String(formData.get('supplier_url') ?? '').trim()
+  const saleMode = String(formData.get('sale_mode') ?? 'none')
+  const salePctRaw = String(formData.get('sale_pct') ?? '').trim()
+  const salePriceDopRaw = String(formData.get('sale_price_dop') ?? '').trim()
 
   const priceDopRaw = String(formData.get('price_dop') ?? '').trim()
   const priceDop = priceDopRaw ? parseFloat(priceDopRaw) : 0
@@ -84,6 +87,26 @@ export async function createProduct(
 
   const manualPriceCents = Math.round(priceDop * 100)
   const priceCents = calcPriceCents ?? manualPriceCents
+
+  // Direct discount: percent or exact sale price -> final sale price in cents.
+  let salePriceCents: number | null = null
+  let saleDiscountPct: number | null = null
+  if (saleMode === 'pct') {
+    const pct = salePctRaw ? parseFloat(salePctRaw) : NaN
+    if (!Number.isNaN(pct) && pct > 0 && pct < 100) {
+      saleDiscountPct = pct
+      salePriceCents = Math.round(priceCents * (1 - pct / 100))
+    }
+  } else if (saleMode === 'price') {
+    const sp = salePriceDopRaw ? parseFloat(salePriceDopRaw) : NaN
+    if (!Number.isNaN(sp) && sp > 0) {
+      salePriceCents = Math.round(sp * 100)
+    }
+  }
+  if (salePriceCents != null && salePriceCents >= priceCents) {
+    salePriceCents = null
+    saleDiscountPct = null
+  }
 
   const clubPriceCents =
     clubPriceDop != null && !Number.isNaN(clubPriceDop)
@@ -158,6 +181,9 @@ export async function updateProduct(
   const isInventory = formData.get('is_inventory') === 'on'
   const videoUrl = String(formData.get('video_url') ?? '').trim()
   const supplierUrl = String(formData.get('supplier_url') ?? '').trim()
+  const saleMode = String(formData.get('sale_mode') ?? 'none')
+  const salePctRaw = String(formData.get('sale_pct') ?? '').trim()
+  const salePriceDopRaw = String(formData.get('sale_price_dop') ?? '').trim()
 
   const priceDop =
     parseFloat(String(formData.get('price_dop') ?? '0')) || 0
@@ -193,6 +219,26 @@ export async function updateProduct(
   slug = candidate
 
   const priceCents = Math.round(priceDop * 100)
+
+  // Direct discount: percent or exact sale price -> final sale price in cents.
+  let salePriceCents: number | null = null
+  let saleDiscountPct: number | null = null
+  if (saleMode === 'pct') {
+    const pct = salePctRaw ? parseFloat(salePctRaw) : NaN
+    if (!Number.isNaN(pct) && pct > 0 && pct < 100) {
+      saleDiscountPct = pct
+      salePriceCents = Math.round(priceCents * (1 - pct / 100))
+    }
+  } else if (saleMode === 'price') {
+    const sp = salePriceDopRaw ? parseFloat(salePriceDopRaw) : NaN
+    if (!Number.isNaN(sp) && sp > 0) {
+      salePriceCents = Math.round(sp * 100)
+    }
+  }
+  if (salePriceCents != null && salePriceCents >= priceCents) {
+    salePriceCents = null
+    saleDiscountPct = null
+  }
   const clubPriceCents =
     clubPriceDop != null && !Number.isNaN(clubPriceDop)
       ? Math.round(clubPriceDop * 100)
