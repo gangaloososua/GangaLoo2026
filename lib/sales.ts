@@ -229,6 +229,13 @@ export type SaleDetailPayment = {
   reference: string | null
 }
 
+export type SaleDetailHeldCash = {
+  id: string
+  amount_cents: number
+  note: string | null
+  collected_at: string
+}
+
 export type SaleDetail = {
   id: string
   invoice_number: string | null
@@ -265,6 +272,10 @@ export type SaleDetail = {
   items: SaleDetailItem[]
   commissions: SaleDetailCommission[]
   payments: SaleDetailPayment[]
+  // Cash a seller has logged as collected but the owner has not yet handed in.
+  // Sits outside the books until reconciled on the Seller Cash screen. RLS
+  // shows a seller only their own rows; owner/admin see all.
+  held_cash: SaleDetailHeldCash[]
 }
 
 export async function getSale(id: string): Promise<SaleDetail | null> {
@@ -355,6 +366,21 @@ export async function getSale(id: string): Promise<SaleDetail | null> {
   }))
   payments.sort((a, b) => a.paid_at.localeCompare(b.paid_at))
 
+  // Held seller-cash logged against this sale (not yet handed in / booked).
+  const { data: heldRows, error: heldErr } = await supabase
+    .from('seller_cash_collections')
+    .select('id, amount_cents, note, collected_at')
+    .eq('sale_id', id)
+    .eq('status', 'held')
+    .order('collected_at', { ascending: true })
+  if (heldErr) throw new Error(`getSale held cash: ${heldErr.message}`)
+  const held_cash: SaleDetailHeldCash[] = (heldRows ?? []).map((r: any) => ({
+    id: r.id,
+    amount_cents: Number(r.amount_cents) || 0,
+    note: r.note ?? null,
+    collected_at: r.collected_at,
+  }))
+
   const s = sale as any
   return {
     id: s.id,
@@ -392,6 +418,7 @@ export async function getSale(id: string): Promise<SaleDetail | null> {
     items,
     commissions,
     payments,
+    held_cash,
   }
 }
 

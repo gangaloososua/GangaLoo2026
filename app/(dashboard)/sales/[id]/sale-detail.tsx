@@ -894,6 +894,36 @@ function PaymentsPanel({
             )}
           </div>
         )}
+        {sale.held_cash.length > 0 && (
+          <div className="mt-3 rounded-md border border-amber-300 bg-amber-50 p-3">
+            <div className="text-xs font-medium uppercase tracking-wide text-amber-800">
+              {locale === 'es'
+                ? 'Pago pendiente de confirmación'
+                : 'Payment pending confirmation'}
+            </div>
+            <ul className="mt-2 space-y-1">
+              {sale.held_cash.map((h) => (
+                <li
+                  key={h.id}
+                  className="flex items-center justify-between gap-3 text-sm"
+                >
+                  <span className="text-xs text-amber-900/80">
+                    {formatDateTime(h.collected_at)}
+                    {h.note ? ` · ${h.note}` : ''}
+                  </span>
+                  <span className="font-medium tabular-nums text-amber-900">
+                    {formatDOP(h.amount_cents)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+            <p className="mt-2 text-xs text-amber-800/80">
+              {locale === 'es'
+                ? 'Registrado por el vendedor. El dueño debe confirmarlo antes de que entre en la contabilidad.'
+                : 'Logged by the seller. The owner must confirm it before it enters accounting.'}
+            </p>
+          </div>
+        )}
       </CardContent>
       {canTakePayment && (
         <AddPaymentDialog
