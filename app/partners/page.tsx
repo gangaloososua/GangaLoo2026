@@ -3,8 +3,9 @@
 // GangaLoo — Partners page  —  route: /partners  (app/partners/page.tsx)
 //
 // Two tabs:
-//   Mayoreo (wholesale)  — marketing for the automatic bulk discounts + a button
-//                          to the store. No form (discounts apply in the cart).
+//   Mayoreo (wholesale)  — marketing for wholesale pricing. Wholesale is NOT
+//                          automatic: partners contact us for a personalized
+//                          quote via WhatsApp. No automatic cart discount.
 //   Vendedores (sellers) — marketing + a seller APPLICATION form. On submit it
 //                          calls submitSellerApplication(), which WhatsApps the
 //                          full application to the owner. It does NOT create an
@@ -17,10 +18,10 @@ import { submitSellerApplication } from './actions'
 const WA_BUSINESS = '18292867868'
 
 const MAYOREO_STEPS = [
-  { n: 1, t: 'Elige tu producto', d: 'Navega la tienda y selecciona lo que quieres comprar al por mayor.' },
-  { n: 2, t: 'Agrega cantidad', d: 'Sube la cantidad en el carrito. El descuento se calcula al instante.' },
-  { n: 3, t: 'Descuento aplicado', d: 'Al llegar al mínimo de unidades, el precio baja solo. Sin cupones ni códigos.' },
-  { n: 4, t: 'Paga y recibe', d: 'Completa tu pedido normalmente. El precio mayorista ya viene incluido.' },
+  { n: 1, t: 'Escríbenos', d: 'Contáctanos por WhatsApp y dinos qué productos te interesan.' },
+  { n: 2, t: 'Cuéntanos cantidades', d: 'Indícanos las cantidades aproximadas que necesitas para tu negocio.' },
+  { n: 3, t: 'Te cotizamos', d: 'Te enviamos un precio de mayoreo personalizado según el producto y el volumen.' },
+  { n: 4, t: 'Haz tu pedido', d: 'Coordinamos el pago y la entrega o recogida. ¡Así de fácil!' },
 ]
 
 const SELLER_BENEFITS = [
@@ -106,6 +107,10 @@ export default function PartnersPage() {
     `https://wa.me/${WA_BUSINESS}?text=` +
     encodeURIComponent('Hola, tengo una pregunta sobre ser Vendedor GangaLoo.')
 
+  const waMayoreo =
+    `https://wa.me/${WA_BUSINESS}?text=` +
+    encodeURIComponent('Hola, me interesa comprar al por mayor en GangaLoo. ¿Me podrían dar información sobre precios?')
+
   return (
     <div className="gl-partners">
       <style>{styles}</style>
@@ -132,19 +137,25 @@ export default function PartnersPage() {
             <div className="gl-hero-bg" aria-hidden="true" />
             <div className="gl-hero-inner">
               <p className="gl-eyebrow">Programa Mayorista</p>
-              <h1 className="gl-title">Compra más,<br /><span>paga menos</span></h1>
+              <h1 className="gl-title">Compra al<br /><span>por mayor</span></h1>
               <p className="gl-tagline">
-                Sin registro. Sin contratos. Agrega productos al carrito y el descuento se
-                aplica automáticamente según la cantidad.
+                ¿Compras en cantidad para tu negocio? Contáctanos y te damos
+                precios especiales de mayoreo según el producto y la cantidad.
               </p>
               <div className="gl-pills">
-                <span className="gl-pill">✓ Sin registro</span>
-                <span className="gl-pill">✓ Descuento automático</span>
-                <span className="gl-pill">✓ Hasta 20% off</span>
+                <span className="gl-pill">✓ Precios por volumen</span>
+                <span className="gl-pill">✓ Atención personalizada</span>
+                <span className="gl-pill">✓ Respuesta rápida</span>
               </div>
-              <Link className="gl-btn gl-btn-primary" href="/tienda" style={{ marginTop: '2rem' }}>
-                Ir a la tienda →
-              </Link>
+              <a
+                className="gl-btn gl-btn-wa"
+                href={waMayoreo}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ marginTop: '2rem' }}
+              >
+                Solicitar precios por WhatsApp
+              </a>
             </div>
           </section>
 
@@ -162,12 +173,23 @@ export default function PartnersPage() {
               ))}
             </div>
             <p className="gl-tip">
-              💡 Los descuentos aplican <strong>por producto individual</strong>, no por el total
-              del carrito. Ej: si compras 12 unidades del mismo artículo, obtienes el descuento en
-              ese producto.
+              💡 Los precios de mayoreo se acuerdan caso por caso, según el
+              producto y la cantidad que necesites. Escríbenos por WhatsApp y con
+              gusto te asesoramos.
             </p>
-            <div style={{ textAlign: 'center', marginTop: '1.5rem' }}>
-              <Link className="gl-btn gl-btn-primary" href="/tienda">Empezar a comprar →</Link>
+            <div
+              style={{
+                display: 'flex',
+                gap: '1rem',
+                justifyContent: 'center',
+                flexWrap: 'wrap',
+                marginTop: '1.5rem',
+              }}
+            >
+              <a className="gl-btn gl-btn-wa" href={waMayoreo} target="_blank" rel="noopener noreferrer">
+                Escríbenos por WhatsApp
+              </a>
+              <Link className="gl-btn gl-btn-ghost" href="/tienda">Ver productos</Link>
             </div>
           </section>
         </>
