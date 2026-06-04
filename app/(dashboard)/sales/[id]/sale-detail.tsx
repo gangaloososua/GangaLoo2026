@@ -111,6 +111,7 @@ export function SaleDetail({
         moneyAccounts={moneyAccounts}
         locale={locale}
         canSeeCost={canSeeCost}
+        role={role}
       />
     </div>
   )
@@ -790,10 +791,12 @@ function PaymentsPanel({
   sale,
   moneyAccounts,
   locale,
+  role,
 }: {
   sale: SaleDetailType
   moneyAccounts: MoneyAccount[]
   locale: Locale
+  role: Role
 }) {
   const outstanding = sale.total_cents - sale.paid_cents
   const isCancelled = sale.status === 'cancelled' || sale.status === 'refunded'
@@ -803,7 +806,16 @@ function PaymentsPanel({
       sale.status === 'paid' ||
       sale.status === 'partially_paid')
 
+  // Owner/admin take real payments (into a money account, posts to accounting).
+  // Sellers/distributors instead log the cash they've collected, which sits as
+  // "held" until the owner hands it in from the Seller Cash screen.
+  const canTakePayment = isOwnerEquivalent(role)
+  const canLogCash =
+    outstanding > 0 &&
+    (sale.status === 'confirmed' || sale.status === 'partially_paid')
+
   const [addOpen, setAddOpen] = useState(false)
+  const [logOpen, setLogOpen] = useState(false)
 
   // Suggest outstanding (or total if no payments yet) as the default amount.
   const suggestedAmountCents = outstanding > 0 ? outstanding : sale.total_cents
@@ -817,10 +829,16 @@ function PaymentsPanel({
             ({sale.payments.length})
           </span>
         </CardTitle>
-        {canAddPayment && (
+        {canTakePayment && canAddPayment && (
           <Button size="sm" variant="outline" onClick={() => setAddOpen(true)}>
             <Plus className="mr-1 h-3.5 w-3.5" />
             {t(locale, 'sd.addPayment')}
+          </Button>
+        )}
+        {!canTakePayment && canLogCash && (
+          <Button size="sm" variant="outline" onClick={() => setLogOpen(true)}>
+            <Banknote className="mr-1 h-3.5 w-3.5" />
+            {t(locale, 'sd.logCashCollected')}
           </Button>
         )}
       </CardHeader>
@@ -877,14 +895,27 @@ function PaymentsPanel({
           </div>
         )}
       </CardContent>
-      <AddPaymentDialog
-        open={addOpen}
-        onOpenChange={setAddOpen}
-        saleId={sale.id}
-        suggestedAmountCents={suggestedAmountCents}
-        moneyAccounts={moneyAccounts}
-        locale={locale}
-      />
+      {canTakePayment && (
+        <AddPaymentDialog
+          open={addOpen}
+          onOpenChange={setAddOpen}
+          saleId={sale.id}
+          suggestedAmountCents={suggestedAmountCents}
+          moneyAccounts={moneyAccounts}
+          locale={locale}
+        />
+      )}
+      {!canTakePayment && (
+        <LogCashDialog
+          open={logOpen}
+          onOpenChange={setLogOpen}
+          saleId={sale.id}
+          outstandingCents={outstanding}
+          sellerName={sale.seller_name}
+          isOnBehalf={false}
+          locale={locale}
+        />
+      )}
     </Card>
   )
 }
@@ -1003,16 +1034,18 @@ function SummaryCards({
   moneyAccounts,
   locale,
   canSeeCost,
+  role,
 }: {
   sale: SaleDetailType
   moneyAccounts: MoneyAccount[]
   locale: Locale
   canSeeCost: boolean
+  role: Role
 }) {
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
       <TotalsCard sale={sale} locale={locale} canSeeCost={canSeeCost} />
-      <PaymentsPanel sale={sale} moneyAccounts={moneyAccounts} locale={locale} />
+      <PaymentsPanel sale={sale} moneyAccounts={moneyAccounts} locale={locale} role={role} />
       <CommissionsPanel sale={sale} locale={locale} />
     </div>
   )
