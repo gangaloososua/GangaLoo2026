@@ -101,11 +101,17 @@ export function SaleDetail({
   role: Role
 }) {
   const locale = localeForRole(role)
+  const canSeeCost = isOwnerEquivalent(role)
   return (
     <div className="space-y-4">
       <HeaderCard sale={sale} role={role} locale={locale} />
-      <ItemsCard items={sale.items} locale={locale} />
-      <SummaryCards sale={sale} moneyAccounts={moneyAccounts} locale={locale} />
+      <ItemsCard items={sale.items} locale={locale} canSeeCost={canSeeCost} />
+      <SummaryCards
+        sale={sale}
+        moneyAccounts={moneyAccounts}
+        locale={locale}
+        canSeeCost={canSeeCost}
+      />
     </div>
   )
 }
@@ -535,7 +541,15 @@ function Field({ label, value }: { label: string; value: string }) {
 // ItemsCard — line items with expand-row showing FIFO lot consumption
 // ---------------------------------------------------------------------------
 
-function ItemsCard({ items, locale }: { items: SaleDetailItem[]; locale: Locale }) {
+function ItemsCard({
+  items,
+  locale,
+  canSeeCost,
+}: {
+  items: SaleDetailItem[]
+  locale: Locale
+  canSeeCost: boolean
+}) {
   if (items.length === 0) {
     return (
       <Card>
@@ -566,12 +580,14 @@ function ItemsCard({ items, locale }: { items: SaleDetailItem[]; locale: Locale 
               <TableHead className="text-right">{t(locale, 'sd.colUnitPrice')}</TableHead>
               <TableHead className="text-right">{t(locale, 'sd.colDiscount')}</TableHead>
               <TableHead className="text-right">{t(locale, 'sd.colLineTotal')}</TableHead>
-              <TableHead className="text-right">{t(locale, 'sd.colCogs')}</TableHead>
+              {canSeeCost && (
+                <TableHead className="text-right">{t(locale, 'sd.colCogs')}</TableHead>
+              )}
             </TableRow>
           </TableHeader>
           <TableBody>
             {items.map((item) => (
-              <ItemRow key={item.id} item={item} locale={locale} />
+              <ItemRow key={item.id} item={item} locale={locale} canSeeCost={canSeeCost} />
             ))}
           </TableBody>
         </Table>
@@ -580,9 +596,17 @@ function ItemsCard({ items, locale }: { items: SaleDetailItem[]; locale: Locale 
   )
 }
 
-function ItemRow({ item, locale }: { item: SaleDetailItem; locale: Locale }) {
+function ItemRow({
+  item,
+  locale,
+  canSeeCost,
+}: {
+  item: SaleDetailItem
+  locale: Locale
+  canSeeCost: boolean
+}) {
   const [open, setOpen] = useState(false)
-  const hasTrail = item.lot_consumption.length > 0
+  const hasTrail = canSeeCost && item.lot_consumption.length > 0
 
   return (
     <>
@@ -621,9 +645,11 @@ function ItemRow({ item, locale }: { item: SaleDetailItem; locale: Locale }) {
         <TableCell className="text-right font-medium tabular-nums">
           {formatDOP(item.line_total_cents)}
         </TableCell>
-        <TableCell className="text-right tabular-nums text-muted-foreground">
-          {item.cogs_cents != null ? formatDOP(item.cogs_cents) : '—'}
-        </TableCell>
+        {canSeeCost && (
+          <TableCell className="text-right tabular-nums text-muted-foreground">
+            {item.cogs_cents != null ? formatDOP(item.cogs_cents) : '—'}
+          </TableCell>
+        )}
       </TableRow>
       {open && hasTrail && (
         <TableRow className="bg-muted/20 hover:bg-muted/20">
@@ -674,7 +700,15 @@ function ItemRow({ item, locale }: { item: SaleDetailItem; locale: Locale }) {
 // TotalsCard — totals breakdown + outstanding balance
 // ---------------------------------------------------------------------------
 
-function TotalsCard({ sale, locale }: { sale: SaleDetailType; locale: Locale }) {
+function TotalsCard({
+  sale,
+  locale,
+  canSeeCost,
+}: {
+  sale: SaleDetailType
+  locale: Locale
+  canSeeCost: boolean
+}) {
   const outstanding = sale.total_cents - sale.paid_cents
   return (
     <Card>
@@ -707,14 +741,14 @@ function TotalsCard({ sale, locale }: { sale: SaleDetailType; locale: Locale }) 
               bold
             />
           )}
-          {sale.cogs_cents != null && (
+          {canSeeCost && sale.cogs_cents != null && (
             <Row
               label={t(locale, 'sd.colCogs')}
               value={formatDOP(sale.cogs_cents)}
               tone="muted"
             />
           )}
-          {sale.gross_profit_cents != null && (
+          {canSeeCost && sale.gross_profit_cents != null && (
             <Row
               label={t(locale, 'sd.grossProfit')}
               value={formatDOP(sale.gross_profit_cents)}
@@ -968,14 +1002,16 @@ function SummaryCards({
   sale,
   moneyAccounts,
   locale,
+  canSeeCost,
 }: {
   sale: SaleDetailType
   moneyAccounts: MoneyAccount[]
   locale: Locale
+  canSeeCost: boolean
 }) {
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-      <TotalsCard sale={sale} locale={locale} />
+      <TotalsCard sale={sale} locale={locale} canSeeCost={canSeeCost} />
       <PaymentsPanel sale={sale} moneyAccounts={moneyAccounts} locale={locale} />
       <CommissionsPanel sale={sale} locale={locale} />
     </div>
