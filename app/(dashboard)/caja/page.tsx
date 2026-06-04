@@ -8,7 +8,6 @@ import Link from 'next/link'
 import { X } from 'lucide-react'
 import { requireAdminCaller } from '@/lib/auth/guard'
 import {
-  getCurrentSeller,
   listWarehousesForFilter,
   listMoneyAccounts,
 } from '@/lib/sales'
@@ -24,9 +23,8 @@ export default async function CajaPage() {
   const caller = await requireAdminCaller()
   const locale = localeForRole(caller.role)
 
-  const [currentSeller, warehouses, moneyAccounts, activeDiscountRules] =
+  const [warehouses, moneyAccounts, activeDiscountRules] =
     await Promise.all([
-      getCurrentSeller(),
       listWarehousesForFilter(),
       listMoneyAccounts(),
       listDiscountRules({ activeOnly: true }),
@@ -38,7 +36,7 @@ export default async function CajaPage() {
     : []
 
   const canTakePayment =
-    currentSeller?.role === 'owner' || currentSeller?.role === 'admin'
+    caller.role === 'owner' || caller.role === 'admin'
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-background">
@@ -59,7 +57,7 @@ export default async function CajaPage() {
           initialProducts={initialProducts}
           moneyAccounts={moneyAccounts}
           activeDiscountRules={activeDiscountRules}
-          sellerId={currentSeller?.id ?? null}
+          sellerId={caller.id}
           canTakePayment={canTakePayment}
           locale={locale}
         />

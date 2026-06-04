@@ -462,7 +462,7 @@ export async function getCurrentSeller(): Promise<SellerOption | null> {
   const { data, error } = await supabase
     .from('profiles')
     .select('id, full_name, role')
-    .eq('id', auth.user.id)
+    .eq('auth_user_id', auth.user.id)
     .maybeSingle()
   if (error || !data) return null
   // Only return them as a seller default if their role qualifies.
