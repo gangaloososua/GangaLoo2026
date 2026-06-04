@@ -552,7 +552,14 @@ export async function searchProductsForSale(opts: {
       'id, sku, name, primary_image_url, price_cents, club_price_cents, sale_price_cents, commission_percent'
     )
     .eq('is_active', true)
-  if (q) pq = pq.or(`sku.ilike.%${q}%,name.ilike.%${q}%`)
+  if (q) {
+    // Match EACH typed word independently (AND), in name OR sku, so word order
+    // and in-between characters like % or " do not matter. Typing
+    // "13x4 180% 24" now finds "13x4 180% 24\" Negro Lacio Indoo".
+    for (const term of q.split(' ')) {
+      if (term) pq = pq.or(`sku.ilike.%${term}%,name.ilike.%${term}%`)
+    }
+  }
   if (categoryProductIds) pq = pq.in('id', categoryProductIds)
   const { data: products, error: pErr } = await pq
     .order('name', { ascending: true })
