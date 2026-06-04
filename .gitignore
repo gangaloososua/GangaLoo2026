@@ -42,3 +42,6 @@ _tsc_*.txt
 next-env.d.ts
 
 HANDOFF.md
+
+*.bak
+*.bak-*
