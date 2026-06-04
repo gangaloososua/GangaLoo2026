@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { formatDOP } from '@/lib/format'
 import type { StoreWithDeals } from '@/lib/store/catalog'
@@ -20,6 +20,9 @@ const T = {
     deals: 'Ofertas de hoy',
     shopAt: 'Comprar en',
     none: 'No hay tiendas disponibles por ahora.',
+    banner: 'Crea tu cuenta y obtén mejores precios en cada compra.',
+    bannerBtn: 'Crear cuenta',
+    bannerClose: 'Cerrar aviso',
   },
   en: {
     welcome: 'Welcome',
@@ -28,6 +31,9 @@ const T = {
     deals: "Today's offers",
     shopAt: 'Shop at',
     none: 'No stores available right now.',
+    banner: 'Create an account and get better prices on every order.',
+    bannerBtn: 'Create account',
+    bannerClose: 'Dismiss',
   },
 } as const
 
@@ -35,9 +41,43 @@ function price(cents: number) {
   return formatDOP(cents, { decimals: 0 })
 }
 
-export function StoreLandingView({ stores }: { stores: StoreWithDeals[] }) {
+export function StoreLandingView({
+  stores,
+  isLoggedIn = false,
+}: {
+  stores: StoreWithDeals[]
+  isLoggedIn?: boolean
+}) {
   const [locale, setLocale] = useState<Locale>('es')
+  const [showBanner, setShowBanner] = useState(false)
   const t = T[locale]
+
+  // The "Crear cuenta" sign-up form lives under a store (/tienda/<store>/cuenta).
+  // The account is global, so any store works — we use the first available one.
+  // (If you'd rather always send people to the Club page, set this to '/club'.)
+  const signupHref = stores[0] ? `/tienda/${stores[0].slug}/cuenta` : '/club'
+
+  // Show the sign-up banner only to visitors who aren't signed in, and only
+  // if they haven't dismissed it before (remembered per browser).
+  useEffect(() => {
+    if (isLoggedIn) return
+    let dismissed = false
+    try {
+      dismissed = localStorage.getItem('gl_signup_banner') === 'dismissed'
+    } catch {
+      dismissed = false
+    }
+    if (!dismissed) setShowBanner(true)
+  }, [isLoggedIn])
+
+  function dismissBanner() {
+    setShowBanner(false)
+    try {
+      localStorage.setItem('gl_signup_banner', 'dismissed')
+    } catch {
+      /* ignore — banner just won't be remembered */
+    }
+  }
 
   return (
     <div style={{ background: '#f7f8fa', color: INK, minHeight: '100vh' }}>
@@ -57,6 +97,31 @@ export function StoreLandingView({ stores }: { stores: StoreWithDeals[] }) {
       </header>
 
       <main className="mx-auto w-full max-w-[760px] px-4 py-10">
+        {showBanner && (
+          <div
+            className="mb-6 flex items-center gap-3 rounded-2xl px-4 py-3"
+            style={{ background: NAVY, color: '#fff' }}
+          >
+            <span className="text-[18px] leading-none" aria-hidden="true">💡</span>
+            <p className="flex-1 text-[13px] leading-snug">{t.banner}</p>
+            <Link
+              href={signupHref}
+              className="shrink-0 rounded-full px-3.5 py-1.5 text-[12px] font-semibold text-white transition active:scale-[.97]"
+              style={{ background: RED }}
+            >
+              {t.bannerBtn}
+            </Link>
+            <button
+              onClick={dismissBanner}
+              aria-label={t.bannerClose}
+              className="shrink-0 px-1 text-[20px] leading-none"
+              style={{ color: 'rgba(255,255,255,.7)' }}
+            >
+              ×
+            </button>
+          </div>
+        )}
+
         <p className="mb-1 text-[11px] font-semibold uppercase tracking-[2px]" style={{ color: RED }}>{t.welcome}</p>
         <h1 className="text-[28px] leading-[1.15] sm:text-[34px]" style={{ color: NAVY, fontWeight: 600 }}>{t.title}</h1>
         <p className="mt-2 max-w-md text-[14px]" style={{ color: MUTED }}>{t.sub}</p>
