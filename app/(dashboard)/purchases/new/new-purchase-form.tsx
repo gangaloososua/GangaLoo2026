@@ -196,6 +196,13 @@ export function NewPurchaseForm({
 
   // ---- Line helpers ----
   function addLine(p: ProductPickerItem) {
+    // Default the USD unit cost to the supplier cost saved in the product
+    // calculator (products.cost_calc.base_cost_usd). Blank if none saved.
+    // The cashier can still type over it on any line.
+    const defaultCost =
+      p.baseCostUsd != null && Number.isFinite(p.baseCostUsd)
+        ? String(p.baseCostUsd)
+        : ''
     setLines((prev) => [
       ...prev,
       {
@@ -204,7 +211,7 @@ export function NewPurchaseForm({
         productName: p.name,
         productSku: p.sku,
         qty: '1',
-        usdUnitCost: '',
+        usdUnitCost: defaultCost,
       },
     ])
   }

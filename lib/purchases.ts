@@ -660,6 +660,10 @@ export type ProductPickerItem = {
   id: string
   sku: string
   name: string
+  // Saved supplier unit cost (USD) from the product cost calculator
+  // (products.cost_calc.base_cost_usd). Used to pre-fill the USD unit
+  // cost on new purchase-order lines. null when none has been saved.
+  baseCostUsd?: number | null
 }
 
 export type ProductPickerCategoryGroup = {
@@ -668,12 +672,21 @@ export type ProductPickerCategoryGroup = {
   products: ProductPickerItem[]
 }
 
+// Pull the saved supplier unit cost (USD) out of a product's cost_calc
+// JSON. Returns null unless it is a finite, positive number.
+function pickerBaseCostUsd(costCalc: unknown): number | null {
+  if (!costCalc || typeof costCalc !== 'object') return null
+  const v = (costCalc as { base_cost_usd?: unknown }).base_cost_usd
+  const n = typeof v === 'number' ? v : Number(v)
+  return Number.isFinite(n) && n > 0 ? n : null
+}
+
 export async function listProductsGroupedByCategory(): Promise<ProductPickerCategoryGroup[]> {
   const supabase = await createClient()
 
   const { data: products, error: prodErr } = await supabase
     .from('products')
-    .select('id, sku, name')
+    .select('id, sku, name, cost_calc')
     .eq('is_active', true)
     .order('name')
   if (prodErr) throw new Error(prodErr.message)
@@ -693,7 +706,14 @@ export async function listProductsGroupedByCategory(): Promise<ProductPickerCate
   if (catErr) throw new Error(catErr.message)
 
   const productMap = new Map<string, ProductPickerItem>()
-  for (const p of products ?? []) productMap.set(p.id, p as ProductPickerItem)
+  for (const p of products ?? []) {
+    productMap.set(p.id, {
+      id: p.id,
+      sku: p.sku,
+      name: p.name,
+      baseCostUsd: pickerBaseCostUsd((p as { cost_calc?: unknown }).cost_calc),
+    })
+  }
 
   const taggedProductIds = new Set<string>()
   const productsByCategory = new Map<string, Set<string>>()
@@ -722,7 +742,7 @@ export async function listProductsGroupedByCategory(): Promise<ProductPickerCate
 
   const orphans = (products ?? [])
     .filter((p) => !taggedProductIds.has(p.id))
-    .map((p) => p as ProductPickerItem)
+    .map((p) => productMap.get(p.id)!)
     .sort((a, b) => a.name.localeCompare(b.name))
 
   if (orphans.length > 0) {
