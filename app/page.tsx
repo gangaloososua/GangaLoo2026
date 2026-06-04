@@ -5,6 +5,7 @@
 
 import type { Metadata } from "next";
 import Link from "next/link";
+import { HomeInstallButton } from "./home-install-button";
 
 export const metadata: Metadata = {
   title: "GangaLoo — Tu destino de compras",
@@ -128,6 +129,7 @@ export default function HomePage() {
             <Link href="/ayuda" className="gl-btn gl-btn-ghost">
               ¿Cómo funciona?
             </Link>
+            <HomeInstallButton />
           </div>
         </div>
       </section>
