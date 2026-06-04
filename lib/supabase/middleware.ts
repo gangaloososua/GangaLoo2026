@@ -13,6 +13,11 @@ import { NextResponse, type NextRequest } from 'next/server'
 //                    opens to view their invoice and choose pickup/delivery
 const PUBLIC_PREFIXES = [
   '/login',
+  '/manifest.webmanifest',
+  '/icon-512.png',
+  '/icon.png',
+  '/apple-icon.png',
+  '/favicon.ico',
   '/auth',
   '/tienda',
   '/api/webhooks',
