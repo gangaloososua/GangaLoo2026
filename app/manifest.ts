@@ -11,7 +11,7 @@ export default function manifest(): MetadataRoute.Manifest {
     short_name: 'GangaLoo',
     description: 'Tienda GangaLoo — extensiones y pelucas de cabello.',
     lang: 'es',
-    start_url: '/tienda',
+    start_url: '/',
     scope: '/',
     display: 'standalone',
     orientation: 'portrait',
