@@ -188,7 +188,7 @@ function HeaderCard({ sale, role, locale }: { sale: SaleDetailType; role: Role; 
     <>
       <Card>
         <CardHeader className="pb-3">
-          <div className="flex items-baseline justify-between gap-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-baseline sm:justify-between sm:gap-4">
             <div className="space-y-1">
               <div className="flex items-center gap-3">
                 <CardTitle className="font-mono text-xl">
@@ -262,7 +262,7 @@ function HeaderCard({ sale, role, locale }: { sale: SaleDetailType; role: Role; 
                 {sale.paid_at && <> · {t(locale, 'sd.paidAt')} {formatDateTime(sale.paid_at)}</>}
               </p>
             </div>
-            <div className="text-right">
+            <div className="text-left sm:text-right">
               <div className="text-xs uppercase tracking-wide text-muted-foreground">
                 {t(locale, 'sd.totalLabel')}
               </div>
