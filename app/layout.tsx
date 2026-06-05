@@ -29,7 +29,7 @@ export default function RootLayout({
         {children}
         <ChatWidget />
       </body>
-      <GoogleAnalytics gaId="G-2EX25TXEFJ" />
+      <GoogleAnalytics gaId="G-BWQCDSXY1G" />
     </html>
   );
 }
