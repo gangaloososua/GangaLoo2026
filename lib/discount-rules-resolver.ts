@@ -4,9 +4,12 @@
 // Round 20  — promotion support added; stale walk-in early return removed
 // Round 61  — bulk rules can be scoped to a SOURCE WAREHOUSE
 //             (scopeSourceWarehouseId). Blank = all warehouses.
+// Round 61b — promotion rules can be scoped to a WAREHOUSE
+//             (scopeWarehouseId, the same column the online deal uses).
+//             Blank = all warehouses.
 //
 // Mirrors the SQL function `public.resolve_line_discounts`
-// (see db/migrations/round-61a-bulk-warehouse-scope.sql for the
+// (see db/migrations/round-61b-promotion-warehouse-scope.sql for the
 // current version).
 // Used for cart-time live preview in both POS and online-order forms;
 // SQL function is the authority at create-sale time.
@@ -17,7 +20,8 @@
 // shared design contract.
 //
 // Currently supports: customer_override (Round 16), club_tier (Round 17),
-// bulk (Round 19, warehouse scope Round 61), promotion (Round 20).
+// bulk (Round 19, warehouse scope Round 61), promotion (Round 20,
+// warehouse scope Round 61b).
 
 import type { DiscountRuleRow, DiscountRuleKind } from '@/lib/discount-rules'
 
@@ -127,8 +131,16 @@ export function resolveLineDiscount(
       // Round 20: promotion — time-bound product deal. No customer, no
       // tier, no threshold → fires for everyone incl. walk-ins. The
       // date-window filter above already bounds it (daily/weekly).
+      // Round 61b: now also store-scoped. A blank warehouse means the
+      // promotion applies at every store (today's behavior). When set,
+      // it only matches a sale from that same warehouse. Mirrors the SQL:
+      // (scope_warehouse_id IS NULL OR scope_warehouse_id = p_source_warehouse_id).
       if (r.kind === 'promotion') {
-        return r.scopeProductId === input.productId
+        if (r.scopeProductId !== input.productId) return false
+        return (
+          r.scopeWarehouseId === null ||
+          r.scopeWarehouseId === input.sourceWarehouseId
+        )
       }
       // Other kinds: not yet supported here. The SQL function will
       // produce the canonical audit at confirm time.

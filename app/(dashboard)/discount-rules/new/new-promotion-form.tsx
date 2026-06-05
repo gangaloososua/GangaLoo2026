@@ -6,6 +6,11 @@
 //   online Daily/Weekly deal for a chosen store with an exact end time. When
 //   the toggle is off, the form behaves exactly as before (in-person promotion
 //   with date-based window).
+// Round 61 — the STORE picker moved OUT of the online-deal box so it governs
+//   EVERY promotion: the chosen store now limits where the promotion applies
+//   at the register too (blank = all stores), and (when the online box is
+//   ticked) also which store features the deal. Mirrors the bulk rule's
+//   per-store scope. Sends scopeWarehouseId on every promotion now.
 //
 // A promotion is a time-bound % off a single product, for EVERYONE
 // (incl. walk-ins), with NO minimum quantity.
@@ -50,10 +55,12 @@ export function NewPromotionRuleForm({ products, categories, warehouses }: Props
   const [priorityStr, setPriorityStr] = useState('0')
   const [submitting, setSubmitting] = useState(false)
 
+  // Round 61: store now applies to ALL promotions (not just online deals).
+  const [warehouseId, setWarehouseId] = useState('') // '' = all stores
+
   // Online deal section
   const [onlineDeal, setOnlineDeal] = useState(false)
   const [dealSlot, setDealSlot] = useState<'daily' | 'weekly'>('daily')
-  const [warehouseId, setWarehouseId] = useState('') // '' = all stores
   const [endsAtLocal, setEndsAtLocal] = useState('') // datetime-local
 
   const percentValue = Number(percentStr)
@@ -104,7 +111,8 @@ export function NewPromotionRuleForm({ products, categories, warehouses }: Props
         startsAt,
         endsAt,
         priority: priorityValue,
-        scopeWarehouseId: onlineDeal && warehouseId ? warehouseId : null,
+        // Round 61: store applies to every promotion now (blank = all stores).
+        scopeWarehouseId: warehouseId || null,
         dealSlot: onlineDeal ? dealSlot : null,
       })
       if (result.ok) {
@@ -155,6 +163,31 @@ export function NewPromotionRuleForm({ products, categories, warehouses }: Props
             <p className="text-xs text-muted-foreground">
               The deal price applies to everyone, including walk-ins, with no
               minimum quantity.
+            </p>
+          </div>
+
+          {/* Round 61: store scope for EVERY promotion (register + online). */}
+          <div className="space-y-1 sm:col-span-2">
+            <Label htmlFor="dr-store" className="text-xs">
+              Store
+            </Label>
+            <select
+              id="dr-store"
+              className={selectClass}
+              value={warehouseId}
+              onChange={(e) => setWarehouseId(e.target.value)}
+            >
+              <option value="">All stores</option>
+              {warehouses.map((w) => (
+                <option key={w.id} value={w.id}>
+                  {w.name}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-muted-foreground">
+              Leave on &ldquo;All stores&rdquo; to apply everywhere, or pick one
+              store so the promotion only applies to that store&rsquo;s sales
+              (and, if featured online below, that store&rsquo;s website).
             </p>
           </div>
 
@@ -224,25 +257,6 @@ export function NewPromotionRuleForm({ products, categories, warehouses }: Props
                 </select>
               </div>
 
-              <div className="space-y-1">
-                <Label htmlFor="dr-store" className="text-xs">
-                  Store
-                </Label>
-                <select
-                  id="dr-store"
-                  className={selectClass}
-                  value={warehouseId}
-                  onChange={(e) => setWarehouseId(e.target.value)}
-                >
-                  <option value="">All stores</option>
-                  {warehouses.map((w) => (
-                    <option key={w.id} value={w.id}>
-                      {w.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
               <div className="space-y-1 sm:col-span-2">
                 <Label htmlFor="dr-ends-at" className="text-xs">
                   Ends at <span className="text-rose-600">*</span>
@@ -256,6 +270,7 @@ export function NewPromotionRuleForm({ products, categories, warehouses }: Props
                 <p className="text-xs text-muted-foreground">
                   The store shows a live countdown to this time, then the deal
                   disappears and the price returns to normal. Starts immediately.
+                  Uses the Store chosen above (or all stores).
                 </p>
               </div>
             </div>
