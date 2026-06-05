@@ -1,25 +1,27 @@
-// Round 16.4 â€” TS resolver for line discounts
-// Round 17  â€” club_tier support added
-// Round 19  â€” bulk support added (product/category scope, walk-in capable)
-// Round 20  â€” promotion support added; stale walk-in early return removed
+// Round 16.4 — TS resolver for line discounts
+// Round 17  — club_tier support added
+// Round 19  — bulk support added (product/category scope, walk-in capable)
+// Round 20  — promotion support added; stale walk-in early return removed
+// Round 61  — bulk rules can be scoped to a SOURCE WAREHOUSE
+//             (scopeSourceWarehouseId). Blank = all warehouses.
 //
 // Mirrors the SQL function `public.resolve_line_discounts`
-// (see db/migrations/round-20-promotion-01-resolver.sql for the
+// (see db/migrations/round-61a-bulk-warehouse-scope.sql for the
 // current version).
 // Used for cart-time live preview in both POS and online-order forms;
 // SQL function is the authority at create-sale time.
 //
 // !!! KEEP IN LOCK-STEP WITH THE SQL FUNCTION !!!
 // If SQL adds a new rule kind, this file must also handle it; if SQL
-// changes the cap or stacking, change here too. Spec Â§5 is the
+// changes the cap or stacking, change here too. Spec §5 is the
 // shared design contract.
 //
 // Currently supports: customer_override (Round 16), club_tier (Round 17),
-// bulk (Round 19), promotion (Round 20).
+// bulk (Round 19, warehouse scope Round 61), promotion (Round 20).
 
 import type { DiscountRuleRow, DiscountRuleKind } from '@/lib/discount-rules'
 
-const CAP_FACTOR = 0.70 // 30% off max â†’ 70% retained
+const CAP_FACTOR = 0.70 // 30% off max → 70% retained
 
 // Sort key per rule kind. Lower = earlier in the stack. Round 17 puts
 // club_tier first; customer_override layers on top. Future kinds slot
@@ -103,6 +105,15 @@ export function resolveLineDiscount(
       }
       if (r.kind === 'bulk') {
         if (r.thresholdQty == null || input.qty < r.thresholdQty) return false
+        // Round 61: warehouse scope. A blank source-warehouse means the
+        // rule applies to every warehouse (today's behavior). When set,
+        // the rule only matches a sale from that same source warehouse.
+        // Mirrors the SQL: (scope_source_warehouse_id IS NULL OR
+        // scope_source_warehouse_id = p_source_warehouse_id).
+        const warehouseMatch =
+          r.scopeSourceWarehouseId === null ||
+          r.scopeSourceWarehouseId === input.sourceWarehouseId
+        if (!warehouseMatch) return false
         const productMatch = r.scopeProductId === input.productId
         const categoryMatch =
           r.scopeCategoryId !== null &&
@@ -113,8 +124,8 @@ export function resolveLineDiscount(
           r.scopeProductId === null && r.scopeCategoryId === null
         return productMatch || categoryMatch || storeWideMatch
       }
-      // Round 20: promotion â€” time-bound product deal. No customer, no
-      // tier, no threshold â†’ fires for everyone incl. walk-ins. The
+      // Round 20: promotion — time-bound product deal. No customer, no
+      // tier, no threshold → fires for everyone incl. walk-ins. The
       // date-window filter above already bounds it (daily/weekly).
       if (r.kind === 'promotion') {
         return r.scopeProductId === input.productId

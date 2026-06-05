@@ -1,16 +1,21 @@
 'use client'
 
-// Round 19 Ã¢â‚¬â€ New bulk rule form
-// Round 20.1 Ã¢â‚¬â€ product-scope selector swapped for the searchable
+// Round 19 — New bulk rule form
+// Round 20.1 — product-scope selector swapped for the searchable
 //              ProductPicker (category filter + type-to-search). The
 //              product-vs-category SCOPE toggle is unchanged.
+// Round 61  — optional "Store" (source warehouse) picker. Blank = all
+//              stores (unchanged behavior); pick one to scope the rule
+//              to a single store. Modeled on the promotion form's store
+//              picker. Sends scopeSourceWarehouseId to createBulkRule.
 //
 // Mirrors new-club-tier-form.tsx. Differences:
 //   * scope selector: PRODUCT or CATEGORY (radio toggle), feeding the
 //     matching control.
 //   * a "minimum quantity" (threshold) field.
 // A bulk rule fires when the line qty >= threshold AND the line's
-// product (or its PRIMARY category) matches the chosen scope.
+// product (or its PRIMARY category) matches the chosen scope AND the
+// store matches (or the rule's store is blank = all stores).
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
@@ -40,6 +45,7 @@ type CategoryOpt = { id: string; name: string }
 type Props = {
   products: ProductOpt[]
   categories: CategoryOpt[]
+  warehouses: { id: string; name: string }[]
 }
 
 function toIsoOrNull(dateStr: string, endOfDay: boolean): string | null {
@@ -48,13 +54,17 @@ function toIsoOrNull(dateStr: string, endOfDay: boolean): string | null {
   return `${dateStr}${suffix}`
 }
 
-export function NewBulkRuleForm({ products, categories }: Props) {
+const selectClass =
+  'h-9 w-full rounded-md border bg-background px-3 text-sm shadow-sm'
+
+export function NewBulkRuleForm({ products, categories, warehouses }: Props) {
   const router = useRouter()
 
   const [name, setName] = useState('')
   const [scopeKind, setScopeKind] = useState<'product' | 'category' | 'all'>('product')
   const [productId, setProductId] = useState('')
   const [categoryId, setCategoryId] = useState('')
+  const [warehouseId, setWarehouseId] = useState('') // '' = all stores
   const [thresholdStr, setThresholdStr] = useState('10')
   const [percentStr, setPercentStr] = useState('5')
   const [startsAtStr, setStartsAtStr] = useState('')
@@ -100,6 +110,7 @@ export function NewBulkRuleForm({ products, categories }: Props) {
         scopeKind,
         scopeProductId: scopeKind === 'product' ? productId : null,
         scopeCategoryId: scopeKind === 'category' ? categoryId : null,
+        scopeSourceWarehouseId: warehouseId || null,
         thresholdQty: thresholdValue,
         deltaPercent: percentValue,
         startsAt: toIsoOrNull(startsAtStr, false),
@@ -196,7 +207,7 @@ export function NewBulkRuleForm({ products, categories }: Props) {
               </Label>
               <Select value={categoryId} onValueChange={setCategoryId}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Pick a categoryÃ¢â‚¬Â¦" />
+                  <SelectValue placeholder="Pick a category…" />
                 </SelectTrigger>
                 <SelectContent>
                   {categories.map((c) => (
@@ -208,6 +219,30 @@ export function NewBulkRuleForm({ products, categories }: Props) {
               </Select>
             </div>
           )}
+
+          {/* Round 61: store (source warehouse) scope */}
+          <div className="space-y-1 sm:col-span-2">
+            <Label htmlFor="dr-store" className="text-xs">
+              Store
+            </Label>
+            <select
+              id="dr-store"
+              className={selectClass}
+              value={warehouseId}
+              onChange={(e) => setWarehouseId(e.target.value)}
+            >
+              <option value="">All stores</option>
+              {warehouses.map((w) => (
+                <option key={w.id} value={w.id}>
+                  {w.name}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-muted-foreground">
+              Leave on &ldquo;All stores&rdquo; to apply everywhere, or pick one
+              store so the discount only applies to sales from that store.
+            </p>
+          </div>
 
           <div className="space-y-1">
             <Label htmlFor="dr-threshold" className="text-xs">
@@ -305,7 +340,7 @@ export function NewBulkRuleForm({ products, categories }: Props) {
             disabled={!canSubmit}
             title={validationError ?? 'Create rule'}
           >
-            {submitting ? 'CreatingÃ¢â‚¬Â¦' : 'Create rule'}
+            {submitting ? 'Creating…' : 'Create rule'}
           </Button>
         </div>
       </CardContent>

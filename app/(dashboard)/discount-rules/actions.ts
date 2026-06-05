@@ -1,6 +1,6 @@
-﻿'use server'
+'use server'
 
-// Round 16.3 Ã¢â‚¬â€ Discount rules server actions
+// Round 16.3 — Discount rules server actions
 //
 // Direct table writes (no RPC wrapper in v1). The requireRole gate
 // is the security boundary. The schema CHECK constraint guards
@@ -166,13 +166,17 @@ export async function createClubTierRule(
 }
 
 // ----------------------------------------------------------------------
-// createBulkRule  (Round 19)
+// createBulkRule  (Round 19; Round 61 adds optional source-warehouse scope)
 // ----------------------------------------------------------------------
 export type CreateBulkRuleInput = {
   name: string
   scopeKind: 'product' | 'category' | 'all'
   scopeProductId: string | null
   scopeCategoryId: string | null
+  // Round 61: optional source-warehouse scope. null = applies at every
+  // warehouse (default). When set, the rule only fires for a sale from
+  // that source warehouse. Written to scope_source_warehouse_id.
+  scopeSourceWarehouseId?: string | null
   thresholdQty: number
   deltaPercent: number
   startsAt: string | null // ISO datetime
@@ -247,6 +251,8 @@ export async function createBulkRule(
         input.scopeKind === 'product' ? input.scopeProductId : null,
       scope_category_id:
         input.scopeKind === 'category' ? input.scopeCategoryId : null,
+      // Round 61: blank picker -> null = all warehouses.
+      scope_source_warehouse_id: input.scopeSourceWarehouseId ?? null,
       threshold_qty: input.thresholdQty,
       delta_percent: input.deltaPercent,
       priority: input.priority,
@@ -293,7 +299,7 @@ export async function setRuleActive(
 // deleteRule
 //
 // Hard delete. Only allowed when no audit rows reference the rule
-// (FK with no ON DELETE policy Ã¢â€ â€™ DB rejects). Soft-deactivate via
+// (FK with no ON DELETE policy → DB rejects). Soft-deactivate via
 // setRuleActive(false) for the common case.
 // ----------------------------------------------------------------------
 
