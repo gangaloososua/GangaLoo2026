@@ -18,6 +18,7 @@ const PUBLIC_PREFIXES = [
   '/icon.png',
   '/apple-icon.png',
   '/favicon.ico',
+  '/feed.xml',
   '/auth',
   '/tienda',
   '/api/webhooks',
