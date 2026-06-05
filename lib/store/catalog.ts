@@ -117,21 +117,27 @@ export async function listStoreWarehouses(): Promise<StoreWarehouse[]> {
     .sort((a, b) => a.rawName.localeCompare(b.rawName))
 }
 
-// For the /tienda landing page: every active store with its live featured
+// For the /tienda landing page: every active store with its live FEATURED
 // deals (daily/weekly promotions). Reads only safe store_* views. Deal price =
 // percent off the normal store price, capped at 30% (matches checkout).
+// Round 62: store_promotions now exposes ALL active promotions, so this
+// landing carousel filters to FEATURED ones (deal_slot set) to stay unchanged.
 export async function listStoreWarehousesWithDeals(): Promise<StoreWithDeals[]> {
   const supabase = await createClient()
   const stores = await listStoreWarehouses()
   if (stores.length === 0) return []
 
-  // All active online deal promotions across stores.
+  // All active online deal promotions across stores. FEATURED only here.
   const { data: promos } = await supabase
     .from('store_promotions')
-    .select('product_id, warehouse_id, delta_percent, priority')
+    .select('product_id, warehouse_id, deal_slot, delta_percent, priority')
+
+  const featured = (promos ?? []).filter(
+    (p) => p.deal_slot === 'daily' || p.deal_slot === 'weekly',
+  )
 
   // Resolve the product details + per-store normal prices we need.
-  const productIds = [...new Set((promos ?? []).map((p) => p.product_id))]
+  const productIds = [...new Set(featured.map((p) => p.product_id))]
   const nameById = new Map<string, { name: string; slug: string; base: number; img: string | null }>()
   if (productIds.length > 0) {
     const { data: prods } = await supabase
@@ -147,7 +153,7 @@ export async function listStoreWarehousesWithDeals(): Promise<StoreWithDeals[]> 
 
   return Promise.all(
     stores.map(async (store) => {
-      const relevant = (promos ?? []).filter(
+      const relevant = featured.filter(
         (p) => p.warehouse_id == null || p.warehouse_id === store.id,
       )
       if (relevant.length === 0) return { ...store, deals: [] }
@@ -265,9 +271,10 @@ export async function fetchStoreCatalog(
       .select('product_id, qty_on_hand')
       .eq('warehouse_id', warehouse.id)
       .in('product_id', ids),
-    // Active, non-expired online deal promotions (daily/weekly) for this store.
-    // store_promotions exposes only featured promotions in their live window;
-    // warehouse_id is null for "all stores" or a specific store id.
+    // Active, in-window promotions for this store. Round 62: store_promotions
+    // now exposes ALL active promotions (not only featured daily/weekly ones);
+    // warehouse_id is null for "all stores" or a specific store id. A plain
+    // promotion (deal_slot null) lowers the price but is NOT a featured deal.
     supabase
       .from('store_promotions')
       .select('product_id, warehouse_id, deal_slot, delta_percent, ends_at, priority')
@@ -301,22 +308,38 @@ export async function fetchStoreCatalog(
     stockByProduct.set(r.product_id, Number(r.qty_on_hand) || 0)
   }
 
+  // Round 62: split the promotion concept into PRICE vs FEATURED.
+  //  - promoPctByProduct: the top promotion's percent for ANY active promotion
+  //    (plain or featured) -> lowers the displayed price, matching checkout
+  //    and the product page.
+  //  - dealByProduct: ONLY featured (daily/weekly) promotions -> drives the
+  //    homepage countdown carousel + the grid's deal sections.
+  // Both pick the highest-priority row per product.
+  const promoPctByProduct = new Map<string, { percent: number; priority: number }>()
   const dealByProduct = new Map<
     string,
     { slot: 'daily' | 'weekly'; percent: number; endsAt: string | null; priority: number }
   >()
   for (const d of dealRows ?? []) {
     if (d.delta_percent == null) continue
-    if (d.deal_slot !== 'daily' && d.deal_slot !== 'weekly') continue
-    const prev = dealByProduct.get(d.product_id)
     const priority = Number(d.priority) || 0
-    if (!prev || priority > prev.priority) {
-      dealByProduct.set(d.product_id, {
-        slot: d.deal_slot,
-        percent: Number(d.delta_percent) || 0,
-        endsAt: d.ends_at,
-        priority,
-      })
+    const percent = Number(d.delta_percent) || 0
+
+    const prevAny = promoPctByProduct.get(d.product_id)
+    if (!prevAny || priority > prevAny.priority) {
+      promoPctByProduct.set(d.product_id, { percent, priority })
+    }
+
+    if (d.deal_slot === 'daily' || d.deal_slot === 'weekly') {
+      const prev = dealByProduct.get(d.product_id)
+      if (!prev || priority > prev.priority) {
+        dealByProduct.set(d.product_id, {
+          slot: d.deal_slot,
+          percent,
+          endsAt: d.ends_at,
+          priority,
+        })
+      }
     }
   }
 
@@ -434,18 +457,21 @@ export async function fetchStoreCatalog(
     if (!isGuest && salePrice != null && salePrice > 0 && salePrice < memberNormal) {
       memberNormal = salePrice
     }
-    const deal = dealByProduct.get(p.id)
-    // A featured deal's price: percent off the member's normal price, with the
-    // same 30% maximum discount cap as the in-person promotion rules.
-    const dealPrice = deal
-      ? Math.round(memberNormal * Math.max(0.7, 1 - deal.percent / 100))
+    // Round 62: the PRICE-lowering promotion percent for this product (ANY active
+    // promotion, plain or featured). Same 30% max-discount cap as in-person and
+    // the checkout functions.
+    const promo = promoPctByProduct.get(p.id)
+    const promoPrice = promo
+      ? Math.round(memberNormal * Math.max(0.7, 1 - promo.percent / 100))
       : null
+    // FEATURED deal info (daily/weekly only) -> drives the carousel/sections.
+    const deal = dealByProduct.get(p.id)
     // The "was" price to compare against and strike through:
     //  - club member with a club price: the list normal (so the club saving shows)
-    //  - on a featured deal: the member normal price (so % off is honest)
+    //  - on a promotion: the member normal price (so % off is honest)
     //  - on a plain override offer: the base list price
-    const compareAt = hasClub ? listNormal : deal ? memberNormal : base
-    const eff = deal && dealPrice != null ? dealPrice : memberNormal
+    const compareAt = hasClub ? listNormal : promoPrice != null ? memberNormal : base
+    const eff = promoPrice != null ? promoPrice : memberNormal
     const isOffer = eff < compareAt
 
     // Keep only value ids whose value (and its attribute) are active/known, so
@@ -470,6 +496,8 @@ export async function fetchStoreCatalog(
       category: catByProduct.get(p.id) ?? null,
       attributeValueIds,
       stock: stockByProduct.get(p.id) ?? 0,
+      // Featured slot/countdown ONLY for daily/weekly promotions. A plain
+      // promotion has lowered the price above but is not a featured deal.
       dealSlot: deal?.slot ?? null,
       dealEndsAt: deal?.endsAt ?? null,
     })
@@ -481,8 +509,8 @@ export async function fetchStoreCatalog(
       a.name.localeCompare(b.name),
   )
 
-  // Generic price-override offers (NOT featured deals -- those get their own
-  // sections so they don't appear twice).
+  // Generic offers (price-override or plain promotion) -- NOT featured deals,
+  // which get their own carousel sections so they don't appear twice.
   const offers = rows.filter((r) => r.isOffer && !r.dealSlot)
 
   // Featured daily / weekly deals. Section countdown = soonest end among its
