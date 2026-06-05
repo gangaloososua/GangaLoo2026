@@ -358,7 +358,7 @@ export async function fetchStoreCatalog(
   // ids) are independent of each other, so fetch them together too. Empty id
   // lists return no rows (no extra cost, no error).
   const [{ data: cats }, { data: avRows }] = await Promise.all([
-    supabase.from('store_categories').select('id, name').in('id', catIds),
+    supabase.from('store_categories').select('id, name, parent_id, display_order').in('id', catIds),
     supabase
       .from('store_attribute_values')
       .select('id, attribute_id, value, slug, display_order')
@@ -366,8 +366,22 @@ export async function fetchStoreCatalog(
       .eq('is_active', true),
   ])
 
+  // Round 63: carry each category's admin order (display_order) and parent so
+  // the storefront can sort categories the SAME way they're arranged in admin
+  // (instead of alphabetical). Names still drive display; order/parent are
+  // used only for sorting below.
+  const catInfoById = new Map<
+    string,
+    { name: string; parentId: string | null; order: number }
+  >()
+  for (const c of cats ?? [])
+    catInfoById.set(c.id, {
+      name: c.name,
+      parentId: (c as { parent_id?: string | null }).parent_id ?? null,
+      order: Number((c as { display_order?: number }).display_order ?? 0) || 0,
+    })
   const catNameById = new Map<string, string>()
-  for (const c of cats ?? []) catNameById.set(c.id, c.name)
+  for (const [id, info] of catInfoById) catNameById.set(id, info.name)
   const catByProduct = new Map<string, { id: string; name: string }>()
   for (const l of primaryLinks ?? []) {
     const name = catNameById.get(l.category_id)
@@ -529,9 +543,25 @@ export async function fetchStoreCatalog(
 
   const catMap = new Map<string, string>()
   for (const r of rows) if (r.category) catMap.set(r.category.id, r.category.name)
+  // Round 63: sort by the admin order. A sub-category sorts right after its
+  // parent: rank = [parent's display_order, this category's display_order].
+  // A main has no parent, so its parent-rank is its own order. Name breaks ties.
+  const sortRank = (id: string): [number, number, string] => {
+    const info = catInfoById.get(id)
+    if (!info) return [Number.MAX_SAFE_INTEGER, 0, '']
+    const parentOrder = info.parentId
+      ? catInfoById.get(info.parentId)?.order ?? info.order
+      : info.order
+    const selfOrder = info.parentId ? info.order : -1 // mains before their subs
+    return [parentOrder, selfOrder, info.name]
+  }
   const categories: StoreCategory[] = [...catMap.entries()]
     .map(([id, name]) => ({ id, name }))
-    .sort((a, b) => a.name.localeCompare(b.name))
+    .sort((a, b) => {
+      const [pa, sa, na] = sortRank(a.id)
+      const [pb, sb, nb] = sortRank(b.id)
+      return pa - pb || sa - sb || na.localeCompare(nb)
+    })
 
   // Build attribute filter facets from the SHOWN rows only — so the filter only
   // offers attributes/values that actually exist among visible products. Order
