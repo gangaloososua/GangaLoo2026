@@ -18,7 +18,9 @@ export const FREQUENCY_LABEL: Record<PayFrequency, string> = {
   monthly: 'Monthly',
 }
 
-export type AttendanceStatus = 'present' | 'late' | 'absent'
+// 'off' = a rest day: not worked, no deduction. The pay calculator ignores any
+// status that is not present/late/absent, so 'off' rows never affect pay.
+export type AttendanceStatus = 'present' | 'late' | 'absent' | 'off'
 
 export type PayComponent = {
   id: string

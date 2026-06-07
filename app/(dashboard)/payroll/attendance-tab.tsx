@@ -5,7 +5,9 @@
 // "Off" (greyed, no deduction) but can be turned into a normal work day with
 // "+ Mark" for the occasional weekend shift. Days are assumed worked unless
 // marked Late or Absent, which reveals a per-day deduction box (pre-filled from
-// the employee's default). "Save month" upserts the whole month. Money in CENTS.
+// the employee's default). "Save month" upserts the whole month, INCLUDING Off
+// days (saved with status 'off'), so a normal day set Off stays Off after a
+// refresh. Money in CENTS.
 
 import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
@@ -24,7 +26,7 @@ import {
 const selectClass =
   'flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring'
 
-// A day in the grid. `off` = a rest day (Sun/Mon) the user hasn't activated.
+// A day in the grid. `off` = a rest day the user hasn't activated (or set Off).
 type DayState = { status: AttendanceStatus; deduction: string; note: string; off: boolean }
 
 function pesosToCents(s: string): number {
@@ -85,17 +87,23 @@ export function AttendanceTab({
         status: 'present',
         deduction: '',
         note: '',
-        off: isRestDay(ds), // Sun/Mon start as Off
+        off: isRestDay(ds), // Sun/Mon start as Off when there's no saved row
       }
     }
     if (res.ok) {
-      // Any saved row means that day was actually worked/recorded -> not Off.
+      // A saved row is the source of truth. status 'off' -> the day is Off;
+      // otherwise it's a recorded work day. (status keeps a sane 'present'
+      // value for off rows so "+ Mark" activates cleanly.)
       for (const r of res.rows) {
+        const isOff = r.status === 'off'
         base[r.work_date] = {
-          status: r.status,
-          deduction: r.status === 'present' ? '' : centsToPesos(r.deduction_cents),
+          status: isOff ? 'present' : r.status,
+          deduction:
+            r.status === 'late' || r.status === 'absent'
+              ? centsToPesos(r.deduction_cents)
+              : '',
           note: r.note ?? '',
-          off: false,
+          off: isOff,
         }
       }
     } else {
@@ -172,14 +180,15 @@ export function AttendanceTab({
       return
     }
     setSaving(true)
-    // Only save active (non-Off) days.
+    // Save every day's true state, including Off (status 'off'), so an Off day
+    // persists and overwrites any earlier worked record for that date.
     const payload = dateList
       .map((ds) => ({ ds, s: days[ds] }))
-      .filter((x) => x.s && !x.s.off)
+      .filter((x) => !!x.s)
       .map(({ ds, s }) => ({
         workDate: ds,
-        status: s!.status,
-        deductionCents: pesosToCents(s!.deduction),
+        status: (s!.off ? 'off' : s!.status) as AttendanceStatus,
+        deductionCents: s!.off ? 0 : pesosToCents(s!.deduction),
         note: s!.note,
       }))
     const res = await saveAttendanceMonth(employeeId, payload)

@@ -180,7 +180,9 @@ export type AttendanceDayInput = {
   note: string
 }
 
-const STATUSES: AttendanceStatus[] = ['present', 'late', 'absent']
+// All statuses that may be saved. 'off' is a rest day (no deduction, ignored by
+// the pay calculator); present/late/absent are as before.
+const STATUSES: AttendanceStatus[] = ['present', 'late', 'absent', 'off']
 
 export async function saveAttendanceMonth(
   employeeId: string,
@@ -194,8 +196,11 @@ export async function saveAttendanceMonth(
       employee_id: employeeId,
       work_date: d.workDate,
       status: d.status,
+      // Only late/absent carry a deduction; present and off are always 0.
       deduction_cents:
-        d.status === 'present' ? 0 : Math.max(0, Math.round(d.deductionCents || 0)),
+        d.status === 'late' || d.status === 'absent'
+          ? Math.max(0, Math.round(d.deductionCents || 0))
+          : 0,
       note: (d.note || '').trim() || null,
     }))
   if (rows.length === 0) return { ok: true }
