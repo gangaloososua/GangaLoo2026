@@ -1,14 +1,53 @@
 import { requireOwner } from '@/lib/auth/guard'
 import { formatDate } from '@/lib/format'
-import { fetchBalanceSheet } from '@/lib/balance-sheet'
+import {
+  fetchBalanceSheet,
+  getBalanceSheetSnapshot,
+  listBalanceSheetSnapshots,
+} from '@/lib/balance-sheet'
 import { BalanceSheetView } from './balance-sheet-view'
+import { SnapshotControls } from './snapshot-controls'
 
 export const dynamic = 'force-dynamic'
 
-export default async function BalanceSheetPage() {
+// First day of the current month, in Dominican Republic local time, as
+// 'YYYY-MM-DD' (matches how the DB keys snapshots).
+function currentMonthIsoDR(): string {
+  const ym = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Santo_Domingo',
+    year: 'numeric',
+    month: '2-digit',
+  }).format(new Date()) // 'YYYY-MM'
+  return `${ym}-01`
+}
+
+export default async function BalanceSheetPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ month?: string }>
+}) {
   await requireOwner()
-  const data = await fetchBalanceSheet()
-  const today = formatDate(new Date().toISOString())
+
+  const { month } = await searchParams
+  const selectedMonth =
+    month && /^\d{4}-\d{2}-\d{2}$/.test(month) ? month : null
+
+  const months = await listBalanceSheetSnapshots()
+
+  const data = selectedMonth
+    ? await getBalanceSheetSnapshot(selectedMonth)
+    : await fetchBalanceSheet()
+
+  const currentMonthIso = currentMonthIsoDR()
+
+  // Date shown under the title.
+  let asOf: string
+  if (selectedMonth) {
+    const meta = months.find((m) => m.period_month === selectedMonth)
+    asOf = meta ? formatDate(meta.captured_at) : formatDate(selectedMonth)
+  } else {
+    asOf = formatDate(new Date().toISOString())
+  }
 
   return (
     <div className="space-y-6">
@@ -17,12 +56,24 @@ export default async function BalanceSheetPage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Balance Sheet</h1>
           <p className="text-sm text-muted-foreground">
-            Snapshot as of <span className="font-medium text-foreground">{today}</span>
+            {selectedMonth ? 'Saved snapshot from ' : 'Snapshot as of '}
+            <span className="font-medium text-foreground">{asOf}</span>
           </p>
         </div>
+        <SnapshotControls
+          months={months}
+          selectedMonth={selectedMonth}
+          currentMonthIso={currentMonthIso}
+        />
       </div>
 
-      <BalanceSheetView data={data} />
+      {data ? (
+        <BalanceSheetView data={data} />
+      ) : (
+        <div className="rounded-md border bg-card p-8 text-center text-sm text-muted-foreground">
+          No saved snapshot for that month yet.
+        </div>
+      )}
     </div>
   )
 }

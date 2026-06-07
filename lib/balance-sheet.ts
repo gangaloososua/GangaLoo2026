@@ -13,6 +13,11 @@
 // Cash is split business/private so the screen's Business/Everything toggle can
 // adjust the cash line; inventory, receivables and supplier bills are inherently
 // business and do not change with the toggle.
+//
+// Monthly snapshots (Round 64a): we also bank a copy of the live sheet per
+// calendar month so the screen can show past months. The snapshot RPCs gate on
+// owner/admin in the DB, so they MUST be called via the regular server client
+// (auth.uid() must be present), exactly like fetchBalanceSheet below.
 
 import { createClient } from '@/lib/supabase/server'
 
@@ -40,9 +45,41 @@ export type BalanceSheet = {
   commissions_owed_cents: number
 }
 
+/** One saved monthly snapshot (metadata only, for the picker). */
+export type BalanceSheetSnapshotMeta = {
+  /** First day of the month, 'YYYY-MM-DD'. */
+  period_month: string
+  /** When the snapshot was captured (ISO timestamp). */
+  captured_at: string
+}
+
 export async function fetchBalanceSheet(): Promise<BalanceSheet> {
   const supabase = await createClient()
   const { data, error } = await supabase.rpc('balance_sheet')
+  if (error) throw new Error(error.message)
+  return data as BalanceSheet
+}
+
+/** All saved months, newest first. */
+export async function listBalanceSheetSnapshots(): Promise<BalanceSheetSnapshotMeta[]> {
+  const supabase = await createClient()
+  const { data, error } = await supabase.rpc('list_balance_sheet_snapshots')
+  if (error) throw new Error(error.message)
+  return (data ?? []) as BalanceSheetSnapshotMeta[]
+}
+
+/** One saved month's sheet, or null if none exists for that month. */
+export async function getBalanceSheetSnapshot(month: string): Promise<BalanceSheet | null> {
+  const supabase = await createClient()
+  const { data, error } = await supabase.rpc('get_balance_sheet_snapshot', { p_month: month })
+  if (error) throw new Error(error.message)
+  return (data ?? null) as BalanceSheet | null
+}
+
+/** Capture/refresh the current month's snapshot; returns the sheet just stored. */
+export async function saveBalanceSheetSnapshot(): Promise<BalanceSheet> {
+  const supabase = await createClient()
+  const { data, error } = await supabase.rpc('save_balance_sheet_snapshot')
   if (error) throw new Error(error.message)
   return data as BalanceSheet
 }
