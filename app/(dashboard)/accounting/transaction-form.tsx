@@ -40,6 +40,20 @@ const TYPE_ORDER: AccountType[] = ['income', 'expense', 'asset', 'liability', 'e
 
 const SCOPES: AccountScope[] = ['business', 'private', 'mixed']
 
+// Short symbol for a currency code; falls back to the raw code if unknown.
+function currencySymbol(code: string | null | undefined): string {
+  switch (code) {
+    case 'DOP':
+      return 'RD$'
+    case 'EUR':
+      return '\u20ac' // euro sign
+    case 'USD':
+      return 'US$'
+    default:
+      return code ?? 'RD$'
+  }
+}
+
 type Props = {
   accounts: AccountOption[]
   categories: AccountCategoryOption[]
@@ -111,6 +125,8 @@ export function TransactionForm({ accounts, categories, editing, onClose, onSave
 
   const blocks = React.useMemo(() => buildBlocks(categories), [categories])
   const selectedCategory = categories.find((c) => c.id === categoryId) ?? null
+  const selectedAccount = accounts.find((a) => a.id === accountId) ?? null
+  const amountSymbol = selectedAccount ? currencySymbol(selectedAccount.currency) : null
 
   async function save() {
     setError(null)
@@ -194,7 +210,9 @@ export function TransactionForm({ accounts, categories, editing, onClose, onSave
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
-              <Label htmlFor="txn-amount">Amount (RD$)</Label>
+              <Label htmlFor="txn-amount">
+                {amountSymbol ? `Amount (${amountSymbol})` : 'Amount'}
+              </Label>
               <Input
                 id="txn-amount"
                 type="number"
@@ -205,6 +223,11 @@ export function TransactionForm({ accounts, categories, editing, onClose, onSave
                 onChange={(e) => setAmount(e.target.value)}
                 placeholder="0.00"
               />
+              {selectedAccount && selectedAccount.currency !== 'DOP' && (
+                <p className="text-xs text-muted-foreground">
+                  Enter the amount in {selectedAccount.currency}, this account&apos;s own currency.
+                </p>
+              )}
               {selectedCategory && (
                 <p className="text-xs text-muted-foreground">
                   {outflow ? 'Will lower the balance' : 'Will raise the balance'}
@@ -257,7 +280,7 @@ export function TransactionForm({ accounts, categories, editing, onClose, onSave
             Cancel
           </Button>
           <Button onClick={save} disabled={busy}>
-            {busy ? 'Saving…' : editing ? 'Save changes' : 'Add transaction'}
+            {busy ? 'Saving...' : editing ? 'Save changes' : 'Add transaction'}
           </Button>
         </DialogFooter>
       </DialogContent>

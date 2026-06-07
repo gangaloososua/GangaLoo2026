@@ -12,7 +12,9 @@
 //
 // Cash is split business/private so the screen's Business/Everything toggle can
 // adjust the cash line; inventory, receivables and supplier bills are inherently
-// business and do not change with the toggle.
+// business and do not change with the toggle. Foreign-currency cash accounts
+// (EUR/USD) are converted to pesos inside the RPC at the latest monthly rate;
+// cash_rates reports the rates that were applied (Round 65a).
 //
 // Monthly snapshots (Round 64a): we also bank a copy of the live sheet per
 // calendar month so the screen can show past months. The snapshot RPCs gate on
@@ -35,6 +37,12 @@ export type SupplierOwed = {
   total_cents: number
 }
 
+/** DOP-per-unit rates used to convert foreign cash to pesos (null = none set). */
+export type CashRates = {
+  eur: number | null
+  usd: number | null
+}
+
 export type BalanceSheet = {
   /** USD->DOP rate used to value unpaid supplier bills. */
   live_rate: number
@@ -43,6 +51,8 @@ export type BalanceSheet = {
   receivables_cents: number
   supplier_owed: SupplierOwed
   commissions_owed_cents: number
+  /** Optional: present from Round 65a on; older snapshots may not have it. */
+  cash_rates?: CashRates
 }
 
 /** One saved monthly snapshot (metadata only, for the picker). */

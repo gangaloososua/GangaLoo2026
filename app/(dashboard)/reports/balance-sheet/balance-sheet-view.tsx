@@ -6,6 +6,9 @@
 // (money accounts carry scope); inventory, receivables and supplier bills are
 // inherently business and don't change. Equity = Assets - Liabilities.
 //
+// Foreign-currency cash (EUR/USD) is converted to pesos inside the RPC; the
+// rates applied arrive in data.cash_rates and are shown as a note (Round 65a).
+//
 // Money is in CENTS throughout.
 
 import { useState } from 'react'
@@ -138,6 +141,11 @@ export function BalanceSheetView({ data }: { data: BalanceSheet }) {
 
   const equity = assets - liabilities
 
+  // Foreign-cash conversion note (Round 65a). Only show rates that are set.
+  const fxParts: string[] = []
+  if (data.cash_rates?.eur) fxParts.push(`EUR ${data.cash_rates.eur.toFixed(2)}`)
+  if (data.cash_rates?.usd) fxParts.push(`US$ ${data.cash_rates.usd.toFixed(2)}`)
+
   const assetMix = [
     { name: 'Cash', value: cash, fill: EMERALD },
     { name: 'Inventory', value: inventory, fill: BLUE },
@@ -176,7 +184,7 @@ export function BalanceSheetView({ data }: { data: BalanceSheet }) {
           </Button>
         </div>
         <p className="text-xs text-muted-foreground">
-          Toggle adjusts cash only — inventory, receivables and supplier bills are business.
+          Toggle adjusts cash only - inventory, receivables and supplier bills are business.
         </p>
       </div>
 
@@ -197,7 +205,7 @@ export function BalanceSheetView({ data }: { data: BalanceSheet }) {
         <StatCard
           label="Equity (net worth)"
           value={formatDOP(equity)}
-          sub="assets − liabilities"
+          sub="assets - liabilities"
           accent={INDIGO}
         />
       </div>
@@ -259,7 +267,7 @@ export function BalanceSheetView({ data }: { data: BalanceSheet }) {
         {/* Assets vs Liabilities vs Equity */}
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-base">Assets · Liabilities · Equity</CardTitle>
+            <CardTitle className="text-base">Assets - Liabilities - Equity</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="h-56 w-full">
@@ -323,6 +331,11 @@ export function BalanceSheetView({ data }: { data: BalanceSheet }) {
             <Row name="Equity (net worth)" amount={equity} bold accent={INDIGO} />
           </div>
 
+          {fxParts.length > 0 && (
+            <p className="px-4 py-2 text-xs text-muted-foreground">
+              Foreign-currency cash converted to pesos at {fxParts.join(' / ')} per unit.
+            </p>
+          )}
           <p className="px-4 py-2 text-xs text-muted-foreground">
             Unpaid supplier bills are billed in USD and converted at the live rate of
             RD${data.live_rate.toFixed(2)} / US$1.
