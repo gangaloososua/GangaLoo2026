@@ -8,6 +8,7 @@ import { useCart } from '@/lib/store/cart'
 import type { StoreWarehouse } from '@/lib/store/catalog'
 import type { DeliveryFees } from '@/lib/store-config-types'
 import { placeOnlineOrder, getOrderQuote, startStripeCheckout, startPaypalCheckout } from './actions'
+import { readFlyerCoupon, clearFlyerCoupon } from '@/lib/store/flyer-coupon'
 
 const NAVY = '#0A2A66'
 const RED = '#CE1126'
@@ -408,6 +409,13 @@ export function CheckoutView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [warehouseSlug])
 
+  // Round 43: pre-fill a coupon captured from a scanned flyer QR (?coupon=CODE),
+  // only if the box is empty so we never clobber a code the customer typed.
+  useEffect(() => {
+    const c = readFlyerCoupon()
+    if (c) setCouponCode((prev) => prev || c)
+  }, [])
+
   // Auto-detect Local vs National from the typed city, unless the customer has
   // manually changed the dropdown.
   const onCityChange = (v: string) => {
@@ -469,6 +477,9 @@ export function CheckoutView({
     })
     setSubmitting(false)
     if (res.ok) {
+      // Round 43: order placed — the flyer coupon has done its job, so forget
+      // it (whether or not it applied) to avoid carrying it to a later order.
+      clearFlyerCoupon()
       // Stripe: hand off to the hosted Stripe checkout page to actually pay.
       // (The order is marked paid later by the Stripe webhook, not here.)
       if (payment === 'stripe') {

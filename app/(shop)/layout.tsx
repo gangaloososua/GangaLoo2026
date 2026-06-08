@@ -4,6 +4,7 @@
 import type { ReactNode } from 'react'
 import { Fraunces, Plus_Jakarta_Sans } from 'next/font/google'
 import { InstallPrompt } from './install-prompt'
+import { CouponCapture } from './coupon-capture'
 const display = Fraunces({
   subsets: ['latin'],
   style: ['normal', 'italic'],
@@ -21,6 +22,7 @@ export default function ShopLayout({ children }: { children: ReactNode }) {
       style={{ fontFamily: 'var(--font-body)' }}
     >
       {children}
+      <CouponCapture />
       <InstallPrompt />
     </div>
   )
