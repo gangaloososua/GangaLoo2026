@@ -181,12 +181,15 @@ export type OrderQuoteResult =
       tierName: string
       tierDiscountPct: number
       isClubMember: boolean
+      couponApplied: boolean
+      couponDiscountCents: number
     }
   | { ok: false }
 
 export async function getOrderQuote(input: {
   warehouseSlug: string
   items: { product_id: string; qty: number }[]
+  couponCode?: string
 }): Promise<OrderQuoteResult> {
   try {
     if (!input.items || input.items.length === 0) return { ok: false }
@@ -194,7 +197,11 @@ export async function getOrderQuote(input: {
     if (!warehouse) return { ok: false }
     const supabase = await createClient()
     const { data, error } = await supabase.rpc('get_storefront_quote', {
-      payload: { warehouse_id: warehouse.id, items: input.items },
+      payload: {
+        warehouse_id: warehouse.id,
+        items: input.items,
+        coupon_code: input.couponCode ?? null,
+      },
     })
     if (error) {
       console.error('[getOrderQuote] rpc error:', error)
@@ -207,6 +214,8 @@ export async function getOrderQuote(input: {
       tier_name?: string
       tier_discount_pct?: number
       is_club_member?: boolean
+      coupon_applied?: boolean
+      coupon_discount_cents?: number
     } | null
     if (!res?.ok) return { ok: false }
     return {
@@ -216,6 +225,8 @@ export async function getOrderQuote(input: {
       tierName: res.tier_name ?? '',
       tierDiscountPct: Number(res.tier_discount_pct ?? 0),
       isClubMember: res.is_club_member === true,
+      couponApplied: res.coupon_applied === true,
+      couponDiscountCents: res.coupon_discount_cents ?? 0,
     }
   } catch (e) {
     console.error('[getOrderQuote] threw:', e)

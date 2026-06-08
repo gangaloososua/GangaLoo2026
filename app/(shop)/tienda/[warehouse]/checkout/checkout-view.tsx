@@ -350,6 +350,8 @@ export function CheckoutView({
   const [placedPickupId, setPlacedPickupId] = useState('')
   // Round 42: coupon code (applied server-side at order placement).
   const [couponCode, setCouponCode] = useState('')
+  // Round 43: live preview of the coupon discount shown before confirming.
+  const [couponDiscountCents, setCouponDiscountCents] = useState(0)
   const [placedCouponDiscount, setPlacedCouponDiscount] = useState(0)
   const [placedCouponCode, setPlacedCouponCode] = useState<string | null>(null)
   const [placedCouponApplied, setPlacedCouponApplied] = useState(false)
@@ -381,7 +383,7 @@ export function CheckoutView({
       : payment === 'paypal'
         ? { pct: paymentConfig.paypalPct, fixed: paymentConfig.paypalFixed }
         : { pct: 0, fixed: 0 }
-  const baseForSurcharge = cart.subtotalCents - memberDiscountCents + fee
+  const baseForSurcharge = cart.subtotalCents - memberDiscountCents - couponDiscountCents + fee
   const surcharge =
     surchargeRate.pct > 0 || surchargeRate.fixed > 0
       ? Math.round((baseForSurcharge * surchargeRate.pct) / 100) + Math.round(surchargeRate.fixed * 100)
@@ -415,6 +417,33 @@ export function CheckoutView({
     const c = readFlyerCoupon()
     if (c) setCouponCode((prev) => prev || c)
   }, [])
+
+  // Round 43: preview the coupon discount as the code changes (debounced), so
+  // the order summary shows the real total before the customer confirms. Uses
+  // the same server quote the order will use, so the preview matches the charge.
+  useEffect(() => {
+    const code = couponCode.trim()
+    if (!code || cart.items.length === 0) {
+      setCouponDiscountCents(0)
+      return
+    }
+    let active = true
+    const tid = setTimeout(() => {
+      getOrderQuote({
+        warehouseSlug,
+        items: cart.items.map((i) => ({ product_id: i.id, qty: i.qty })),
+        couponCode: code,
+      }).then((q) => {
+        if (!active) return
+        setCouponDiscountCents(q.ok && q.couponApplied ? q.couponDiscountCents : 0)
+      })
+    }, 400)
+    return () => {
+      active = false
+      clearTimeout(tid)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [couponCode, warehouseSlug])
 
   // Auto-detect Local vs National from the typed city, unless the customer has
   // manually changed the dropdown.
@@ -866,6 +895,12 @@ export function CheckoutView({
                 <div className="mt-1 flex items-center justify-between text-[13px]">
                   <span style={{ color: MUTED }}>{tx.memberDiscount}{tierName ? ` (${tierName})` : ''}</span>
                   <span style={{ color: '#1d9e75' }}>-{price(memberDiscountCents)}</span>
+                </div>
+              )}
+              {couponDiscountCents > 0 && (
+                <div className="mt-1 flex items-center justify-between text-[13px]">
+                  <span style={{ color: MUTED }}>{tx.coupon}{couponCode.trim() ? ` (${couponCode.trim()})` : ''}</span>
+                  <span style={{ color: '#1d9e75' }}>-{price(couponDiscountCents)}</span>
                 </div>
               )}
               <div className="mt-1 flex items-center justify-between text-[13px]">
