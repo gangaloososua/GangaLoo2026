@@ -422,3 +422,121 @@ export async function createPromotionRule(
   revalidatePath('/discount-rules')
   return { ok: true, ruleId: (data as { id: string }).id }
 }
+
+// ----------------------------------------------------------------------
+// createCouponRule  (Round 42)
+//
+// A coupon is an order-level discount unlocked by a CODE typed at
+// checkout. Admin picks EITHER a percentage OR a fixed RD$ amount.
+// Optional store (scope_source_warehouse_id; null = all stores) and
+// optional channel (scope_channel: 'pos' | 'online'; null = both).
+// Coupons do not use priority — the checker picks by specificity.
+// Uniqueness (active code per store+channel) is enforced by the DB
+// index; a 23505 is surfaced as a friendly message.
+// ----------------------------------------------------------------------
+export type CreateCouponRuleInput = {
+  name: string
+  code: string
+  amountType: 'percent' | 'fixed'
+  deltaPercent: number | null // when amountType = 'percent'
+  deltaCents: number | null // when amountType = 'fixed' (RD$ in cents)
+  scopeSourceWarehouseId: string | null // null = all stores
+  scopeChannel: 'pos' | 'online' | null // null = both channels
+  startsAt: string | null // ISO datetime
+  endsAt: string | null // ISO datetime
+}
+export type CreateCouponRuleResult = Ok<{ ruleId: string }> | Err
+
+// Letters, digits, dot, dash, underscore; 2–40 chars; no spaces.
+const COUPON_CODE_RE = /^[A-Za-z0-9._-]{2,40}$/
+
+export async function createCouponRule(
+  input: CreateCouponRuleInput,
+): Promise<CreateCouponRuleResult> {
+  const caller = await requireRole(['owner', 'admin'] as const)
+
+  const name = input.name.trim()
+  if (!name) return { ok: false, error: 'Rule name is required' }
+
+  const code = input.code.trim().toUpperCase()
+  if (!code) return { ok: false, error: 'Coupon code is required' }
+  if (!COUPON_CODE_RE.test(code)) {
+    return {
+      ok: false,
+      error:
+        'Code can use letters, numbers, dot, dash and underscore (2–40 characters, no spaces)',
+    }
+  }
+
+  let delta_percent: number | null = null
+  let delta_cents: number | null = null
+  if (input.amountType === 'percent') {
+    const p = Number(input.deltaPercent)
+    if (!Number.isFinite(p) || p <= 0 || p > 100) {
+      return {
+        ok: false,
+        error: 'Percent must be greater than 0 and at most 100',
+      }
+    }
+    delta_percent = p
+  } else if (input.amountType === 'fixed') {
+    const c = Number(input.deltaCents)
+    if (!Number.isFinite(c) || c <= 0 || !Number.isInteger(c)) {
+      return { ok: false, error: 'Fixed amount must be greater than zero' }
+    }
+    delta_cents = c
+  } else {
+    return { ok: false, error: 'Pick a percentage or a fixed amount' }
+  }
+
+  if (
+    input.scopeChannel != null &&
+    !['pos', 'online'].includes(input.scopeChannel)
+  ) {
+    return { ok: false, error: 'Channel must be POS, online, or both' }
+  }
+  if (
+    input.startsAt &&
+    input.endsAt &&
+    new Date(input.startsAt) > new Date(input.endsAt)
+  ) {
+    return { ok: false, error: 'Start date must be on or before end date' }
+  }
+
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('discount_rules')
+    .insert({
+      kind: 'coupon',
+      name,
+      code,
+      is_active: true,
+      starts_at: input.startsAt,
+      ends_at: input.endsAt,
+      scope_source_warehouse_id: input.scopeSourceWarehouseId || null,
+      scope_channel: input.scopeChannel ?? null,
+      delta_percent,
+      delta_cents,
+      created_by: caller.id,
+    })
+    .select('id')
+    .single()
+
+  if (error) {
+    // Unique-index violation -> duplicate active code for this store+channel.
+    if (
+      error.code === '23505' ||
+      error.message.toLowerCase().includes('duplicate')
+    ) {
+      return {
+        ok: false,
+        error:
+          'An active coupon with that code already exists for this store and channel. Use a different code, or deactivate the old one first.',
+      }
+    }
+    return { ok: false, error: error.message }
+  }
+
+  revalidatePath('/discount-rules')
+  return { ok: true, ruleId: (data as { id: string }).id }
+}
