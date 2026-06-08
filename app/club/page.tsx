@@ -67,6 +67,11 @@ const BENEFITS: { icon: string; title: string; desc: string }[] = [
     title: 'Atención prioritaria por WhatsApp',
     desc: 'Línea directa para miembros: respuesta prioritaria y atención personalizada.',
   },
+  {
+    icon: '📦',
+    title: 'Pedidos Temu, Shein y AliExpress con menos comisión',
+    desc: 'Como miembro pagas una comisión más baja cuando te traemos tus pedidos de Temu, Shein o AliExpress.',
+  },
 ]
 
 const ERR_ES: Record<string, string> = {
