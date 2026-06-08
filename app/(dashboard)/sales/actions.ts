@@ -416,6 +416,10 @@ export type ConfirmPosInput = {
   fulfillment_warehouse_id: string
   fulfillment_method: 'in_store' | 'pickup' | 'delivery'
   discount_cents: number
+  // Round 42: optional coupon code. The RPC re-validates it server-side
+  // (validate_coupon for channel 'pos') and computes the real amount off the
+  // merchandise subtotal — the client value is never trusted.
+  coupon_code?: string | null
   items: ConfirmPosItem[]
   payments: ConfirmPosPayment[]
 }
@@ -438,6 +442,64 @@ export async function getCustomerTier(
   if (error || !data) return { tierName: '', discountPct: 0 }
   const r = data as { tier_name?: string; discount_pct?: number }
   return { tierName: r.tier_name ?? '', discountPct: Number(r.discount_pct ?? 0) }
+}
+
+// Round 42: live coupon preview for the till. Calls validate_coupon and
+// returns the matched rule's percent/amount so the form can show (and
+// recompute) the discount as the cart changes. This is PREVIEW ONLY — the
+// authoritative check + amount happen inside confirm_pos_sale at submit.
+export type PreviewCouponResult =
+  | { ok: true; valid: false }
+  | {
+      ok: true
+      valid: true
+      rule_id: string
+      name: string
+      percent: number | null
+      amount_cents: number | null
+    }
+  | { ok: false; error: string }
+
+export async function previewCoupon(input: {
+  code: string
+  sourceWarehouseId: string
+  channel: 'pos' | 'online'
+  baseCents: number
+}): Promise<PreviewCouponResult> {
+  await requireAdminCaller()
+  const code = input.code.trim()
+  if (!code) return { ok: true, valid: false }
+
+  const supabase = await createClient()
+  const { data, error } = await supabase.rpc('validate_coupon', {
+    p_code: code,
+    p_source_warehouse_id: input.sourceWarehouseId || null,
+    p_channel: input.channel,
+    p_base_cents: Math.max(0, Math.round(input.baseCents)),
+  })
+  if (error) return { ok: false, error: error.message }
+
+  // validate_coupon is set-returning -> rpc gives an array of one row.
+  const row = (Array.isArray(data) ? data[0] : data) as
+    | {
+        rule_id: string | null
+        name: string | null
+        delta_percent: number | string | null
+        delta_cents: number | null
+        reason: string
+      }
+    | undefined
+  if (!row || row.reason !== 'ok' || !row.rule_id) {
+    return { ok: true, valid: false }
+  }
+  return {
+    ok: true,
+    valid: true,
+    rule_id: row.rule_id,
+    name: row.name ?? '',
+    percent: row.delta_percent == null ? null : Number(row.delta_percent),
+    amount_cents: row.delta_cents == null ? null : Number(row.delta_cents),
+  }
 }
 
 export async function confirmPosSale(
@@ -467,6 +529,9 @@ export async function confirmPosSale(
     const friendly = raw.startsWith('no_lots_for_product:')
       ? 'One of the products has no inventory lots in the selected warehouse. ' +
         'Receive stock for it first, or pick a different source warehouse.'
+      : raw.startsWith('invalid_coupon:')
+      ? "That coupon code isn't valid for this sale — it may be expired, " +
+        'for a different store, or mistyped. Remove it or check the code.'
       : raw
     return { ok: false, error: friendly }
   }

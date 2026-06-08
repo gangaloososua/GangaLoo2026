@@ -28,7 +28,7 @@ import { Badge } from '@/components/ui/badge'
 import { Plus, Trash2 } from 'lucide-react'
 import { formatDOP } from '@/lib/format'
 import { ProductSearch } from './product-search'
-import { confirmPosSale, getCustomerTier } from '../actions'
+import { confirmPosSale, getCustomerTier, previewCoupon } from '../actions'
 import { QuickCustomerDialog } from './quick-customer-dialog'
 import type {
   CustomerPickerItem,
@@ -195,6 +195,16 @@ export function NewSaleForm({
 
   const [lines, setLines] = useState<CartLine[]>([])
   const [saleDiscountCents, setSaleDiscountCents] = useState<number>(0)
+  // Round 42: coupon code state. Preview only; the RPC re-checks at submit.
+  const [couponInput, setCouponInput] = useState('')
+  const [appliedCoupon, setAppliedCoupon] = useState<{
+    code: string
+    name: string
+    percent: number | null
+    amount_cents: number | null
+  } | null>(null)
+  const [couponError, setCouponError] = useState<string | null>(null)
+  const [couponChecking, setCouponChecking] = useState(false)
   const [payments, setPayments] = useState<CartPayment[]>([])
   const [submitting, setSubmitting] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
@@ -387,9 +397,88 @@ export function NewSaleForm({
       }
     }
     const afterLineDiscounts = subtotal - lineDiscounts - loyaltyDiscount
-    const grandTotal = Math.max(0, afterLineDiscounts - saleDiscountCents)
-    return { subtotal, lineDiscounts, loyaltyDiscount, grandTotal }
-  }, [lines, saleDiscountCents, tierPct])
+    // Round 42: coupon comes off the SAME base the RPC uses (subtotal after
+    // line + member discounts), and after any manual order discount. Recomputed
+    // here from the rule's percent/amount so it tracks cart changes without
+    // re-calling the server; the RPC computes the authoritative amount at submit.
+    let couponDiscount = 0
+    if (appliedCoupon) {
+      const raw =
+        appliedCoupon.percent != null
+          ? Math.floor((afterLineDiscounts * appliedCoupon.percent) / 100)
+          : Math.min(appliedCoupon.amount_cents ?? 0, afterLineDiscounts)
+      couponDiscount = Math.max(
+        0,
+        Math.min(raw, afterLineDiscounts - saleDiscountCents)
+      )
+    }
+    const grandTotal = Math.max(
+      0,
+      afterLineDiscounts - saleDiscountCents - couponDiscount
+    )
+    return {
+      subtotal,
+      lineDiscounts,
+      loyaltyDiscount,
+      afterLineDiscounts,
+      couponDiscount,
+      grandTotal,
+    }
+  }, [lines, saleDiscountCents, tierPct, appliedCoupon])
+
+  // Round 42: validate + apply a coupon code against the current base.
+  async function applyCoupon() {
+    const code = couponInput.trim()
+    if (!code) return
+    setCouponChecking(true)
+    setCouponError(null)
+    try {
+      const res = await previewCoupon({
+        code,
+        sourceWarehouseId,
+        channel: 'pos',
+        baseCents: totals.afterLineDiscounts,
+      })
+      if (!res.ok) {
+        setAppliedCoupon(null)
+        setCouponError(res.error)
+        return
+      }
+      if (!res.valid) {
+        setAppliedCoupon(null)
+        setCouponError(
+          locale === 'es'
+            ? 'Código no válido para esta venta (expirado, de otra tienda o mal escrito).'
+            : "Code isn't valid for this sale (expired, another store, or mistyped)."
+        )
+        return
+      }
+      setAppliedCoupon({
+        code,
+        name: res.name,
+        percent: res.percent,
+        amount_cents: res.amount_cents,
+      })
+      setCouponInput(code)
+    } catch (e) {
+      setAppliedCoupon(null)
+      setCouponError(
+        e instanceof Error
+          ? e.message
+          : locale === 'es'
+            ? 'No se pudo verificar el cupón.'
+            : 'Coupon check failed.'
+      )
+    } finally {
+      setCouponChecking(false)
+    }
+  }
+
+  function removeCoupon() {
+    setAppliedCoupon(null)
+    setCouponError(null)
+    setCouponInput('')
+  }
 
   // === payment ops ===
 
@@ -480,6 +569,7 @@ export function NewSaleForm({
         fulfillment_warehouse_id: fulfillmentWarehouseId,
         fulfillment_method: fulfillmentMethod,
         discount_cents: saleDiscountCents,
+        coupon_code: appliedCoupon?.code ?? null,
         items: lines.map((l) => {
           const gross = l.unit_price_cents * l.qty
           const cap = Math.floor(gross * 0.3)
@@ -868,6 +958,66 @@ export function NewSaleForm({
                       className="w-32"
                     />
                   </div>
+                  {/* Round 42: coupon code */}
+                  <div className="space-y-1">
+                    <Label className="text-xs">
+                      {locale === 'es' ? 'Cupón' : 'Coupon code'}
+                    </Label>
+                    {appliedCoupon ? (
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge variant="secondary" className="font-mono uppercase">
+                          {appliedCoupon.code}
+                        </Badge>
+                        <span className="text-xs text-muted-foreground">
+                          {appliedCoupon.percent != null
+                            ? `${appliedCoupon.percent}%`
+                            : formatDOP(appliedCoupon.amount_cents ?? 0)}
+                          {appliedCoupon.name ? ` · ${appliedCoupon.name}` : ''}
+                        </span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={removeCoupon}
+                        >
+                          {locale === 'es' ? 'Quitar' : 'Remove'}
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <Input
+                          value={couponInput}
+                          onChange={(e) => setCouponInput(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault()
+                              applyCoupon()
+                            }
+                          }}
+                          placeholder={locale === 'es' ? 'Código' : 'Code'}
+                          className="w-32 font-mono uppercase"
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={applyCoupon}
+                          disabled={couponChecking || !couponInput.trim()}
+                        >
+                          {couponChecking
+                            ? locale === 'es'
+                              ? 'Verificando…'
+                              : 'Checking…'
+                            : locale === 'es'
+                              ? 'Aplicar'
+                              : 'Apply'}
+                        </Button>
+                      </div>
+                    )}
+                    {couponError ? (
+                      <p className="text-xs text-rose-600">{couponError}</p>
+                    ) : null}
+                  </div>
                   <div className="space-y-1 text-sm sm:text-right">
                     <div className="flex justify-between sm:justify-end sm:gap-6">
                       <span className="text-muted-foreground">{t(locale, 'sd.subtotal')}</span>
@@ -903,6 +1053,17 @@ export function NewSaleForm({
                         </span>
                         <span className="tabular-nums">
                           −{formatDOP(saleDiscountCents)}
+                        </span>
+                      </div>
+                    )}
+                    {totals.couponDiscount > 0 && (
+                      <div className="flex justify-between sm:justify-end sm:gap-6">
+                        <span className="text-muted-foreground">
+                          {locale === 'es' ? 'Cupón' : 'Coupon'}
+                          {appliedCoupon ? ` (${appliedCoupon.code})` : ''}
+                        </span>
+                        <span className="tabular-nums">
+                          −{formatDOP(totals.couponDiscount)}
                         </span>
                       </div>
                     )}
