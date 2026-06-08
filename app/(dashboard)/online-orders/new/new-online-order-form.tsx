@@ -43,6 +43,7 @@ import { Badge } from '@/components/ui/badge'
 import { formatDOP } from '@/lib/format'
 import { ProductSearch } from '../../sales/new/product-search'
 import { createOnlineOrder } from '../actions'
+import { previewCoupon } from '../../sales/actions'
 import type {
   CustomerPickerItem,
   MoneyAccount,
@@ -202,6 +203,17 @@ export function NewOnlineOrderForm({
 
   const [lines, setLines] = useState<CartLine[]>([])
   const [saleDiscountCents, setSaleDiscountCents] = useState<number>(0)
+  // Round 42: coupon code state (channel 'online'). Preview only; the RPC
+  // re-checks at submit.
+  const [couponInput, setCouponInput] = useState('')
+  const [appliedCoupon, setAppliedCoupon] = useState<{
+    code: string
+    name: string
+    percent: number | null
+    amount_cents: number | null
+  } | null>(null)
+  const [couponError, setCouponError] = useState<string | null>(null)
+  const [couponChecking, setCouponChecking] = useState(false)
   const [shippingCents, setShippingCents] = useState<number>(0)
   const [shippingManuallyEdited, setShippingManuallyEdited] = useState(false)
   const [shippingAddress, setShippingAddress] = useState<string>('')
@@ -371,12 +383,79 @@ export function NewOnlineOrderForm({
       lineDiscounts += l.line_discount_cents
     }
     const afterLineDiscounts = subtotal - lineDiscounts
+    // Round 42: coupon comes off the merchandise subtotal (after line
+    // discounts), BEFORE shipping — the same base the RPC uses. Recomputed
+    // from the rule's percent/amount so it tracks cart changes; the RPC
+    // computes the authoritative amount at submit.
+    let couponDiscount = 0
+    if (appliedCoupon) {
+      const raw =
+        appliedCoupon.percent != null
+          ? Math.floor((afterLineDiscounts * appliedCoupon.percent) / 100)
+          : Math.min(appliedCoupon.amount_cents ?? 0, afterLineDiscounts)
+      couponDiscount = Math.max(
+        0,
+        Math.min(raw, afterLineDiscounts - saleDiscountCents),
+      )
+    }
     const grandTotal = Math.max(
       0,
-      afterLineDiscounts - saleDiscountCents + shippingCents,
+      afterLineDiscounts - saleDiscountCents - couponDiscount + shippingCents,
     )
-    return { subtotal, lineDiscounts, grandTotal }
-  }, [lines, saleDiscountCents, shippingCents])
+    return {
+      subtotal,
+      lineDiscounts,
+      afterLineDiscounts,
+      couponDiscount,
+      grandTotal,
+    }
+  }, [lines, saleDiscountCents, shippingCents, appliedCoupon])
+
+  // Round 42: validate + apply a coupon code against the current base.
+  async function applyCoupon() {
+    const code = couponInput.trim()
+    if (!code) return
+    setCouponChecking(true)
+    setCouponError(null)
+    try {
+      const res = await previewCoupon({
+        code,
+        sourceWarehouseId,
+        channel: 'online',
+        baseCents: totals.afterLineDiscounts,
+      })
+      if (!res.ok) {
+        setAppliedCoupon(null)
+        setCouponError(res.error)
+        return
+      }
+      if (!res.valid) {
+        setAppliedCoupon(null)
+        setCouponError(
+          "Code isn't valid for this order (expired, another store, or mistyped).",
+        )
+        return
+      }
+      setAppliedCoupon({
+        code,
+        name: res.name,
+        percent: res.percent,
+        amount_cents: res.amount_cents,
+      })
+      setCouponInput(code)
+    } catch (e) {
+      setAppliedCoupon(null)
+      setCouponError(e instanceof Error ? e.message : 'Coupon check failed.')
+    } finally {
+      setCouponChecking(false)
+    }
+  }
+
+  function removeCoupon() {
+    setAppliedCoupon(null)
+    setCouponError(null)
+    setCouponInput('')
+  }
 
   // === payment ops ===
 
@@ -519,6 +598,7 @@ export function NewOnlineOrderForm({
         fulfillmentWarehouseId,
         fulfillmentMethod,
         discountCents: saleDiscountCents,
+        couponCode: appliedCoupon?.code ?? null,
         shippingCents,
         shippingAddress: shippingAddress.trim() || null,
         shippingCity: shippingCity.trim() || null,
@@ -914,6 +994,61 @@ export function NewOnlineOrderForm({
                         </button>
                       ) : null}
                     </div>
+                    {/* Round 42: coupon code */}
+                    <div className="space-y-1">
+                      <Label className="text-xs">Coupon code</Label>
+                      {appliedCoupon ? (
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge
+                            variant="secondary"
+                            className="font-mono uppercase"
+                          >
+                            {appliedCoupon.code}
+                          </Badge>
+                          <span className="text-xs text-muted-foreground">
+                            {appliedCoupon.percent != null
+                              ? `${appliedCoupon.percent}%`
+                              : formatDOP(appliedCoupon.amount_cents ?? 0)}
+                            {appliedCoupon.name ? ` · ${appliedCoupon.name}` : ''}
+                          </span>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={removeCoupon}
+                          >
+                            Remove
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <Input
+                            value={couponInput}
+                            onChange={(e) => setCouponInput(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault()
+                                applyCoupon()
+                              }
+                            }}
+                            placeholder="Code"
+                            className="w-32 font-mono uppercase"
+                          />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={applyCoupon}
+                            disabled={couponChecking || !couponInput.trim()}
+                          >
+                            {couponChecking ? 'Checking…' : 'Apply'}
+                          </Button>
+                        </div>
+                      )}
+                      {couponError ? (
+                        <p className="text-xs text-rose-600">{couponError}</p>
+                      ) : null}
+                    </div>
                   </div>
                   <div className="space-y-1 text-sm sm:text-right">
                     <div className="flex justify-between sm:justify-end sm:gap-6">
@@ -939,6 +1074,16 @@ export function NewOnlineOrderForm({
                         </span>
                         <span className="tabular-nums">
                           −{formatDOP(saleDiscountCents)}
+                        </span>
+                      </div>
+                    ) : null}
+                    {totals.couponDiscount > 0 ? (
+                      <div className="flex justify-between sm:justify-end sm:gap-6">
+                        <span className="text-muted-foreground">
+                          Coupon{appliedCoupon ? ` (${appliedCoupon.code})` : ''}
+                        </span>
+                        <span className="tabular-nums">
+                          −{formatDOP(totals.couponDiscount)}
                         </span>
                       </div>
                     ) : null}

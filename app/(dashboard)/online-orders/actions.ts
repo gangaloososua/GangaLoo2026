@@ -55,6 +55,10 @@ export type CreateOnlineOrderInput = {
   fulfillmentWarehouseId: string
   fulfillmentMethod: 'pickup' | 'delivery' | 'in_store'
   discountCents: number
+  // Round 42: optional coupon code. The RPC re-validates server-side
+  // (validate_coupon, channel 'online') and computes the real amount off the
+  // merchandise subtotal — the client value is never trusted.
+  couponCode?: string | null
   shippingCents: number
   shippingAddress: string | null
   shippingCity: string | null
@@ -114,6 +118,7 @@ export async function createOnlineOrder(
       fulfillment_warehouse_id: input.fulfillmentWarehouseId,
       fulfillment_method: input.fulfillmentMethod,
       discount_cents: input.discountCents,
+      coupon_code: input.couponCode ?? null,
       shipping_cents: input.shippingCents,
       shipping_address: input.shippingAddress,
       shipping_city: input.shippingCity,
@@ -134,7 +139,14 @@ export async function createOnlineOrder(
     },
   })
 
-  if (error) return { ok: false, error: error.message }
+  if (error) {
+    const raw = error.message || 'Failed to create online order.'
+    const friendly = raw.startsWith('invalid_coupon:')
+      ? "That coupon code isn't valid for this order — it may be expired, " +
+        'for a different store, online-only/in-person-only, or mistyped.'
+      : raw
+    return { ok: false, error: friendly }
+  }
 
   const result = (data ?? {}) as {
     sale_id?: string
