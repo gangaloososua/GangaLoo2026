@@ -36,6 +36,7 @@ const KIND_SORT_KEY: Record<DiscountRuleKind, number> = {
   bulk: 2,                // Round 19
   promotion: 3,           // Round 20
   logistics_surcharge: 4, // reserved for Round 21
+  coupon: 5,              // Round 42 — order-level; never a per-line candidate
 }
 
 export type AppliedDiscount = {
@@ -93,6 +94,10 @@ export function resolveLineDiscount(
   const candidates = input.rules
     .filter((r) => {
       if (!r.isActive) return false
+      // Round 42: coupons are ORDER-LEVEL — unlocked by a code and validated
+      // by validate_coupon at checkout. They must NEVER be auto-applied as a
+      // per-line discount, so skip them here regardless of their fields.
+      if (r.kind === 'coupon') return false
       if (r.deltaPercent == null) return false
       if (r.startsAt && new Date(r.startsAt).getTime() > atMs) return false
       if (r.endsAt && new Date(r.endsAt).getTime() < atMs) return false

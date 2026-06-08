@@ -37,6 +37,12 @@ const RULE_KINDS: Array<{
     blurb:
       'A limited-time % off a single product, for everyone including walk-ins, with no minimum quantity.',
   },
+  {
+    href: '/discount-rules/new/coupon',
+    title: 'Coupon code',
+    blurb:
+      'A code customers type at checkout for a % or fixed amount off the whole order. Optionally limit it to one store or channel (online / in-person).',
+  },
 ]
 export default async function NewDiscountRulePage() {
   await requireRole(['owner', 'admin'] as const)

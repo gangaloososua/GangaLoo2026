@@ -1,6 +1,7 @@
 'use client'
 
-// Round 16.3 â€” Discount rules list table
+// Round 16.3 — Discount rules list table
+// Round 42  — coupon kind: label + code/channel summary
 
 import * as React from 'react'
 import { useTransition } from 'react'
@@ -25,9 +26,9 @@ type Props = {
 }
 
 function formatDate(iso: string | null): string {
-  if (!iso) return 'â€”'
+  if (!iso) return '—'
   const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return 'â€”'
+  if (Number.isNaN(d.getTime())) return '—'
   return d.toLocaleDateString('en-GB', {
     day: '2-digit',
     month: 'short',
@@ -36,7 +37,7 @@ function formatDate(iso: string | null): string {
 }
 
 function formatPercent(n: number | null): string {
-  if (n == null) return 'â€”'
+  if (n == null) return '—'
   return `${n.toFixed(2)}%`
 }
 
@@ -52,12 +53,33 @@ function formatKindLabel(kind: string): string {
       return 'Promotion'
     case 'logistics_surcharge':
       return 'Logistics surcharge'
+    case 'coupon':
+      return 'Coupon'
     default:
       return kind
   }
 }
 
 function scopeSummary(r: DiscountRuleRow): string {
+  // Round 42: coupons summarise differently — code, channel, store.
+  if (r.kind === 'coupon') {
+    const parts: string[] = []
+    if (r.code) parts.push(`Code: ${r.code}`)
+    parts.push(
+      r.scopeChannel === 'pos'
+        ? 'In-person'
+        : r.scopeChannel === 'online'
+          ? 'Online'
+          : 'Online & in-person',
+    )
+    parts.push(
+      r.scopeSourceWarehouseName
+        ? `Store: ${r.scopeSourceWarehouseName}`
+        : 'All stores',
+    )
+    return parts.join(' • ')
+  }
+
   const parts: string[] = []
   if (r.scopeCustomerName) parts.push(`Customer: ${r.scopeCustomerName}`)
   if (r.scopeClubTier && r.scopeClubTier !== 'none')
@@ -72,22 +94,24 @@ function scopeSummary(r: DiscountRuleRow): string {
   if (r.scopeFulfillmentWarehouseName)
     parts.push(`To: ${r.scopeFulfillmentWarehouseName}`)
   if (r.thresholdQty != null) parts.push(`Min qty: ${r.thresholdQty}`)
-  return parts.join(' â€¢ ') || 'â€”'
+  return parts.join(' • ') || '—'
 }
 
 function windowSummary(r: DiscountRuleRow): string {
   if (!r.startsAt && !r.endsAt) return 'Always'
-  return `${formatDate(r.startsAt)} â†’ ${formatDate(r.endsAt)}`
+  return `${formatDate(r.startsAt)} → ${formatDate(r.endsAt)}`
 }
 
 function amountSummary(r: DiscountRuleRow): string {
   if (r.deltaPercent != null) return formatPercent(r.deltaPercent)
   if (r.deltaCents != null)
-    return new Intl.NumberFormat('en-GB', {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(r.deltaCents / 100) + ' DOP'
-  return 'â€”'
+    return (
+      new Intl.NumberFormat('en-GB', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      }).format(r.deltaCents / 100) + ' DOP'
+    )
+  return '—'
 }
 
 export function DiscountRulesListTable({ rules }: Props) {
@@ -102,9 +126,7 @@ export function DiscountRulesListTable({ rules }: Props) {
       if (!result.ok) {
         toast.error(result.error)
       } else {
-        toast.success(
-          rule.isActive ? 'Rule deactivated.' : 'Rule activated.',
-        )
+        toast.success(rule.isActive ? 'Rule deactivated.' : 'Rule activated.')
       }
     })
   }
@@ -169,7 +191,10 @@ export function DiscountRulesListTable({ rules }: Props) {
                 </TableRow>
               ) : (
                 rules.map((r) => (
-                  <TableRow key={r.id} className={r.isActive ? '' : 'opacity-60'}>
+                  <TableRow
+                    key={r.id}
+                    className={r.isActive ? '' : 'opacity-60'}
+                  >
                     <TableCell>
                       <Button
                         variant={r.isActive ? 'default' : 'outline'}

@@ -18,6 +18,7 @@ export type DiscountRuleKind =
   | 'promotion'
   | 'customer_override'
   | 'logistics_surcharge'
+  | 'coupon'
 
 export type ClubTier =
   | 'none'
@@ -52,6 +53,9 @@ export type DiscountRuleRow = {
   deltaPercent: number | null
   deltaCents: number | null
   priority: number
+  // Round 42: coupon fields (null for non-coupon kinds)
+  code: string | null
+  scopeChannel: 'pos' | 'online' | null
   createdAt: string
   updatedAt: string
 }
@@ -83,6 +87,8 @@ type RawRule = {
   delta_percent: number | string | null
   delta_cents: number | null
   priority: number
+  code: string | null
+  scope_channel: 'pos' | 'online' | null
   created_at: string
   updated_at: string
 }
@@ -108,6 +114,7 @@ export async function listDiscountRules(
         'scope_club_tier, scope_customer_id, ' +
         'scope_source_warehouse_id, scope_fulfillment_warehouse_id, ' +
         'threshold_qty, delta_percent, delta_cents, ' +
+        'code, scope_channel, ' +
         'priority, created_at, updated_at',
     )
     .order('is_active', { ascending: false })
@@ -221,6 +228,8 @@ export async function listDiscountRules(
     deltaPercent: toNumberOrNull(r.delta_percent),
     deltaCents: r.delta_cents,
     priority: r.priority,
+    code: r.code,
+    scopeChannel: r.scope_channel,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   }))
