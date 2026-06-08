@@ -24,6 +24,7 @@ export type PlaceOrderInput = {
   deliveryLat?: number
   deliveryLng?: number
   deliveryAt?: string
+  couponCode?: string
   items: { product_id: string; qty: number }[]
 }
 
@@ -42,6 +43,10 @@ export type PlaceOrderResult =
       paymentMethod: 'cash' | 'transfer' | 'stripe' | 'paypal'
       tierName: string
       tierDiscountPct: number
+      couponApplied: boolean
+      couponDiscountCents: number
+      couponCode: string | null
+      couponReason: string | null
     }
   | { ok: false; error: string }
 
@@ -68,6 +73,7 @@ export async function placeOnlineOrder(
       pickup_warehouse_id: input.pickupWarehouseId ?? null,
       delivery_region: input.deliveryRegion ?? null,
       payment_method: input.paymentMethod,
+      coupon_code: input.couponCode ?? null,
     shipping_address: input.shippingAddress ?? null,
       shipping_city: input.shippingCity ?? null,
       delivery_lat: input.deliveryLat ?? null,
@@ -99,6 +105,10 @@ export async function placeOnlineOrder(
       payment_method?: string
       tier_name?: string
       tier_discount_pct?: number
+      coupon_applied?: boolean
+      coupon_discount_cents?: number
+      coupon_code?: string | null
+      coupon_reason?: string | null
     } | null
     if (!res?.ok || !res.invoice_number) {
       console.error('[placeOnlineOrder] unexpected result:', data)
@@ -150,6 +160,10 @@ export async function placeOnlineOrder(
           : 'cash',
       tierName: res.tier_name ?? '',
       tierDiscountPct: Number(res.tier_discount_pct ?? 0),
+      couponApplied: res.coupon_applied === true,
+      couponDiscountCents: res.coupon_discount_cents ?? 0,
+      couponCode: res.coupon_code ?? null,
+      couponReason: res.coupon_reason ?? null,
     }
   } catch (e) {
     console.error('[placeOnlineOrder] threw:', e)

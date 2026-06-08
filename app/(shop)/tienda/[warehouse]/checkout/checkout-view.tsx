@@ -104,6 +104,10 @@ const CT = {
     payCardSub: 'Pago con tarjeta en línea',
     payPaypalSub: 'Paga con tu cuenta PayPal',
     payOnlineSoon: 'Pago en línea (en pruebas)',
+    couponLabel: 'Cupón (opcional)',
+    couponPlaceholder: 'Código',
+    coupon: 'Cupón',
+    couponNotApplied: 'Cupón no aplicado',
   },
   en: {
     fulfillTitle: 'Fulfillment',
@@ -144,6 +148,10 @@ const CT = {
     payCardSub: 'Pay by card online',
     payPaypalSub: 'Pay with your PayPal account',
     payOnlineSoon: 'Online payment (testing)',
+    couponLabel: 'Coupon (optional)',
+    couponPlaceholder: 'Code',
+    coupon: 'Coupon',
+    couponNotApplied: 'Coupon not applied',
   },
 } as const
 
@@ -339,6 +347,11 @@ export function CheckoutView({
   const [placedItems, setPlacedItems] = useState<{ name: string; qty: number; priceCents: number }[]>([])
   const [placedMethod, setPlacedMethod] = useState<Method>('pickup')
   const [placedPickupId, setPlacedPickupId] = useState('')
+  // Round 42: coupon code (applied server-side at order placement).
+  const [couponCode, setCouponCode] = useState('')
+  const [placedCouponDiscount, setPlacedCouponDiscount] = useState(0)
+  const [placedCouponCode, setPlacedCouponCode] = useState<string | null>(null)
+  const [placedCouponApplied, setPlacedCouponApplied] = useState(false)
 
   const storeHref = `/tienda/${warehouseSlug}`
   const otherStores = stores.filter((s) => s.id !== warehouseId)
@@ -452,6 +465,7 @@ export function CheckoutView({
       deliveryLng: method === 'delivery' && deliveryLng != null ? deliveryLng : undefined,
       deliveryAt: method === 'delivery' && deliveryDate && deliveryTime ? new Date(`${deliveryDate}T${deliveryTime}`).toISOString() : undefined,
       items: cart.items.map((i) => ({ product_id: i.id, qty: i.qty })),
+      couponCode: couponCode.trim() || undefined,
     })
     setSubmitting(false)
     if (res.ok) {
@@ -506,6 +520,9 @@ export function CheckoutView({
       setPlacedItems(cart.items.map((i) => ({ name: i.name, qty: i.qty, priceCents: i.priceCents })))
       setPlacedMethod(method)
       setPlacedPickupId(pickupStoreId)
+      setPlacedCouponDiscount(res.couponDiscountCents)
+      setPlacedCouponCode(res.couponCode)
+      setPlacedCouponApplied(res.couponApplied)
       cart.clear()
       if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' })
     } else {
@@ -556,6 +573,12 @@ export function CheckoutView({
               )}
               {placedMemberDiscount > 0 && (
                 <p><span style={{ color: MUTED }}>{tx.memberDiscount}{placedTierName ? ` (${placedTierName})` : ''}:</span> <span style={{ color: '#1d9e75' }}>-{price(placedMemberDiscount)}</span></p>
+              )}
+              {placedCouponApplied && placedCouponDiscount > 0 && (
+                <p><span style={{ color: MUTED }}>{tx.coupon}{placedCouponCode ? ` (${placedCouponCode})` : ''}:</span> <span style={{ color: '#1d9e75' }}>-{price(placedCouponDiscount)}</span></p>
+              )}
+              {!placedCouponApplied && placedCouponCode && (
+                <p><span style={{ color: MUTED }}>{tx.coupon}{` (${placedCouponCode})`}:</span> <span style={{ color: '#b91c1c' }}>{tx.couponNotApplied}</span></p>
               )}
               <p className="mt-1"><span style={{ color: MUTED }}>{tx.deliveryFee}:</span> {placedShipping > 0 ? price(placedShipping) : tx.free}</p>
               <p className="mt-1"><span style={{ color: MUTED }}>{ts(locale, 'shop.total')}:</span> <span style={{ color: NAVY, fontWeight: 600 }}>{price(placedSurcharge > 0 ? placedAmountDue : placedTotal)}</span></p>
@@ -801,6 +824,17 @@ export function CheckoutView({
                   {bankInfo.accountType && <p><span style={{ color: MUTED }}>{tx.bankAccountType}:</span> {bankInfo.accountType}</p>}
                 </div>
               )}
+            </section>
+
+            <section className="mb-4 rounded-2xl bg-white p-4" style={{ border: '1px solid #eceef2' }}>
+              <label className="mb-2 block text-[14px] font-semibold" style={{ color: INK }}>{tx.couponLabel}</label>
+              <input
+                value={couponCode}
+                onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                placeholder={tx.couponPlaceholder}
+                className="w-full rounded-xl px-3 py-2 text-[14px] uppercase"
+                style={inputStyle}
+              />
             </section>
 
             <section className="mb-4 rounded-2xl bg-white p-4" style={{ border: '1px solid #eceef2' }}>
