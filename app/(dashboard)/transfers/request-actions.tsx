@@ -6,6 +6,11 @@
 // (trim per-line qty, drop a line with 0) or decline with a reason.
 // WithdrawRequestButton: the requesting distributor pulls back their own
 // pending request (locale-aware — Spanish for distributors).
+//
+// Round 67a (mobile fix): the approve dialog now caps at 90dvh with an
+// internal scroll and a pinned footer, so "Approve & send" is always reachable
+// even with many line items. The button group also wraps to full width on
+// phones (it stacks under the request details — see transfers/page.tsx).
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
@@ -93,22 +98,28 @@ export function RequestReviewButtons({ request }: { request: PendingRequest }) {
   }
 
   return (
-    <div className="flex shrink-0 items-center gap-2">
-      <Button type="button" size="sm" onClick={() => setApproveOpen(true)}>
+    <div className="flex w-full items-center gap-2 sm:w-auto sm:shrink-0">
+      <Button
+        type="button"
+        size="sm"
+        className="flex-1 sm:flex-none"
+        onClick={() => setApproveOpen(true)}
+      >
         Review &amp; approve
       </Button>
       <Button
         type="button"
         size="sm"
         variant="outline"
+        className="flex-1 sm:flex-none"
         onClick={() => setDeclineOpen(true)}
       >
         Decline
       </Button>
 
       <AlertDialog open={approveOpen} onOpenChange={setApproveOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
+        <AlertDialogContent className="flex max-h-[90dvh] flex-col gap-0 overflow-hidden">
+          <AlertDialogHeader className="shrink-0">
             <AlertDialogTitle>Approve transfer request</AlertDialogTitle>
             <AlertDialogDescription>
               Set how much of each product to send from {request.from_warehouse_name}{' '}
@@ -117,7 +128,7 @@ export function RequestReviewButtons({ request }: { request: PendingRequest }) {
             </AlertDialogDescription>
           </AlertDialogHeader>
 
-          <div className="space-y-3">
+          <div className="min-h-0 flex-1 space-y-3 overflow-y-auto py-3">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
@@ -164,7 +175,7 @@ export function RequestReviewButtons({ request }: { request: PendingRequest }) {
             </div>
           </div>
 
-          <AlertDialogFooter>
+          <AlertDialogFooter className="shrink-0 border-t pt-4">
             <AlertDialogCancel disabled={submitting}>Cancel</AlertDialogCancel>
             <AlertDialogAction
               disabled={!canApprove}

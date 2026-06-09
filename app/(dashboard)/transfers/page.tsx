@@ -202,7 +202,7 @@ export default async function TransfersPage() {
         >
           {pending.map((r: PendingRequest) => (
             <div key={r.id} className="px-6 py-3">
-              <div className="flex items-start justify-between gap-3">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     {statusBadge(r.status, locale)}
