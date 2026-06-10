@@ -36,6 +36,8 @@ import { QrScanButton } from '@/components/qr-scanner'
 import { findProductBySkuAction } from '../scan/actions'
 import { confirmPosSale, type ConfirmPosInput } from '../sales/actions'
 import { loadRegisterProducts } from './actions'
+import { MemberScan } from './member-scan'
+import type { ScannedMember } from './member-scan-actions'
 
 type LookupItem = { id: string; name: string }
 
@@ -100,6 +102,7 @@ export function Register({
   const [loadingProducts, setLoadingProducts] = useState(false)
   const [lines, setLines] = useState<CartLine[]>([])
   const [saleDiscountCents, setSaleDiscountCents] = useState(0)
+  const [member, setMember] = useState<ScannedMember | null>(null)
   const [cartOpen, setCartOpen] = useState(false)
   const [pending, start] = useTransition()
   const didMount = useRef(false)
@@ -123,6 +126,18 @@ export function Register({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [warehouseId, query])
 
+  // Recompute line discounts when the attached member changes — club-tier and
+  // customer-override pricing depend on who is on the sale.
+  useEffect(() => {
+    setLines((prev) =>
+      prev.map((l) => {
+        const d = lineDiscountFor(l.product_id, l.primary_category_id, l.qty, l.unit_price_cents)
+        return { ...l, line_discount_cents: d.totalDiscountCents, discount_breakdown: d.applied }
+      }),
+    )
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [member])
+
   function reloadGrid() {
     const myId = ++reqId.current
     loadRegisterProducts({ warehouseId, query: query.trim() }).then((res) => {
@@ -143,8 +158,8 @@ export function Register({
       categoryId,
       qty,
       unitPriceCents: unit,
-      customerId: null,
-      customerClubTier: null,
+      customerId: member?.customerId ?? null,
+      customerClubTier: member?.tier ?? null,
       sourceWarehouseId: warehouseId || null,
       rules: activeDiscountRules,
       at: new Date(),
@@ -216,6 +231,7 @@ export function Register({
   function clearCart() {
     setLines([])
     setSaleDiscountCents(0)
+    setMember(null)
   }
 
   const totals = useMemo(() => {
@@ -251,7 +267,7 @@ export function Register({
     }
 
     const input: ConfirmPosInput = {
-      customer_id: null,
+      customer_id: member?.customerId ?? null,
       seller_id: sellerId,
       source_warehouse_id: warehouseId,
       fulfillment_warehouse_id: warehouseId,
@@ -307,6 +323,7 @@ export function Register({
   function renderCart() {
     return (
       <div className="space-y-3">
+        <MemberScan member={member} onMember={setMember} locale={locale} />
         {lines.length === 0 ? (
           <p className="py-8 text-center text-sm text-muted-foreground">
             {tc(locale, 'rg.cartEmpty')}
