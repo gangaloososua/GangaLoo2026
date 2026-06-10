@@ -36,6 +36,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { cancelSale, refundSale, recordPayment, logCashCollected } from '../actions'
+import { ReturnMoney } from './return-money'
 import { buildInvoiceWhatsAppLink } from '@/lib/whatsapp'
 import { isOwnerEquivalent, type Role } from '@/lib/auth/roles'
 import {
@@ -113,6 +114,16 @@ export function SaleDetail({
         canSeeCost={canSeeCost}
         role={role}
       />
+      {isOwnerEquivalent(role) ? (
+        <div className="flex justify-end">
+          <ReturnMoney
+            saleId={sale.id}
+            moneyAccounts={moneyAccounts}
+            canReturn
+            locale={locale}
+          />
+        </div>
+      ) : null}
     </div>
   )
 }
