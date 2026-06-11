@@ -37,6 +37,7 @@ import {
 } from '@/components/ui/dialog'
 import { cancelSale, refundSale, recordPayment, logCashCollected } from '../actions'
 import { ReturnMoney } from './return-money'
+import { RefundSummaryRows } from './refund-line'
 import { buildInvoiceWhatsAppLink } from '@/lib/whatsapp'
 import { isOwnerEquivalent, type Role } from '@/lib/auth/roles'
 import {
@@ -745,6 +746,7 @@ function TotalsCard({
           )}
           <Row label={t(locale, 'sales.col.total')} value={formatDOP(sale.total_cents)} bold />
           <Row label={t(locale, 'sales.col.paid')} value={formatDOP(sale.paid_cents)} />
+          <RefundSummaryRows saleId={sale.id} paidCents={sale.paid_cents} locale={locale} enabled={canSeeCost} />
           {outstanding > 0 && (
             <Row
               label={t(locale, 'sd.outstanding')}
