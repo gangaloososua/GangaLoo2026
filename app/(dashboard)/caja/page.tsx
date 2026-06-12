@@ -10,6 +10,7 @@ import { requireAdminCaller } from '@/lib/auth/guard'
 import {
   listWarehousesForFilter,
   listMoneyAccounts,
+  listCustomersForPicker,
 } from '@/lib/sales'
 import { listDiscountRules } from '@/lib/discount-rules'
 import { listProductsForRegister } from '@/lib/pos-register'
@@ -30,6 +31,7 @@ export default async function CajaPage() {
       listDiscountRules({ activeOnly: true }),
     ])
 
+  const customers = await listCustomersForPicker().catch(() => [])
   const initialWarehouseId = warehouses[0]?.id ?? ''
   const initialProducts = initialWarehouseId
     ? await listProductsForRegister({ warehouseId: initialWarehouseId })
@@ -57,6 +59,7 @@ export default async function CajaPage() {
           initialProducts={initialProducts}
           moneyAccounts={moneyAccounts}
           activeDiscountRules={activeDiscountRules}
+          customers={customers}
           sellerId={caller.id}
           canTakePayment={canTakePayment}
           locale={locale}

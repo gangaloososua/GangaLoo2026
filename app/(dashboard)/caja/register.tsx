@@ -24,7 +24,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { formatDOP } from '@/lib/format'
-import type { MoneyAccount, ProductSearchResult } from '@/lib/sales'
+import type { MoneyAccount, ProductSearchResult, CustomerPickerItem } from '@/lib/sales'
 import type { DiscountRuleRow } from '@/lib/discount-rules'
 import {
   resolveLineDiscount,
@@ -37,6 +37,7 @@ import { findProductBySkuAction } from '../scan/actions'
 import { confirmPosSale, type ConfirmPosInput } from '../sales/actions'
 import { loadRegisterProducts } from './actions'
 import { MemberScan } from './member-scan'
+import { CustomerPicker } from './customer-picker'
 import type { ScannedMember } from './member-scan-actions'
 
 type LookupItem = { id: string; name: string }
@@ -48,6 +49,7 @@ type Props = {
   moneyAccounts: MoneyAccount[]
   activeDiscountRules: DiscountRuleRow[]
   sellerId: string | null
+  customers: CustomerPickerItem[]
   canTakePayment: boolean
   locale: Locale
 }
@@ -92,6 +94,7 @@ export function Register({
   moneyAccounts,
   activeDiscountRules,
   sellerId,
+  customers,
   canTakePayment,
   locale,
 }: Props) {
@@ -324,6 +327,9 @@ export function Register({
     return (
       <div className="space-y-3">
         <MemberScan member={member} onMember={setMember} locale={locale} />
+        {!member ? (
+          <CustomerPicker customers={customers} onPick={setMember} locale={locale} />
+        ) : null}
         {lines.length === 0 ? (
           <p className="py-8 text-center text-sm text-muted-foreground">
             {tc(locale, 'rg.cartEmpty')}
