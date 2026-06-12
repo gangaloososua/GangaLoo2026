@@ -807,7 +807,7 @@ export function PurchaseActionsBar({
               Receive
             </Button>
           </AlertDialogTrigger>
-          <AlertDialogContent className="max-w-2xl">
+          <AlertDialogContent className="max-w-2xl flex max-h-[85vh] flex-col">
             <AlertDialogHeader>
               <AlertDialogTitle>Record receipts</AlertDialogTitle>
               <AlertDialogDescription asChild>
@@ -824,7 +824,7 @@ export function PurchaseActionsBar({
               </AlertDialogDescription>
             </AlertDialogHeader>
 
-            <div className="overflow-x-auto">
+            <div className="flex-1 overflow-y-auto overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b text-left text-xs text-muted-foreground">
