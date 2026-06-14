@@ -58,6 +58,11 @@ type InitialValues = {
   sale_discount_pct?: number | null
   commission_percent?: number
   target_payback_percent?: number | null
+  // US shop (owner-only)
+  base_cost_usd?: number | null
+  us_enabled?: boolean
+  us_markup_percent?: number | null
+  us_price_override_usd?: number | null
 }
 
 type FlatCategory = { id: string; name: string; parent_id: string | null }
@@ -159,7 +164,7 @@ export function ProductForm({
             Cancel
           </Button>
           <Button type="submit" disabled={pending}>
-            {pending ? 'SavingÃ¢â‚¬Â¦' : mode === 'create' ? 'Create' : 'Save'}
+            {pending ? 'Saving…' : mode === 'create' ? 'Create' : 'Save'}
           </Button>
         </div>
       </div>
@@ -213,6 +218,11 @@ export function ProductForm({
             initialSaleDiscountPct={initial.sale_discount_pct}
             initialCommissionPercent={initial.commission_percent}
             initialTargetPaybackPercent={initial.target_payback_percent}
+            canSeeCosts={canSeeCosts}
+            initialBaseCostUsd={initial.base_cost_usd}
+            initialUsEnabled={initial.us_enabled ?? false}
+            initialUsMarkupPercent={initial.us_markup_percent}
+            initialUsPriceOverrideUsd={initial.us_price_override_usd}
           />
         </TabsContent>
 

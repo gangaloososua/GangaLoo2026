@@ -31,9 +31,9 @@ export default async function EditProductPage({
   const { id } = await params
   const sp = await searchParams
   const supabase = await createClient()
-  // Non-owners never see cost_calc ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â leave it out of the SELECT entirely.
+  // Non-owners never see cost_calc - leave it out of the SELECT entirely.
   const selectFields = canSeeCosts
-    ? 'id, sku, name, slug, description, video_url, is_active, visible_in_store, is_inventory, price_cents, club_price_cents, sale_price_cents, sale_discount_pct, commission_percent, target_payback_percent, cost_calc, supplier_url'
+    ? 'id, sku, name, slug, description, video_url, is_active, visible_in_store, is_inventory, price_cents, club_price_cents, sale_price_cents, sale_discount_pct, commission_percent, target_payback_percent, cost_calc, supplier_url, base_cost_usd, us_enabled, us_markup_percent, us_price_override_usd'
     : 'id, sku, name, slug, description, video_url, is_active, visible_in_store, is_inventory, price_cents, club_price_cents, sale_price_cents, sale_discount_pct, commission_percent, target_payback_percent'
   const { data: product, error } = await supabase
     .from('products')
@@ -59,6 +59,10 @@ export default async function EditProductPage({
     target_payback_percent: number | string | null
     cost_calc?: unknown
     supplier_url?: string | null
+    base_cost_usd?: number | string | null
+    us_enabled?: boolean
+    us_markup_percent?: number | string | null
+    us_price_override_usd?: number | string | null
   }
   const [
     productCategories,
@@ -122,6 +126,19 @@ export default async function EditProductPage({
         target_payback_percent:
           productTyped.target_payback_percent != null
             ? Number(productTyped.target_payback_percent)
+            : null,
+        base_cost_usd:
+          canSeeCosts && productTyped.base_cost_usd != null
+            ? Number(productTyped.base_cost_usd)
+            : null,
+        us_enabled: productTyped.us_enabled ?? false,
+        us_markup_percent:
+          productTyped.us_markup_percent != null
+            ? Number(productTyped.us_markup_percent)
+            : 5,
+        us_price_override_usd:
+          productTyped.us_price_override_usd != null
+            ? Number(productTyped.us_price_override_usd)
             : null,
       }}
       productCategories={productCategories}

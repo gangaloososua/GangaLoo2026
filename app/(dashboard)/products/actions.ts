@@ -44,6 +44,14 @@ export async function createProduct(
   const isInventory = formData.get('is_inventory') === 'on'
   const videoUrl = String(formData.get('video_url') ?? '').trim()
   const supplierUrl = String(formData.get('supplier_url') ?? '').trim()
+  const usEnabled = formData.get('us_enabled') === 'on'
+  const usMarkupPercent =
+    parseFloat(String(formData.get('us_markup_percent') ?? '5')) || 0
+  const usOverrideRaw = String(
+    formData.get('us_price_override_usd') ?? '',
+  ).trim()
+  const usPriceOverrideUsd =
+    usOverrideRaw && parseFloat(usOverrideRaw) > 0 ? parseFloat(usOverrideRaw) : null
   const saleMode = String(formData.get('sale_mode') ?? 'none')
   const salePctRaw = String(formData.get('sale_pct') ?? '').trim()
   const salePriceDopRaw = String(formData.get('sale_price_dop') ?? '').trim()
@@ -144,6 +152,9 @@ export async function createProduct(
     sale_discount_pct: saleDiscountPct,
     commission_percent: commissionPercent,
     target_payback_percent: targetPaybackPercent,
+    us_enabled: usEnabled,
+    us_markup_percent: usMarkupPercent,
+    us_price_override_usd: usPriceOverrideUsd,
   }
   if (costCalcState) insertPayload.cost_calc = costCalcState
 
@@ -183,6 +194,14 @@ export async function updateProduct(
   const isInventory = formData.get('is_inventory') === 'on'
   const videoUrl = String(formData.get('video_url') ?? '').trim()
   const supplierUrl = String(formData.get('supplier_url') ?? '').trim()
+  const usEnabled = formData.get('us_enabled') === 'on'
+  const usMarkupPercent =
+    parseFloat(String(formData.get('us_markup_percent') ?? '5')) || 0
+  const usOverrideRaw = String(
+    formData.get('us_price_override_usd') ?? '',
+  ).trim()
+  const usPriceOverrideUsd =
+    usOverrideRaw && parseFloat(usOverrideRaw) > 0 ? parseFloat(usOverrideRaw) : null
   const saleMode = String(formData.get('sale_mode') ?? 'none')
   const salePctRaw = String(formData.get('sale_pct') ?? '').trim()
   const salePriceDopRaw = String(formData.get('sale_price_dop') ?? '').trim()
@@ -264,6 +283,9 @@ export async function updateProduct(
       sale_discount_pct: saleDiscountPct,
       commission_percent: commissionPercent,
       target_payback_percent: targetPaybackPercent,
+      us_enabled: usEnabled,
+      us_markup_percent: usMarkupPercent,
+      us_price_override_usd: usPriceOverrideUsd,
     })
     .eq('id', productId)
 

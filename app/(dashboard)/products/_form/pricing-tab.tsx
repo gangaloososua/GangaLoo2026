@@ -11,6 +11,12 @@ type Props = {
   initialTargetPaybackPercent?: number | null
   initialSalePriceCents?: number | null
   initialSaleDiscountPct?: number | null
+  // US shop (owner-only). base cost (USD) is read-only here, just for preview.
+  canSeeCosts?: boolean
+  initialBaseCostUsd?: number | null
+  initialUsEnabled?: boolean
+  initialUsMarkupPercent?: number | null
+  initialUsPriceOverrideUsd?: number | null
 }
 
 const centsToDop = (c: number | null | undefined): string =>
@@ -23,6 +29,12 @@ const formatDop = (cents: number): string =>
     maximumFractionDigits: 2,
   })
 
+const formatUsd = (n: number): string =>
+  new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+  }).format(n)
+
 type SaleMode = 'none' | 'pct' | 'price'
 
 export function PricingTab({
@@ -32,6 +44,11 @@ export function PricingTab({
   initialTargetPaybackPercent = null,
   initialSalePriceCents = null,
   initialSaleDiscountPct = null,
+  canSeeCosts = false,
+  initialBaseCostUsd = null,
+  initialUsEnabled = false,
+  initialUsMarkupPercent = 5,
+  initialUsPriceOverrideUsd = null,
 }: Props) {
   // Regular price is controlled so the sale preview can react live.
   const [priceText, setPriceText] = useState(centsToDop(initialPriceCents))
@@ -49,6 +66,17 @@ export function PricingTab({
   const [salePriceText, setSalePriceText] = useState(
     initialSalePriceCents != null
       ? (initialSalePriceCents / 100).toString()
+      : '',
+  )
+
+  // US shop state (owner-only).
+  const [usEnabled, setUsEnabled] = useState(initialUsEnabled)
+  const [usMarkupText, setUsMarkupText] = useState(
+    initialUsMarkupPercent != null ? initialUsMarkupPercent.toString() : '5',
+  )
+  const [usOverrideText, setUsOverrideText] = useState(
+    initialUsPriceOverrideUsd != null
+      ? initialUsPriceOverrideUsd.toString()
       : '',
   )
 
@@ -78,6 +106,25 @@ export function PricingTab({
 
   const previewTooHigh =
     previewCents != null && regularCents > 0 && previewCents >= regularCents
+
+  // US price preview: override if set (>0), else base_cost_usd * (1 + markup/100).
+  const usOverride = usOverrideText.trim() ? parseFloat(usOverrideText) : null
+  const usMarkup = parseFloat(usMarkupText)
+  const baseCost = initialBaseCostUsd
+  const usPreview: number | null = (() => {
+    if (usOverride != null && !Number.isNaN(usOverride) && usOverride > 0) {
+      return Math.round(usOverride * 100) / 100
+    }
+    if (
+      baseCost != null &&
+      baseCost > 0 &&
+      !Number.isNaN(usMarkup) &&
+      usMarkup >= 0
+    ) {
+      return Math.round(baseCost * (1 + usMarkup / 100) * 100) / 100
+    }
+    return null
+  })()
 
   const modeBtn = (m: SaleMode, label: string) => (
     <button
@@ -245,6 +292,103 @@ export function PricingTab({
           cashback report; not included in the price calculation.
         </p>
       </div>
+
+      {/* US shop section — owner-only. Lets this DR product also sell in the
+          US shop, priced in USD (markup over USD cost, or a manual override),
+          with no commission/club/loyalty add-ons. */}
+      {canSeeCosts && (
+        <div className="grid gap-2 rounded-lg border p-4">
+          <Label>US shop</Label>
+          <p className="text-xs text-muted-foreground">
+            Optional. Also sell this product in the US shop, priced in US
+            dollars. No commission, club, or loyalty discounts apply there.
+          </p>
+
+          {/* Always send a value so unchecked == off. */}
+          <input
+            type="hidden"
+            name="us_enabled"
+            value={usEnabled ? 'on' : ''}
+          />
+          <label className="flex items-center gap-2 pt-1 text-sm">
+            <input
+              type="checkbox"
+              className="h-4 w-4"
+              checked={usEnabled}
+              onChange={(e) => setUsEnabled(e.target.checked)}
+            />
+            Show this product in the US shop
+          </label>
+
+          {usEnabled && (
+            <>
+              <div className="grid gap-2 pt-2">
+                <Label htmlFor="us_markup_percent">US markup (%)</Label>
+                <Input
+                  id="us_markup_percent"
+                  name="us_markup_percent"
+                  type="number"
+                  step="0.5"
+                  min="0"
+                  value={usMarkupText}
+                  onChange={(e) => setUsMarkupText(e.target.value)}
+                  placeholder="5"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Added on top of the product&apos;s USD cost
+                  {baseCost != null && baseCost > 0
+                    ? ` (${formatUsd(baseCost)} from the Calculator tab)`
+                    : ' (set on the Calculator tab)'}
+                  . Ignored if you set a price override below.
+                </p>
+              </div>
+
+              <div className="grid gap-2 pt-2">
+                <Label htmlFor="us_price_override_usd">
+                  US price override (US$, optional)
+                </Label>
+                <Input
+                  id="us_price_override_usd"
+                  name="us_price_override_usd"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={usOverrideText}
+                  onChange={(e) => setUsOverrideText(e.target.value)}
+                  placeholder="leave blank to use markup"
+                />
+                <p className="text-xs text-muted-foreground">
+                  If set, this exact USD price is used and the markup is
+                  ignored.
+                </p>
+              </div>
+
+              {usPreview != null ? (
+                <p className="pt-1 text-sm font-medium text-green-700">
+                  US customers pay {formatUsd(usPreview)}
+                  {usOverride != null && usOverride > 0 ? (
+                    <span className="font-normal text-muted-foreground">
+                      {' '}
+                      &mdash; your price override
+                    </span>
+                  ) : (
+                    <span className="font-normal text-muted-foreground">
+                      {' '}
+                      &mdash; {formatUsd(baseCost ?? 0)} cost + {usMarkup || 0}%
+                    </span>
+                  )}
+                </p>
+              ) : (
+                <p className="pt-1 text-sm text-amber-700">
+                  No US price yet — set a USD cost on the Calculator tab, or
+                  type a price override. The product won&apos;t show in the US
+                  shop until it has a price.
+                </p>
+              )}
+            </>
+          )}
+        </div>
+      )}
     </div>
   )
 }
