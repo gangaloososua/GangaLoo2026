@@ -540,3 +540,90 @@ export async function createCouponRule(
   revalidatePath('/discount-rules')
   return { ok: true, ruleId: (data as { id: string }).id }
 }
+// ----------------------------------------------------------------------
+// updatePromotionRule
+//
+// Edit an existing promotion rule in place (reuse a daily/weekly deal by
+// swapping product, %, store, slot and dates) instead of creating a new
+// rule each time. Mirrors createPromotionRule's validation exactly.
+// Promotion-only: refuses to touch a row of any other kind.
+// ----------------------------------------------------------------------
+export type UpdatePromotionRuleInput = {
+  ruleId: string
+  name: string
+  scopeProductId: string
+  deltaPercent: number
+  startsAt: string | null // ISO datetime
+  endsAt: string | null // ISO datetime
+  priority: number
+  scopeWarehouseId?: string | null // null = all stores
+  dealSlot?: 'daily' | 'weekly' | null
+}
+export type UpdatePromotionRuleResult = Ok<{ ruleId: string }> | Err
+
+export async function updatePromotionRule(
+  input: UpdatePromotionRuleInput,
+): Promise<UpdatePromotionRuleResult> {
+  await requireRole(['owner', 'admin'] as const)
+
+  if (!input.ruleId) return { ok: false, error: 'Rule id is required' }
+  const name = input.name.trim()
+  if (!name) return { ok: false, error: 'Rule name is required' }
+  if (!input.scopeProductId) return { ok: false, error: 'Pick a product' }
+  if (
+    !Number.isFinite(input.deltaPercent) ||
+    input.deltaPercent <= 0 ||
+    input.deltaPercent >= 100
+  ) {
+    return {
+      ok: false,
+      error: 'Discount percent must be greater than 0 and less than 100',
+    }
+  }
+  if (
+    input.startsAt &&
+    input.endsAt &&
+    new Date(input.startsAt) > new Date(input.endsAt)
+  ) {
+    return { ok: false, error: 'Start date must be on or before end date' }
+  }
+  if (
+    !Number.isFinite(input.priority) ||
+    input.priority < 0 ||
+    !Number.isInteger(input.priority)
+  ) {
+    return { ok: false, error: 'Priority must be a non-negative integer' }
+  }
+  if (input.dealSlot != null && !['daily', 'weekly'].includes(input.dealSlot)) {
+    return { ok: false, error: 'Deal type must be daily or weekly' }
+  }
+  if (input.dealSlot != null && !input.endsAt) {
+    return { ok: false, error: 'An online deal needs an end date and time' }
+  }
+
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('discount_rules')
+    .update({
+      name,
+      starts_at: input.startsAt,
+      ends_at: input.endsAt,
+      scope_product_id: input.scopeProductId,
+      scope_warehouse_id: input.scopeWarehouseId ?? null,
+      deal_slot: input.dealSlot ?? null,
+      delta_percent: input.deltaPercent,
+      priority: input.priority,
+    })
+    .eq('id', input.ruleId)
+    .eq('kind', 'promotion') // safety: never edit a non-promotion row here
+    .select('id')
+    .single()
+
+  if (error) return { ok: false, error: error.message }
+  if (!data) {
+    return { ok: false, error: 'Promotion rule not found.' }
+  }
+
+  revalidatePath('/discount-rules')
+  return { ok: true, ruleId: (data as { id: string }).id }
+}
