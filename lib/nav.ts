@@ -49,7 +49,6 @@ export const navItems: NavItem[] = [
   { label: 'Online Orders',    href: '/online-orders',        icon: Globe,           roles: OWNER_ONLY },
   { label: 'Service Orders',   href: '/service-orders',       icon: ShoppingBag,     roles: OWNER_ONLY,            i18n: { en: 'Service orders', es: 'Encargos' } },
   { label: 'Products',         href: '/products',             icon: Package,         roles: OWNER_ONLY },
-  { label: 'US Products',      href: '/us-products',          icon: Globe,           roles: OWNER_ONLY,            i18n: { en: 'US products', es: 'Productos USA' } },
   { label: 'Inventory',        href: '/inventory',            icon: Boxes,           roles: ALL },
   { label: 'Locations',        href: '/locations',            icon: MapPin,          roles: OWNER_AND_DISTRIBUTOR, i18n: { en: 'Locations', es: 'Locaciones' } },
   { label: 'Find Stock',       href: '/buscar',               icon: Search,          roles: OWNER_AND_DISTRIBUTOR, i18n: { en: 'Find stock', es: 'Â¿DÃ³nde estÃ¡?' } },
