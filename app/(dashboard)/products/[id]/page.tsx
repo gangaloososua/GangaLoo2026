@@ -127,10 +127,18 @@ export default async function EditProductPage({
           productTyped.target_payback_percent != null
             ? Number(productTyped.target_payback_percent)
             : null,
-        base_cost_usd:
-          canSeeCosts && productTyped.base_cost_usd != null
-            ? Number(productTyped.base_cost_usd)
-            : null,
+        base_cost_usd: (() => {
+          // US price is based on the cost you TYPE on the Calculator tab,
+          // i.e. cost_calc.base_cost_usd — NOT the products.base_cost_usd
+          // column (which can hold a different, separately-sourced number).
+          if (!canSeeCosts) return null
+          const cc = productTyped.cost_calc as
+            | { base_cost_usd?: number | string | null }
+            | null
+            | undefined
+          const v = cc?.base_cost_usd
+          return v != null && Number(v) > 0 ? Number(v) : null
+        })(),
         us_enabled: productTyped.us_enabled ?? false,
         us_markup_percent:
           productTyped.us_markup_percent != null
