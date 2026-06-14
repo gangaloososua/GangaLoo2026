@@ -2,12 +2,13 @@
 
 // Round 16.3 — Discount rules list table
 // Round 42  — coupon kind: label + code/channel summary
+// Edit      — promotion rows get an Edit (pencil) link to /[id]/edit
 
 import * as React from 'react'
 import { useTransition } from 'react'
 import Link from 'next/link'
 import { toast } from 'sonner'
-import { Plus, Trash2 } from 'lucide-react'
+import { Plus, Trash2, Pencil } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import {
@@ -176,7 +177,7 @@ export function DiscountRulesListTable({ rules }: Props) {
                 <TableHead className="text-right">Amount</TableHead>
                 <TableHead>Window</TableHead>
                 <TableHead className="text-right">Priority</TableHead>
-                <TableHead className="w-[80px]"></TableHead>
+                <TableHead className="w-[110px]"></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -223,15 +224,30 @@ export function DiscountRulesListTable({ rules }: Props) {
                       {r.priority}
                     </TableCell>
                     <TableCell>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleDelete(r)}
-                        disabled={isPending}
-                        aria-label="Delete rule"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      <div className="flex items-center justify-end gap-1">
+                        {/* Edit is only wired for promotion rules for now. */}
+                        {r.kind === 'promotion' ? (
+                          <Button
+                            asChild
+                            variant="ghost"
+                            size="icon"
+                            aria-label="Edit rule"
+                          >
+                            <Link href={`/discount-rules/${r.id}/edit`}>
+                              <Pencil className="h-4 w-4" />
+                            </Link>
+                          </Button>
+                        ) : null}
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleDelete(r)}
+                          disabled={isPending}
+                          aria-label="Delete rule"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))

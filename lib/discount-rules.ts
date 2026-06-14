@@ -56,6 +56,8 @@ export type DiscountRuleRow = {
   // Round 42: coupon fields (null for non-coupon kinds)
   code: string | null
   scopeChannel: 'pos' | 'online' | null
+  // Promotion online-deal slot (null for non-promotion / non-featured)
+  dealSlot: 'daily' | 'weekly' | null
   createdAt: string
   updatedAt: string
 }
@@ -89,6 +91,7 @@ type RawRule = {
   priority: number
   code: string | null
   scope_channel: 'pos' | 'online' | null
+  deal_slot: 'daily' | 'weekly' | null
   created_at: string
   updated_at: string
 }
@@ -114,7 +117,7 @@ export async function listDiscountRules(
         'scope_club_tier, scope_customer_id, ' +
         'scope_source_warehouse_id, scope_fulfillment_warehouse_id, ' +
         'threshold_qty, delta_percent, delta_cents, ' +
-        'code, scope_channel, ' +
+        'code, scope_channel, deal_slot, ' +
         'priority, created_at, updated_at',
     )
     .order('is_active', { ascending: false })
@@ -230,6 +233,7 @@ export async function listDiscountRules(
     priority: r.priority,
     code: r.code,
     scopeChannel: r.scope_channel,
+    dealSlot: r.deal_slot,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   }))
