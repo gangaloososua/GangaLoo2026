@@ -1,12 +1,16 @@
-import { NextRequest, NextResponse } from 'next/server'
+﻿import { NextRequest, NextResponse } from 'next/server'
 import type Stripe from 'stripe'
 import { getStripe } from '@/lib/stripe'
 import { createAdminClient } from '@/lib/supabase/admin'
 
 // Stripe pings this URL the moment a payment succeeds. We verify the signature
-// (so only the real Stripe can trigger it), then mark the matching order paid
-// via finalize_online_payment(). That function is idempotent, so Stripe's normal
-// retries can never double-count a payment.
+// (so only the real Stripe can trigger it), then mark the matching order paid.
+//
+// This one endpoint receives BOTH storefronts' events:
+//   - DR online orders   -> session.metadata.sale_id      -> finalize_online_payment()
+//   - US dropship orders -> session.metadata.us_order_id  -> mark_us_order_paid()
+// Both target functions are idempotent, so Stripe's normal retries can never
+// double-count a payment.
 //
 // Needs the raw request body for signature verification, so never cache.
 export const dynamic = 'force-dynamic'
@@ -38,8 +42,23 @@ export async function POST(req: NextRequest) {
       const session = event.data.object as Stripe.Checkout.Session
       if (session.payment_status === 'paid') {
         const saleId = session.metadata?.sale_id
+        const usOrderId = session.metadata?.us_order_id
         const amount = session.amount_total ?? 0
-        if (saleId) {
+
+        if (usOrderId) {
+          // US dropship order (USD).
+          const admin = createAdminClient()
+          const { error } = await admin.rpc('mark_us_order_paid', {
+            p_order_id: usOrderId,
+            p_method: 'stripe',
+            p_ref: session.id,
+          })
+          if (error) {
+            console.error('[stripe webhook] mark_us_order_paid error:', error)
+            return NextResponse.json({ error: 'finalize failed' }, { status: 500 })
+          }
+        } else if (saleId) {
+          // DR online order (DOP).
           const admin = createAdminClient()
           const { error } = await admin.rpc('finalize_online_payment', {
             p_provider: 'stripe',
@@ -54,7 +73,7 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'finalize failed' }, { status: 500 })
           }
         } else {
-          console.error('[stripe webhook] checkout.session.completed with no sale_id metadata')
+          console.error('[stripe webhook] checkout.session.completed with no sale_id / us_order_id metadata')
         }
       }
     }
