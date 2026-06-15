@@ -1,4 +1,4 @@
-import {
+﻿import {
   LayoutDashboard,
   ShoppingCart,
   Globe,
@@ -48,10 +48,11 @@ export const navItems: NavItem[] = [
   { label: 'My Pay', href: '/mi-pago', icon: HandCoins, roles: ALL, i18n: { en: 'My pay', es: 'Mi pago' } },
   { label: 'Online Orders',    href: '/online-orders',        icon: Globe,           roles: OWNER_ONLY },
   { label: 'Service Orders',   href: '/service-orders',       icon: ShoppingBag,     roles: OWNER_ONLY,            i18n: { en: 'Service orders', es: 'Encargos' } },
+  { label: 'US Orders',        href: '/us-orders',            icon: Globe,           roles: OWNER_ONLY,            i18n: { en: 'US orders', es: 'Pedidos US' } },
   { label: 'Products',         href: '/products',             icon: Package,         roles: OWNER_ONLY },
   { label: 'Inventory',        href: '/inventory',            icon: Boxes,           roles: ALL },
   { label: 'Locations',        href: '/locations',            icon: MapPin,          roles: OWNER_AND_DISTRIBUTOR, i18n: { en: 'Locations', es: 'Locaciones' } },
-  { label: 'Find Stock',       href: '/buscar',               icon: Search,          roles: OWNER_AND_DISTRIBUTOR, i18n: { en: 'Find stock', es: 'Â¿DÃ³nde estÃ¡?' } },
+  { label: 'Find Stock',       href: '/buscar',               icon: Search,          roles: OWNER_AND_DISTRIBUTOR, i18n: { en: 'Find stock', es: 'Ã‚Â¿DÃƒÂ³nde estÃƒÂ¡?' } },
   { label: 'Labels',           href: '/etiquetas',            icon: QrCode,          roles: OWNER_AND_DISTRIBUTOR, i18n: { en: 'Labels', es: 'Etiquetas' } },
   { label: 'Categories',       href: '/categories',           icon: Tags,            roles: OWNER_ONLY },
   { label: 'Attributes',       href: '/attributes',           icon: Tag,             roles: OWNER_ONLY,            i18n: { en: 'Attributes', es: 'Atributos' } },
@@ -70,6 +71,6 @@ export const navItems: NavItem[] = [
   { label: 'Users',            href: '/users',                icon: UserCog,         roles: OWNER_ONLY },
   { label: 'Customers',        href: '/people?role=customer', icon: Users,           roles: OWNER_ONLY },
   { label: 'Distributors',     href: '/people?distributor=1', icon: Truck,           roles: OWNER_ONLY },
-  { label: 'Payroll', href: '/payroll', icon: HandCoins, roles: OWNER_ONLY, i18n: { en: 'Payroll', es: 'NÃ³mina' } },
+  { label: 'Payroll', href: '/payroll', icon: HandCoins, roles: OWNER_ONLY, i18n: { en: 'Payroll', es: 'NÃƒÂ³mina' } },
   { label: 'Settings',         href: '/settings',             icon: Settings,        roles: OWNER_ONLY },
 ]
