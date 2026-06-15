@@ -1,12 +1,17 @@
 ﻿import Link from 'next/link'
 import { getUsOrderForThanks } from '../actions'
+import { fetchStorePublicConfig } from '@/lib/store-config'
 
 export const dynamic = 'force-dynamic'
+
+const WA = '18292867868' // GangaLoo business WhatsApp
 
 // US checkout thank-you page. Reached after:
 //   - Stripe success  (?order=...)  -> order already 'paid' via webhook
 //   - PayPal capture  (?order=...)  -> order already 'paid' via paypal-return
 //   - Bank deposit    (?order=...)  -> order still 'pending'; show pay-by-deposit info
+//     (bank details for LOCAL/DR clients, read from store_config via the
+//      anon-safe get_store_public_config RPC).
 export default async function UsGraciasPage({
   searchParams,
 }: {
@@ -20,8 +25,23 @@ export default async function UsGraciasPage({
   const isDeposit = info.ok && !isPaid // pending => awaiting bank deposit
   const shortId = info.ok ? info.orderId.slice(0, 8).toUpperCase() : ''
   const totalLabel = info.ok
-    ? `US$ ${info.totalUsd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+    ? 'US$ ' + info.totalUsd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
     : ''
+
+  // Bank details only needed for the deposit case.
+  let bank = { name: '', account: '', accountName: '', accountType: '' }
+  let waHref = 'https://wa.me/' + WA
+  if (isDeposit) {
+    try {
+      const cfg = await fetchStorePublicConfig()
+      bank = cfg.bankInfo
+    } catch {
+      // leave blanks; page still renders with the reference + WhatsApp line
+    }
+    const waMsg =
+      'Hola, hice un deposito para el pedido ' + shortId + ' (US shop). Aqui esta el comprobante:'
+    waHref = 'https://wa.me/' + WA + '?text=' + encodeURIComponent(waMsg)
+  }
 
   return (
     <main
@@ -52,8 +72,8 @@ export default async function UsGraciasPage({
           <>
             <h1 style={{ fontSize: 24, margin: '0 0 12px' }}>Order not found</h1>
             <p style={{ opacity: 0.8, lineHeight: 1.5 }}>
-              We couldn&apos;t find that order. If you just paid, give it a moment and refresh,
-              or contact us and we&apos;ll sort it out.
+              We could not find that order. If you just paid, give it a moment and refresh,
+              or contact us and we will sort it out.
             </p>
           </>
         )}
@@ -62,7 +82,7 @@ export default async function UsGraciasPage({
           <>
             <h1 style={{ fontSize: 26, margin: '0 0 8px' }}>Payment received — thank you!</h1>
             <p style={{ opacity: 0.85, lineHeight: 1.5, margin: '0 0 20px' }}>
-              Your order is confirmed. We&apos;ll get it on its way to you and email any updates.
+              Your order is confirmed. We will get it on its way to you and email any updates.
             </p>
             <SummaryBox label="Order #" value={shortId} total={totalLabel} />
           </>
@@ -71,15 +91,17 @@ export default async function UsGraciasPage({
         {isDeposit && (
           <>
             <h1 style={{ fontSize: 26, margin: '0 0 8px' }}>Order placed — pending deposit</h1>
-            <p style={{ opacity: 0.85, lineHeight: 1.5, margin: '0 0 20px' }}>
-              Your order is reserved. To complete it, please make your bank deposit using the
-              details below and include your order number. We&apos;ll confirm once it arrives.
+            <p style={{ opacity: 0.85, lineHeight: 1.5, margin: '0 0 6px' }}>
+              Your order is reserved. To complete it, make your bank deposit using the details
+              below and include your order number, then send us the receipt on WhatsApp.
             </p>
-            <SummaryBox label="Order #" value={shortId} total={totalLabel} />
+            <p style={{ opacity: 0.7, lineHeight: 1.5, margin: '0 0 20px', fontSize: 13 }}>
+              Tu pedido esta reservado. Para completarlo, realiza el deposito con los datos de
+              abajo, incluye tu numero de pedido y envianos el comprobante por WhatsApp.
+            </p>
 
-            {/* ====================================================================
-                PLACEHOLDER — replace with the real DR bank deposit details.
-                ==================================================================== */}
+            <SummaryBox label="Order # / Pedido" value={shortId} total={totalLabel} />
+
             <div
               style={{
                 marginTop: 18,
@@ -87,21 +109,37 @@ export default async function UsGraciasPage({
                 background: 'rgba(255,255,255,0.06)',
                 border: '1px solid rgba(255,255,255,0.14)',
                 borderRadius: 12,
-                lineHeight: 1.6,
+                lineHeight: 1.7,
               }}
             >
-              <div style={{ fontWeight: 700, marginBottom: 6, color: '#ffd24a' }}>
-                Bank deposit details
+              <div style={{ fontWeight: 700, marginBottom: 8, color: '#ffd24a' }}>
+                Bank deposit / Deposito bancario
               </div>
-              <div>Bank: [BANK NAME]</div>
-              <div>Account name: [ACCOUNT NAME]</div>
-              <div>Account #: [ACCOUNT NUMBER]</div>
-              <div>Type: [SAVINGS / CHECKING]</div>
-              <div style={{ marginTop: 8, fontSize: 14, opacity: 0.8 }}>
-                Reference: order <strong>{shortId}</strong>
+              <Row k="Bank / Banco" v={bank.name} />
+              <Row k="Account name / Titular" v={bank.accountName} />
+              <Row k="Account # / Cuenta" v={bank.account} />
+              <Row k="Type / Tipo" v={bank.accountType} />
+              <div style={{ marginTop: 10, fontSize: 14 }}>
+                Reference / Referencia: <strong>{shortId}</strong>
+              </div>
+              <div style={{ marginTop: 12 }}>
+                <a
+                  href={waHref}
+                  style={{
+                    display: 'inline-block',
+                    padding: '10px 16px',
+                    background: '#25D366',
+                    color: '#04341c',
+                    borderRadius: 9,
+                    textDecoration: 'none',
+                    fontWeight: 700,
+                    fontSize: 14,
+                  }}
+                >
+                  Send receipt on WhatsApp / Enviar comprobante
+                </a>
               </div>
             </div>
-            {/* ==================================================================== */}
           </>
         )}
 
@@ -123,6 +161,15 @@ export default async function UsGraciasPage({
         </div>
       </div>
     </main>
+  )
+}
+
+function Row({ k, v }: { k: string; v: string }) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+      <span style={{ opacity: 0.75 }}>{k}</span>
+      <span style={{ fontWeight: 600, textAlign: 'right' }}>{v || '—'}</span>
+    </div>
   )
 }
 
