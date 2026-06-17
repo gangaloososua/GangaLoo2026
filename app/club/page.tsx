@@ -217,6 +217,44 @@ export default function ClubPage() {
             </p>
           </div>
 
+          {/* PAYMENT INSTRUCTIONS */}
+          <div className="gl-pay gl-no-print">
+            <h2 className="gl-pay-title">Cómo activar tu Club</h2>
+            <p className="gl-pay-amount">
+              Plan {selectedPlan.nombre} · <strong>{selectedPlan.precio}</strong>
+            </p>
+
+            <div className="gl-pay-methods">
+              <div className="gl-pay-method">
+                <span className="gl-pay-icon">🏦</span>
+                <div>
+                  <h3>Transferencia bancaria</h3>
+                  <p className="gl-pay-line">Banco: <strong>Banreservas</strong></p>
+                  <p className="gl-pay-line">Tipo: Cuenta de Ahorros</p>
+                  <p className="gl-pay-line">Cuenta: <strong>960-649-2594</strong></p>
+                  <p className="gl-pay-line">A nombre de: Bernhard Perkins</p>
+                </div>
+              </div>
+
+              <div className="gl-pay-method">
+                <span className="gl-pay-icon">💵</span>
+                <div>
+                  <h3>Efectivo</h3>
+                  <p className="gl-pay-line">Paga en nuestra tienda de Maranatha.</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="gl-pay-next">
+              <p className="gl-pay-next-title">Después de pagar, envíanos por WhatsApp:</p>
+              <ul>
+                <li>El comprobante de pago (o avísanos si pagaste en efectivo)</li>
+                <li>Una foto de tu cédula o pasaporte</li>
+              </ul>
+              <p className="gl-pay-confirm">En cuanto lo confirmemos, activamos tu Club. 🎉</p>
+            </div>
+          </div>
+
           <div className="gl-print-keep">
             <MemberCard
               fullName={fullName || 'Tu Nombre'}
@@ -548,6 +586,24 @@ const styles = `
 .gl-memcard-name{ font-size:1.1rem; font-weight:800; line-height:1.15; }
 .gl-memcard-plan{ font-size:.78rem; opacity:.8; margin-top:.15rem; }
 .gl-memcard-foot{ display:flex; align-items:center; justify-content:space-between; font-size:.72rem; letter-spacing:.5px; opacity:.85; border-top:1px solid rgba(200,168,75,.3); padding-top:8px; }
+
+/* PAYMENT INSTRUCTIONS (success screen) */
+.gl-pay{ max-width:560px; margin:1.75rem auto 0; text-align:left; background:rgba(255,255,255,.03); border:1px solid var(--gl-line); border-radius:14px; padding:1.5rem 1.4rem; }
+.gl-pay-title{ font-size:1.15rem; font-weight:700; color:var(--gl-cream); margin-bottom:.35rem; }
+.gl-pay-amount{ font-size:.95rem; opacity:.85; margin-bottom:1.1rem; }
+.gl-pay-amount strong{ color:var(--gl-gold2); }
+.gl-pay-methods{ display:grid; gap:1rem; }
+@media (min-width:480px){ .gl-pay-methods{ grid-template-columns:1fr 1fr; align-items:start; } }
+.gl-pay-method{ display:flex; gap:.7rem; padding:1rem; border-radius:10px; background:rgba(255,255,255,.03); border:1px solid rgba(255,255,255,.07); }
+.gl-pay-icon{ font-size:1.3rem; line-height:1; }
+.gl-pay-method h3{ font-size:.95rem; font-weight:700; color:var(--gl-cream); margin-bottom:.45rem; }
+.gl-pay-line{ font-size:.85rem; opacity:.8; line-height:1.55; margin:0; }
+.gl-pay-line strong{ color:var(--gl-cream); opacity:1; }
+.gl-pay-next{ margin-top:1.2rem; border-top:1px solid var(--gl-line); padding-top:1rem; }
+.gl-pay-next-title{ font-size:.9rem; font-weight:600; color:var(--gl-cream); margin-bottom:.5rem; }
+.gl-pay-next ul{ margin:0 0 .6rem; padding-left:1.2rem; }
+.gl-pay-next li{ font-size:.85rem; opacity:.8; line-height:1.6; }
+.gl-pay-confirm{ font-size:.88rem; color:var(--gl-gold2); font-weight:600; margin:0; }
 
 /* SUCCESS */
 .gl-success{ text-align:center; max-width:560px; }
