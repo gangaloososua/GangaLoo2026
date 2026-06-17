@@ -7,8 +7,14 @@
 // the old version. Mobile-first.
 //
 // ─── Settings you can change ────────────────────────────────────────────────
-// All the money rules live in STORE_RULES, COMMISSION_TIERS, and the constants
+// All the money rules live in STORE_RULES, getCommission(), and the constants
 // below — edit those numbers to change what you charge.
+//
+// CLUB MEMBER RULES (toggle "Soy miembro del Club GangaLoo"):
+//   • Service commission  → UNCHANGED (still the tiered getCommission rate)
+//   • Cargo financiero     → waived (0% instead of FINANCING_PCT) on the 50/50 plan
+//   • Cobro a domicilio    → free (the DELIVERY_FEE is waived for members)
+//   • Everything else (bank charge, import tax, Amazon minimum, flete) is unchanged.
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
@@ -16,8 +22,8 @@ import Link from "next/link";
 const RATE_MARKUP = 1.008; // +0.8% on the fetched market rate
 const FALLBACK_RATE = 61.5; // used only if all rate APIs fail
 const FLETE_PER_LB = 300; // RD$ per pound (delivery stores)
-const FINANCING_PCT = 0.2; // +20% on the remaining balance (pay-in-two)
-const DELIVERY_FEE = 200; // RD$ home-collection note
+const FINANCING_PCT = 0.2; // +20% on the remaining balance (pay-in-two) — NON-members
+const DELIVERY_FEE = 200; // RD$ home-collection note — NON-members
 const BUSINESS_WA = "18292867868"; // quote is sent here
 
 type Rules = {
@@ -41,7 +47,7 @@ const STORE_RULES: Record<Store, Rules> = {
   Otra: { bank: 3, tax: 7, fleteAtDelivery: true, ship: 0, minFee: 0, minFeeThresholdUSD: 0 },
 };
 
-// Service commission, tiered by USD cart size.
+// Service commission, tiered by USD cart size. (Same for members and non-members.)
 function getCommission(subtotalUSD: number): number {
   if (subtotalUSD <= 30) return 15;
   if (subtotalUSD <= 50) return 12.5;
@@ -65,10 +71,15 @@ export default function CotizadorPage() {
   const [payMode, setPayMode] = useState<"full" | "half">("full");
   const [adelanto, setAdelanto] = useState<string>("");
   const [adelantoTouched, setAdelantoTouched] = useState(false);
+  const [member, setMember] = useState(false); // Club member toggle
 
   useEffect(() => {
     document.title = "Cotizador de Pedidos — GangaLoo";
   }, []);
+
+  // Member-adjusted fee value: financing is waived for members (the RD$200
+  // home-pickup is handled inline in the note since it isn't part of the total).
+  const financingPct = member ? 0 : FINANCING_PCT;
 
   // Fetch the market rate in the browser, 3 fallbacks, +0.8% markup.
   useEffect(() => {
@@ -164,12 +175,12 @@ export default function CotizadorPage() {
       adelantoTouched && adelanto !== "" ? parseFloat(adelanto) || 0 : calc.total / 2;
     const ade = roundUp25(raw);
     const restante = Math.max(calc.total - ade, 0);
-    const finCharge = restante * FINANCING_PCT;
+    const finCharge = restante * financingPct;
     const alRecoger = roundUp25(restante + finCharge);
     const totalAcum = ade + alRecoger;
     const pct = calc.total > 0 ? Math.round((ade / calc.total) * 100) : 0;
     return { ade, restante, finCharge, alRecoger, totalAcum, pct };
-  }, [calc, payMode, adelanto, adelantoTouched]);
+  }, [calc, payMode, adelanto, adelantoTouched, financingPct]);
 
   const lbsCost = (parseFloat(lbs) || 0) * FLETE_PER_LB;
 
@@ -178,10 +189,13 @@ export default function CotizadorPage() {
     const lines = [
       `*Cotización de pedido — ${store}*`,
       `Tasa aplicada: 1 USD = RD$ ${r.toFixed(2)}`,
+    ];
+    if (member) lines.push(`Miembro del Club GangaLoo ✓`);
+    lines.push(
       ``,
       `Subtotal: ${fmt(calc.subtotal)} ($${calc.subtotalUSD.toFixed(2)} USD)`,
       `Comisión de servicio (${calc.fS}%): ${fmt(calc.sAmt)}`,
-    ];
+    );
     if (calc.fB > 0) lines.push(`Cargo bancario (${calc.fB}%): ${fmt(calc.bAmt)}`);
     if (calc.fT > 0) lines.push(`Impuesto importación (${calc.fT}%): ${fmt(calc.tAmt)}`);
     if (calc.minFeeAmt > 0) lines.push(`Cargo mínimo: ${fmt(calc.minFeeAmt)}`);
@@ -189,11 +203,14 @@ export default function CotizadorPage() {
       lines.push(`Flete: se paga al recibir (RD$${FLETE_PER_LB}/lb)`);
     else lines.push(`Flete / envío: ${fmt(calc.ship)}`);
     lines.push(`*TOTAL: ${fmt(calc.total)}*`);
+    if (member) lines.push(`Cobro a domicilio: GRATIS (miembro)`);
 
     if (payMode === "half" && fin) {
       lines.push(``, `*Opción de pago 50/50:*`);
       lines.push(`Adelanto ahora: ${fmt(fin.ade)} (${fin.pct}%)`);
-      lines.push(`Al recoger: ${fmt(fin.alRecoger)} (+20% financiero)`);
+      lines.push(
+        `Al recoger: ${fmt(fin.alRecoger)} (${member ? "sin cargo financiero" : "+20% financiero"})`,
+      );
       lines.push(`Total acumulado: ${fmt(fin.totalAcum)}`);
     }
     window.open(
@@ -243,6 +260,21 @@ export default function CotizadorPage() {
       </div>
 
       <div className="cz-body">
+        {/* CLUB MEMBER TOGGLE */}
+        <button
+          type="button"
+          className={`cz-club${member ? " on" : ""}`}
+          onClick={() => setMember((m) => !m)}
+          aria-pressed={member}
+        >
+          <span className="cz-club-check">{member ? "✓" : ""}</span>
+          <span className="cz-club-txt">
+            <strong>Soy miembro del Club GangaLoo</strong>
+            <small>Sin cargo financiero · cobro a domicilio gratis</small>
+          </span>
+          <span className="cz-club-badge">👑</span>
+        </button>
+
         {/* STORE TABS */}
         <div className="cz-tabs">
           {STORES.map((s) => (
@@ -305,7 +337,7 @@ export default function CotizadorPage() {
           <div className="cz-empty">Ingresa un monto para ver tu cotización.</div>
         ) : (
           <div className="cz-card">
-            <h2 className="cz-label">Desglose</h2>
+            <h2 className="cz-label">Desglose{member ? " · Miembro del Club" : ""}</h2>
             <div className="cz-breakdown">
               <Row
                 label={`Subtotal carrito ($${calc.subtotalUSD.toFixed(2)} USD)`}
@@ -332,9 +364,18 @@ export default function CotizadorPage() {
             </div>
 
             <div className="cz-note">
-              ℹ️ <strong>Cobro a domicilio:</strong> se cobra un adicional de{" "}
-              <strong>RD$ {DELIVERY_FEE}</strong> para recogida del pago en tu dirección.
-              Si pagas en tienda, no aplica.
+              ℹ️ <strong>Cobro a domicilio:</strong>{" "}
+              {member ? (
+                <>
+                  <strong>GRATIS</strong> para miembros del Club. (Normalmente RD$ {DELIVERY_FEE}{" "}
+                  para recogida del pago en tu dirección.)
+                </>
+              ) : (
+                <>
+                  se cobra un adicional de <strong>RD$ {DELIVERY_FEE}</strong> para recogida del
+                  pago en tu dirección. Si pagas en tienda, no aplica.
+                </>
+              )}
             </div>
 
             {/* PAY MODE */}
@@ -352,7 +393,7 @@ export default function CotizadorPage() {
                   if (!adelantoTouched && calc) setAdelanto(String(Math.round(calc.total / 2)));
                 }}
               >
-                Adelanto + financiero
+                {member ? "Adelanto (sin financiero)" : "Adelanto + financiero"}
               </button>
             </div>
 
@@ -382,13 +423,26 @@ export default function CotizadorPage() {
                   <div className="cz-sbox later">
                     <div className="cz-slbl">Al recoger</div>
                     <div className="cz-samt">{fmt(fin.alRecoger)}</div>
-                    <div className="cz-snote">+20% financiero ({fmt(fin.finCharge)})</div>
+                    <div className="cz-snote">
+                      {member
+                        ? "Sin cargo financiero (miembro) ✓"
+                        : `+20% financiero (${fmt(fin.finCharge)})`}
+                    </div>
                   </div>
                 </div>
 
                 <div className="cz-restante">
-                  Restante: {fmt(fin.restante)} + 20% financiero ({fmt(fin.finCharge)}) ={" "}
-                  {fmt(fin.alRecoger)} (redondeado)
+                  {member ? (
+                    <>
+                      Restante: {fmt(fin.restante)} · sin cargo financiero (miembro) ={" "}
+                      {fmt(fin.alRecoger)} (redondeado)
+                    </>
+                  ) : (
+                    <>
+                      Restante: {fmt(fin.restante)} + 20% financiero ({fmt(fin.finCharge)}) ={" "}
+                      {fmt(fin.alRecoger)} (redondeado)
+                    </>
+                  )}
                 </div>
 
                 <div className="cz-acum">
@@ -469,6 +523,21 @@ const styles = `
 .cz-rate-src{ font-size:.74rem; color:#a08800; width:100%; text-align:center; }
 
 .cz-body{ max-width:620px; margin:0 auto; padding:22px 5vw 60px; }
+
+/* CLUB MEMBER TOGGLE */
+.cz-club{ width:100%; display:flex; align-items:center; gap:12px; margin-bottom:16px;
+  padding:14px 16px; border-radius:14px; border:1px solid var(--border); background:var(--surface);
+  cursor:pointer; font-family:inherit; text-align:left; transition:all .15s; }
+.cz-club:hover{ border-color:var(--gold); }
+.cz-club.on{ border-color:var(--gold); background:linear-gradient(135deg,#fff8e6,#fff);
+  box-shadow:0 2px 10px rgba(200,168,75,.18); }
+.cz-club-check{ flex-shrink:0; width:24px; height:24px; border-radius:7px; border:2px solid var(--border);
+  display:flex; align-items:center; justify-content:center; font-weight:800; color:var(--brand); font-size:.9rem; }
+.cz-club.on .cz-club-check{ background:var(--gold); border-color:var(--gold); color:#1a1205; }
+.cz-club-txt{ flex:1; display:flex; flex-direction:column; gap:2px; }
+.cz-club-txt strong{ font-size:.92rem; color:var(--brand); font-weight:700; }
+.cz-club-txt small{ font-size:.74rem; color:var(--muted); }
+.cz-club-badge{ font-size:1.3rem; line-height:1; }
 
 .cz-tabs{ display:flex; flex-wrap:wrap; gap:8px; margin-bottom:16px; }
 .cz-tab{ flex-shrink:0; padding:9px 16px; border-radius:99px; border:1px solid var(--border);
