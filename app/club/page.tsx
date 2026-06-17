@@ -41,7 +41,7 @@ const PLAN_LABEL: Record<PlanId, string> = {
   semestral: 'Semestral — RD$4,999 / 6 meses',
 }
 
-const BENEFITS: { icon: string; title: string; desc: string }[] = [
+const BENEFITS: { icon: string; title: string; desc: string; link?: { href: string; label: string } }[] = [
   {
     icon: '🏷️',
     title: 'Precios de Club',
@@ -56,6 +56,7 @@ const BENEFITS: { icon: string; title: string; desc: string }[] = [
     icon: '💳',
     title: 'Tarjeta de débito virtual GRATIS',
     desc: 'Tu propia tarjeta virtual GangaLoo para pagar en la tienda online. Aplican cargos de servicio por transacción.',
+    link: { href: '/club/tarifas', label: 'Ver tarifas de uso →' },
   },
   {
     icon: '⚡',
@@ -325,6 +326,11 @@ export default function ClubPage() {
                   <div>
                     <h3>{b.title}</h3>
                     <p>{b.desc}</p>
+                    {b.link && (
+                      <Link href={b.link.href} className="gl-benefit-link">
+                        {b.link.label}
+                      </Link>
+                    )}
                   </div>
                 </div>
               ))}
@@ -545,6 +551,8 @@ const styles = `
 .gl-benefit-icon{ font-size:1.5rem; line-height:1; }
 .gl-benefit h3{ font-size:1.02rem; font-weight:700; color:var(--gl-cream); margin-bottom:.25rem; }
 .gl-benefit p{ font-size:.86rem; opacity:.72; line-height:1.5; }
+.gl-benefit-link{ display:inline-block; margin-top:.5rem; font-size:.82rem; font-weight:700; color:var(--gl-gold2); border-bottom:1px solid rgba(229,201,106,.4); }
+.gl-benefit-link:hover{ color:var(--gl-gold); border-color:var(--gl-gold); }
 
 /* REGISTRO */
 .gl-registro{ display:grid; grid-template-columns:1.1fr .9fr; gap:2rem; align-items:start; }
