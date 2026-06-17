@@ -46,6 +46,31 @@ export async function notifyNewOrder(a: {
   ]);
 }
 
+// Owner alert for a REGISTER (caja) sale. Fires after a POS sale is confirmed,
+// for every register sale (paid or not). Shows the seller who rang it up, the
+// store, the authoritative total, and the item list. Never throws.
+export async function notifyRegisterSale(a: {
+  invoice: string;
+  sellerName: string;
+  storeName: string;
+  totalLabel: string;
+  items: { name: string; qty: number }[];
+}): Promise<void> {
+  const lines = [
+    `🛒 Venta en caja ${a.invoice}`,
+    `Vendedor: ${a.sellerName}`,
+    `Tienda: ${a.storeName}`,
+    `Total: ${a.totalLabel}`,
+  ];
+  if (a.items.length > 0) {
+    lines.push("", "Artículos:");
+    for (const it of a.items) {
+      lines.push(`• ${it.qty} × ${it.name}`);
+    }
+  }
+  await sendWhatsApp(OWNER, lines.join("\n"));
+}
+
 // Owner alert when a new customer registers. When `plan` is present, the
 // message is framed as a CLUB membership request (the customer's account is
 // created but their Club toggle stays OFF until the owner activates it after

@@ -8,6 +8,7 @@ import {
 } from '@/lib/sales'
 import { requireOwner, requireAdminCaller } from '@/lib/auth/guard'
 import { maybeCreateEncargoFromSale } from '@/lib/pos-encargo-bridge'
+import { maybeNotifyRegisterSale } from '@/lib/pos-sale-notify'
 
 export type ActionResult = { ok: true } | { ok: false; error: string }
 
@@ -505,7 +506,7 @@ export async function previewCoupon(input: {
 export async function confirmPosSale(
   input: ConfirmPosInput
 ): Promise<ConfirmPosResult> {
-  await requireAdminCaller()
+  const caller = await requireAdminCaller()
   // Light client-side validation so we surface a clean error before the
   // round-trip. The rpc validates again; this is just nicer UX.
   if (!input.seller_id) return { ok: false, error: 'Seller is required.' }
@@ -550,6 +551,18 @@ export async function confirmPosSale(
   // can run it through the delivery/pickup flow. NON-BLOCKING: never throws,
   // never affects the sale result. A walk-in (no customer) is skipped inside.
   await maybeCreateEncargoFromSale(input, row.sale_id)
+
+  // Owner WhatsApp alert for this register sale. NON-BLOCKING (the helper
+  // wraps everything in try/catch), runs after the sale is already saved, so
+  // a WhatsApp/lookup failure can never affect the sale. The seller name comes
+  // from the logged-in caller (a register sale's seller is always the caller).
+  await maybeNotifyRegisterSale({
+    saleId: row.sale_id,
+    invoice: row.invoice_number,
+    sellerName: caller.full_name || caller.email || 'Vendedor',
+    sourceWarehouseId: input.source_warehouse_id,
+    items: input.items.map((i) => ({ product_id: i.product_id, qty: i.qty })),
+  })
 
   return {
     ok: true,
