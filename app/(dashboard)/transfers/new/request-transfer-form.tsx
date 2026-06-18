@@ -5,6 +5,10 @@
 // Direction toggle (order-in vs send-out), the distributor's own warehouse
 // locked onto one side, and a parked REQUEST on submit (no stock moves).
 // Text reads from the transfers dictionary by role; distributors see Spanish.
+//
+// 2026-06-17: + camera scan to add products (one-shot), scoped to the SOURCE
+// warehouse via findProductBySkuAction, mirroring the owner form and the
+// register. The scanned product flows through the same addProduct path.
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
@@ -33,6 +37,8 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { ProductSearch } from '../../sales/new/product-search'
+import { QrScanButton } from '@/components/qr-scanner'
+import { findProductBySkuAction } from '../../scan/actions'
 import { requestTransfer } from '../actions'
 import { plural, type Locale } from '@/lib/i18n/dictionary'
 import { tt } from '@/lib/i18n/transfers-i18n'
@@ -111,6 +117,30 @@ export function RequestTransferForm({
         },
       ]
     })
+  }
+
+  // Camera scan -> look up the code in the SOURCE warehouse -> add the line.
+  async function handleScan(code: string) {
+    if (!sourceId) return
+    try {
+      const res = await findProductBySkuAction(sourceId, code)
+      if (!res.ok) {
+        toast.error(res.error || tt(locale, 'tr.req.toastFailed'))
+        return
+      }
+      if (res.product) {
+        addProduct(res.product)
+        toast.success(res.product.name)
+      } else {
+        toast.error(
+          locale === 'es'
+            ? 'No se encontró ese código en este almacén.'
+            : 'No product for that code in this warehouse.',
+        )
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : tt(locale, 'tr.req.toastFailed'))
+    }
   }
 
   function updateQty(line_id: string, qty: number) {
@@ -217,11 +247,16 @@ export function RequestTransferForm({
             <p className="text-sm text-muted-foreground">{tt(locale, 'tr.req.pickFirst')}</p>
           ) : (
             <>
-              <ProductSearch
-                warehouseId={sourceId}
-                categories={categories}
-                onAdd={addProduct}
-              />
+              <div className="flex items-start gap-2">
+                <div className="flex-1">
+                  <ProductSearch
+                    warehouseId={sourceId}
+                    categories={categories}
+                    onAdd={addProduct}
+                  />
+                </div>
+                <QrScanButton onScan={handleScan} locale={locale} />
+              </div>
 
               {lines.length === 0 ? (
                 <p className="text-sm text-muted-foreground">{tt(locale, 'tr.req.noProducts')}</p>

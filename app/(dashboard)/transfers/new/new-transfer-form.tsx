@@ -4,8 +4,13 @@
 //
 // Pick source + destination warehouse, then add products via the shared
 // ProductSearch (scoped to the SOURCE warehouse, so it lists that warehouse's
-// stock and on-hand qty). Set quantities, confirm, submit -> initiateTransfer.
+// stock and on-hand qty) OR by scanning a product code with the camera.
+// Set quantities, confirm, submit -> initiateTransfer.
 // The engine rejects an over-stock transfer; we also warn in the UI.
+//
+// 2026-06-17: + camera scan to add products (one-shot). A scanned code is
+// looked up scoped to the SOURCE warehouse via findProductBySkuAction, so the
+// added line carries the right on-hand and inherits the over-stock guard.
 
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
@@ -34,6 +39,8 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { ProductSearch } from '../../sales/new/product-search'
+import { QrScanButton } from '@/components/qr-scanner'
+import { findProductBySkuAction } from '../../scan/actions'
 import { initiateTransfer } from '../actions'
 import type { ProductSearchResult, SaleCategoryPickerItem } from '@/lib/sales'
 import type { WarehouseOption } from '@/lib/stock-transfers'
@@ -97,6 +104,26 @@ export function NewTransferForm({
         },
       ]
     })
+  }
+
+  // Camera scan -> look up the code in the SOURCE warehouse -> add the line.
+  async function handleScan(code: string) {
+    if (!fromId) return
+    try {
+      const res = await findProductBySkuAction(fromId, code)
+      if (!res.ok) {
+        toast.error(res.error || 'Lookup failed.')
+        return
+      }
+      if (res.product) {
+        addProduct(res.product)
+        toast.success(res.product.name)
+      } else {
+        toast.error('No product for that code in this warehouse.')
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Lookup failed.')
+    }
   }
 
   function updateQty(line_id: string, qty: number) {
@@ -208,15 +235,20 @@ export function NewTransferForm({
             </p>
           ) : (
             <>
-              <ProductSearch
-                warehouseId={fromId}
-                categories={categories}
-                onAdd={addProduct}
-              />
+              <div className="flex items-start gap-2">
+                <div className="flex-1">
+                  <ProductSearch
+                    warehouseId={fromId}
+                    categories={categories}
+                    onAdd={addProduct}
+                  />
+                </div>
+                <QrScanButton onScan={handleScan} label="Scan" />
+              </div>
 
               {lines.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
-                  No products yet. Search above to add what you&apos;re moving.
+                  No products yet. Search or scan above to add what you&apos;re moving.
                 </p>
               ) : (
                 <div className="overflow-x-auto">
