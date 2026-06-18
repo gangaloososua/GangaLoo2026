@@ -61,9 +61,9 @@ type Props = {
 // --- formatting helpers ------------------------------------
 
 function formatDate(iso: string | null): string {
-  if (!iso) return 'â€”'
+  if (!iso) return '—'
   const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return 'â€”'
+  if (Number.isNaN(d.getTime())) return '—'
   return d.toLocaleDateString('en-GB', {
     day: '2-digit',
     month: 'short',
@@ -79,7 +79,7 @@ function formatUSD(n: number): string {
 }
 
 function formatDOP(n: number | null): string {
-  if (n == null || n === 0) return 'â€”'
+  if (n == null || n === 0) return '—'
   return new Intl.NumberFormat('en-GB', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
@@ -349,7 +349,7 @@ export function PurchasesListTable({
                     {formatDate(r.ordered_at)}
                   </TableCell>
                   <TableCell className="font-medium">
-                    {r.supplier_name ?? <span className="text-muted-foreground">â€”</span>}
+                    {r.supplier_name ?? <span className="text-muted-foreground">—</span>}
                   </TableCell>
                   <TableCell className="max-w-[16rem] align-top">
                     {r.order_no ? (
@@ -368,7 +368,7 @@ export function PurchasesListTable({
                     ) : null}
                   </TableCell>
                   <TableCell className="text-muted-foreground">
-                    {r.warehouse_name ?? 'â€”'}
+                    {r.warehouse_name ?? '—'}
                   </TableCell>
                   <TableCell className="text-right tabular-nums">
                     {formatUSD(r.usd_total)}
