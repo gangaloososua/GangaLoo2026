@@ -71,7 +71,7 @@ export function CartView({
       <main className="mx-auto w-full max-w-[900px] px-4 py-6">
         <div className="mb-4 flex items-baseline gap-2">
           <h1 className="text-[22px] font-semibold" style={{ color: NAVY }}>{ts(locale, 'shop.cartTitle')}</h1>
-          <span className="text-[13px]" style={{ color: MUTED }}>Â· {warehouseName}</span>
+          <span className="text-[13px]" style={{ color: MUTED }}>· {warehouseName}</span>
         </div>
 
         {cart.items.length === 0 ? (
