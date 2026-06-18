@@ -18,14 +18,19 @@ export type ActionResult = { ok: true } | { ok: false; error: string }
 // Allowed from: draft, confirmed, partially_paid.
 // Disallowed from: paid (must refund first), refunded, cancelled.
 //
-// We do NOT reverse stock here because:
-//   - draft sales never wrote stock movements in the first place
-//   - confirmed/partially_paid sales: cancelling without refunding is an
-//     edge case the operator opts into knowingly. They can refund instead
-//     if they want stock returned.
+// Stock + commissions (2026-06-17): cancelling now ALWAYS puts stock back and
+// voids commissions, so a cancelled sale leaves no phantom "sold" stock and no
+// commission owed for a sale that didn't happen. Specifically:
+//   - draft sales never wrote stock movements or commissions, so there's
+//     nothing to reverse — we just flip the status.
+//   - confirmed/partially_paid sales: we mirror refundSale's stock restore —
+//     write a 'return_in' stock_movements row per consumed lot AND add the
+//     consumed qty back to inventory_lots.qty_remaining (on-hand is NOT purely
+//     movement-derived, so the lot count must be bumped too) — then void all
+//     sale_commissions for the sale.
 //
-// Commissions: untouched. If they were paid, they stay paid; if pending,
-// they stay pending. Operator can void manually in a future commissions UI.
+// We do NOT reverse payments here (same boundary as refundSale). If a cancelled
+// sale had money collected, return it separately via the "Return money" button.
 // ---------------------------------------------------------------------------
 
 export async function cancelSale(saleId: string, reason: string): Promise<ActionResult> {
@@ -53,18 +58,127 @@ export async function cancelSale(saleId: string, reason: string): Promise<Action
   const trimmedReason = reason.trim()
   const note = trimmedReason ? `Cancelled: ${trimmedReason}` : 'Cancelled'
 
+  // A draft never consumed stock or wrote commissions, so its cancel is just
+  // a status flip — skip the stock/commission work entirely.
+  const movedStock = sale.status === 'confirmed' || sale.status === 'partially_paid'
+
+  // Pull lot consumption rows (mirrors refundSale) so we can return stock.
+  // We go via sale_items because sale_lot_consumption has no direct FK to sales.
+  type Consumption = {
+    sale_item_id: string
+    product_id: string
+    lot_id: string
+    warehouse_id: string
+    qty_consumed: number
+    unit_cost_dop: number
+    current_remaining: number
+  }
+  const consumptions: Consumption[] = []
+  let saleItemIds: string[] = []
+
+  if (movedStock) {
+    const { data: items, error: itemsErr } = await supabase
+      .from('sale_items')
+      .select(`
+        id,
+        product_id,
+        consumption:sale_lot_consumption (
+          id, lot_id, qty_consumed, unit_cost_dop,
+          lot:lot_id ( id, warehouse_id, qty_remaining )
+        )
+      `)
+      .eq('sale_id', saleId)
+    if (itemsErr) return { ok: false, error: itemsErr.message }
+
+    saleItemIds = ((items ?? []) as any[]).map((it) => it.id)
+    for (const it of (items ?? []) as any[]) {
+      for (const c of (it.consumption ?? []) as any[]) {
+        if (!c.lot) continue
+        consumptions.push({
+          sale_item_id: it.id,
+          product_id: it.product_id,
+          lot_id: c.lot_id,
+          warehouse_id: c.lot.warehouse_id,
+          qty_consumed: Number(c.qty_consumed),
+          unit_cost_dop: Number(c.unit_cost_dop),
+          current_remaining: Number(c.lot.qty_remaining),
+        })
+      }
+    }
+  }
+
+  // 1. Flip the sale status (stash the reason in delivery_notes as a
+  //    quick-and-dirty audit until we surface a proper audit_log UI).
   const { error: updateErr } = await supabase
     .from('sales')
     .update({
       status: 'cancelled',
-      // Stash the reason in delivery_notes as a quick-and-dirty audit until
-      // we have a proper audit_log surfacing UI. The schema has audit_log
-      // available but we'd need a richer write here.
       delivery_notes: note,
     })
     .eq('id', saleId)
 
   if (updateErr) return { ok: false, error: updateErr.message }
+
+  // 2. Insert stock_movements (return_in) — audit trail of stock coming back.
+  if (consumptions.length > 0) {
+    const movementRows = consumptions.map((c) => ({
+      product_id: c.product_id,
+      warehouse_id: c.warehouse_id,
+      lot_id: c.lot_id,
+      kind: 'return_in',
+      qty_delta: c.qty_consumed,
+      unit_cost_dop: c.unit_cost_dop,
+      sale_item_id: c.sale_item_id,
+      adjustment_reason: note,
+    }))
+    const { error: movErr } = await supabase
+      .from('stock_movements')
+      .insert(movementRows)
+    if (movErr) {
+      return { ok: false, error: `Sale cancelled, but stock movement write failed: ${movErr.message}` }
+    }
+  }
+
+  // 3. Always bump inventory_lots.qty_remaining back for each consumed lot
+  //    (cancel always restocks). Aggregate first since lots can repeat.
+  if (consumptions.length > 0) {
+    const lotBumps = new Map<string, number>()
+    for (const c of consumptions) {
+      lotBumps.set(c.lot_id, (lotBumps.get(c.lot_id) ?? 0) + c.qty_consumed)
+    }
+    // current_remaining is the same per lot; capture one snapshot per lot.
+    const lotRemaining = new Map<string, number>()
+    for (const c of consumptions) {
+      if (!lotRemaining.has(c.lot_id)) lotRemaining.set(c.lot_id, c.current_remaining)
+    }
+    for (const [lotId, bump] of lotBumps) {
+      const newRemaining = (lotRemaining.get(lotId) ?? 0) + bump
+      const { error: lotErr } = await supabase
+        .from('inventory_lots')
+        .update({ qty_remaining: newRemaining })
+        .eq('id', lotId)
+      if (lotErr) {
+        return {
+          ok: false,
+          error: `Sale cancelled and stock movements written, but lot restock failed: ${lotErr.message}. Run the lot adjustment manually.`,
+        }
+      }
+    }
+  }
+
+  // 4. Void all commissions for this sale (cancel voids commissions, like refund).
+  if (saleItemIds.length > 0) {
+    const { error: commErr } = await supabase
+      .from('sale_commissions')
+      .update({ status: 'void' })
+      .in('sale_item_id', saleItemIds)
+    if (commErr) {
+      return {
+        ok: false,
+        error: `Sale cancelled and stock handled, but commission void failed: ${commErr.message}.`,
+      }
+    }
+  }
 
   revalidatePath(`/sales/${saleId}`)
   revalidatePath('/sales')
