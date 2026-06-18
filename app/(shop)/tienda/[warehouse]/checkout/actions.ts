@@ -1,4 +1,4 @@
-'use server'
+﻿'use server'
 
 // Server actions for the public storefront checkout.
 //
@@ -88,6 +88,13 @@ export async function placeOnlineOrder(
 
     if (error) {
       console.error('[placeOnlineOrder] rpc error:', error)
+      // round-74a: place_storefront_order rejects an order whose lines exceed
+      // available stock with "out_of_stock: <product_id>". Map it to a stable
+      // flag so the checkout page shows a friendly "review your cart" message
+      // instead of the raw text. Everything else passes through unchanged.
+      if ((error.message || '').startsWith('out_of_stock:')) {
+        return { ok: false, error: 'out_of_stock' }
+      }
       return { ok: false, error: error.message }
     }
 
@@ -390,3 +397,4 @@ export async function startPaypalCheckout(input: {
     return { ok: false, error: e instanceof Error ? e.message : 'unknown' }
   }
 }
+

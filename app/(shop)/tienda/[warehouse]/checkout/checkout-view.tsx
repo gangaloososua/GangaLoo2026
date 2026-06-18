@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useState, useEffect, useRef, type CSSProperties } from 'react'
 import Link from 'next/link'
@@ -17,7 +17,7 @@ const MUTED = '#6b7280'
 
 // Delivery runs every day inside this single window. Edit to change hours.
 const DELIVERY_WINDOW = { start: '14:00', end: '17:00' }
-// Map starting center before the customer pins (Sosúa / Puerto Plata).
+// Map starting center before the customer pins (SosÃºa / Puerto Plata).
 const MAP_DEFAULT = { lat: 19.7536, lng: -70.5169 }
 
 // Build 30-min slots across DELIVERY_WINDOW, each with a 24h value ("14:30")
@@ -70,31 +70,32 @@ const CT = {
     fulfillTitle: 'Entrega',
     pickupHere: 'Recoger en esta tienda',
     pickupOther: 'Recoger en otra tienda',
-    delivery: 'Envío a domicilio',
+    delivery: 'EnvÃ­o a domicilio',
     chooseStore: 'Elige la tienda para recoger',
-    regionLabel: 'Zona de envío',
-    regionLocal: 'Local (Sosúa / Los Castillos)',
-    regionNational: 'Nacional (resto del país)',
+    regionLabel: 'Zona de envÃ­o',
+    regionLocal: 'Local (SosÃºa / Los Castillos)',
+    regionNational: 'Nacional (resto del paÃ­s)',
     free: 'Gratis',
-    deliveryFee: 'Envío',
+    deliveryFee: 'EnvÃ­o',
     payTitle: 'Forma de pago',
     payCash: 'Efectivo',
     payCashSub: 'Pagas al recibir / al recoger',
     payTransfer: 'Transferencia bancaria',
-    payTransferSub: 'Transfiere y envíanos el comprobante',
+    payTransferSub: 'Transfiere y envÃ­anos el comprobante',
     bankTitle: 'Datos para la transferencia',
     bankName: 'Banco',
     bankAccount: 'Cuenta',
     bankAccountName: 'A nombre de',
     bankAccountType: 'Tipo',
     chooseStoreError: 'Elige la tienda donde vas a recoger.',
-    mapTitle: 'Ubicación en el mapa',
-    useMyLocation: 'Usar mi ubicación actual',
-    pinHint: 'Toca el mapa o arrastra el pin para marcar tu ubicación.',
+    outOfStock: 'Uno o más artículos se acaban de agotar. Por favor revisa tu carrito.',
+    mapTitle: 'UbicaciÃ³n en el mapa',
+    useMyLocation: 'Usar mi ubicaciÃ³n actual',
+    pinHint: 'Toca el mapa o arrastra el pin para marcar tu ubicaciÃ³n.',
     dateLabel: 'Fecha de entrega',
     timeLabel: 'Hora de entrega',
-    windowHint: 'Entregas todos los días de 2:00 a 5:00 PM.',
-    pinRequired: 'Marca tu ubicación en el mapa.',
+    windowHint: 'Entregas todos los dÃ­as de 2:00 a 5:00 PM.',
+    pinRequired: 'Marca tu ubicaciÃ³n en el mapa.',
     dateRequired: 'Elige la fecha de entrega.',
     timeRequired: 'Elige la hora de entrega.',
     timeOutOfWindow: 'La hora debe estar entre 2:00 y 5:00 PM.',
@@ -102,13 +103,13 @@ const CT = {
     memberDiscount: 'Descuento socio',
     surcharge: 'Recargo',
     payCard: 'Tarjeta (Stripe)',
-    payCardSub: 'Pago con tarjeta en línea',
+    payCardSub: 'Pago con tarjeta en lÃ­nea',
     payPaypalSub: 'Paga con tu cuenta PayPal',
-    payOnlineSoon: 'Pago en línea (en pruebas)',
-    couponLabel: 'Cupón (opcional)',
-    couponPlaceholder: 'Código',
-    coupon: 'Cupón',
-    couponNotApplied: 'Cupón no aplicado',
+    payOnlineSoon: 'Pago en lÃ­nea (en pruebas)',
+    couponLabel: 'CupÃ³n (opcional)',
+    couponPlaceholder: 'CÃ³digo',
+    coupon: 'CupÃ³n',
+    couponNotApplied: 'CupÃ³n no aplicado',
   },
   en: {
     fulfillTitle: 'Fulfillment',
@@ -117,7 +118,7 @@ const CT = {
     delivery: 'Home delivery',
     chooseStore: 'Choose the store to collect from',
     regionLabel: 'Delivery zone',
-    regionLocal: 'Local (Sosúa / Los Castillos)',
+    regionLocal: 'Local (SosÃºa / Los Castillos)',
     regionNational: 'National (rest of the country)',
     free: 'Free',
     deliveryFee: 'Delivery',
@@ -132,6 +133,7 @@ const CT = {
     bankAccountName: 'Account name',
     bankAccountType: 'Type',
     chooseStoreError: 'Choose the store where you will collect.',
+    outOfStock: 'One or more items just sold out. Please review your cart.',
     mapTitle: 'Location on map',
     useMyLocation: 'Use my current location',
     pinHint: 'Tap the map or drag the pin to mark your location.',
@@ -179,7 +181,7 @@ function norm(s: string): string {
     .trim()
 }
 
-// Loads Leaflet from the CDN once (client-only) — no npm dependency. Shows a
+// Loads Leaflet from the CDN once (client-only) â€” no npm dependency. Shows a
 // draggable pin and reports the chosen lat/lng up to the form.
 let leafletLoading: Promise<unknown> | null = null
 function loadLeaflet(): Promise<unknown> {
@@ -275,7 +277,7 @@ function DeliveryMap({
   return (
     <div>
       <button type="button" onClick={useMyLocation} disabled={locating} className="mb-2 inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] disabled:opacity-50" style={{ border: `1px solid ${NAVY}`, color: NAVY, background: '#fff' }}>
-        <Icon d={ICON.locate} size={14} /> {locating ? '…' : locateLabel}
+        <Icon d={ICON.locate} size={14} /> {locating ? 'â€¦' : locateLabel}
       </button>
       <div ref={mapRef} style={{ height: 240, width: '100%', borderRadius: 12, overflow: 'hidden', border: '1px solid #d7dde6' }} />
       <p className="mt-1.5 text-[11px]" style={{ color: MUTED }}>{hint}</p>
@@ -460,12 +462,12 @@ export function CheckoutView({
   }
 
   const fulfillLabel = (): string => {
-    if (method === 'delivery') return `${tx.delivery} · ${address}`
+    if (method === 'delivery') return `${tx.delivery} Â· ${address}`
     if (method === 'pickup_other') {
       const s = otherStores.find((o) => o.id === pickupStoreId)
-      return `${tx.pickupOther} · ${s?.name ?? ''}`
+      return `${tx.pickupOther} Â· ${s?.name ?? ''}`
     }
-    return `${ts(locale, 'shop.pickup')} · ${warehouseName}`
+    return `${ts(locale, 'shop.pickup')} Â· ${warehouseName}`
   }
 
   const submit = async () => {
@@ -506,7 +508,7 @@ export function CheckoutView({
     })
     setSubmitting(false)
     if (res.ok) {
-      // Round 43: order placed — the flyer coupon has done its job, so forget
+      // Round 43: order placed â€” the flyer coupon has done its job, so forget
       // it (whether or not it applied) to avoid carrying it to a later order.
       clearFlyerCoupon()
       // Stripe: hand off to the hosted Stripe checkout page to actually pay.
@@ -566,7 +568,7 @@ export function CheckoutView({
       cart.clear()
       if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' })
     } else {
-      setError(ts(locale, 'shop.orderError'))
+      setError(res.error === 'out_of_stock' ? tx.outOfStock : ts(locale, 'shop.orderError'))
     }
   }
 
@@ -679,17 +681,17 @@ export function CheckoutView({
                 .map((i) => `   ${i.qty}x ${i.name} (${price(i.priceCents * i.qty)})`)
                 .join('\n')
               const lines = [
-                '🛒 *Nuevo Pedido GangaLoo*',
-                `👤 ${name}  📞 ${phone}`,
-                `📍 Tienda: ${waStore?.name ?? ''}`,
-                `🔑 ${invoice}`,
-                '━━━━━━━━━━━━',
-                '📦 *Productos:*',
+                'ðŸ›’ *Nuevo Pedido GangaLoo*',
+                `ðŸ‘¤ ${name}  ðŸ“ž ${phone}`,
+                `ðŸ“ Tienda: ${waStore?.name ?? ''}`,
+                `ðŸ”‘ ${invoice}`,
+                'â”â”â”â”â”â”â”â”â”â”â”â”',
+                'ðŸ“¦ *Productos:*',
                 itemLines,
-                `💰 *Total: ${price(placedSurcharge > 0 ? placedAmountDue : placedTotal)}*`,
-                '━━━━━━━━━━━━',
-                `🚚 ${fulfillLabel()}`,
-                `💳 Pago: ${payLabel}`,
+                `ðŸ’° *Total: ${price(placedSurcharge > 0 ? placedAmountDue : placedTotal)}*`,
+                'â”â”â”â”â”â”â”â”â”â”â”â”',
+                `ðŸšš ${fulfillLabel()}`,
+                `ðŸ’³ Pago: ${payLabel}`,
               ]
               const waText = encodeURIComponent(lines.join('\n'))
               return (
@@ -758,7 +760,7 @@ export function CheckoutView({
                 <div className="mt-3">
                   <label className="mb-1 block text-[12px]" style={{ color: MUTED }}>{tx.chooseStore} *</label>
                   <select value={pickupStoreId} onChange={(e) => setPickupStoreId(e.target.value)} style={inputStyle}>
-                    <option value="">—</option>
+                    <option value="">â€”</option>
                     {otherStores.map((s) => (
                       <option key={s.id} value={s.id}>{s.name}</option>
                     ))}
@@ -783,8 +785,8 @@ export function CheckoutView({
                       onChange={(e) => { setRegion(e.target.value as Region); setRegionTouched(true) }}
                       style={inputStyle}
                     >
-                      <option value="local">{tx.regionLocal} · {price(deliveryFees.localDeliveryCents)}</option>
-                      <option value="national">{tx.regionNational} · {price(deliveryFees.nationalDeliveryCents)}</option>
+                      <option value="local">{tx.regionLocal} Â· {price(deliveryFees.localDeliveryCents)}</option>
+                      <option value="national">{tx.regionNational} Â· {price(deliveryFees.nationalDeliveryCents)}</option>
                     </select>
                   </div>
 
@@ -807,7 +809,7 @@ export function CheckoutView({
                     <div className="flex-1">
                       <label className="mb-1 block text-[12px]" style={{ color: MUTED }}>{tx.timeLabel} *</label>
                       <select value={deliveryTime} onChange={(e) => setDeliveryTime(e.target.value)} style={inputStyle}>
-                        <option value="">—</option>
+                        <option value="">â€”</option>
                         {deliverySlots().map((s) => (
                           <option key={s.value} value={s.value}>{s.label}</option>
                         ))}
@@ -882,7 +884,7 @@ export function CheckoutView({
               <div className="flex flex-col gap-2">
                 {cart.items.map((item) => (
                   <div key={item.id} className="flex items-center justify-between text-[13px]">
-                    <span style={{ color: INK }}>{item.qty} × {item.name}</span>
+                    <span style={{ color: INK }}>{item.qty} Ã— {item.name}</span>
                     <span style={{ color: NAVY, fontWeight: 500 }}>{price(item.priceCents * item.qty)}</span>
                   </div>
                 ))}
@@ -930,3 +932,4 @@ export function CheckoutView({
     </div>
   )
 }
+
