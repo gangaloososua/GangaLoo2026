@@ -61,9 +61,9 @@ type Props = {
 // --- formatting helpers ------------------------------------
 
 function formatDate(iso: string | null): string {
-  if (!iso) return '—'
+  if (!iso) return 'â€”'
   const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return '—'
+  if (Number.isNaN(d.getTime())) return 'â€”'
   return d.toLocaleDateString('en-GB', {
     day: '2-digit',
     month: 'short',
@@ -79,7 +79,7 @@ function formatUSD(n: number): string {
 }
 
 function formatDOP(n: number | null): string {
-  if (n == null || n === 0) return '—'
+  if (n == null || n === 0) return 'â€”'
   return new Intl.NumberFormat('en-GB', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
@@ -349,23 +349,26 @@ export function PurchasesListTable({
                     {formatDate(r.ordered_at)}
                   </TableCell>
                   <TableCell className="font-medium">
-                    {r.supplier_name ?? <span className="text-muted-foreground">—</span>}
+                    {r.supplier_name ?? <span className="text-muted-foreground">â€”</span>}
                   </TableCell>
                   <TableCell className="max-w-[16rem] align-top">
+                    {r.order_no ? (
+                      <div className="font-medium tabular-nums">{r.order_no}</div>
+                    ) : null}
                     {r.legacy_id ? (
-                      <div className="font-medium tabular-nums">{r.legacy_id}</div>
+                      <div className="text-xs tabular-nums text-muted-foreground">{r.legacy_id}</div>
                     ) : null}
                     {r.notes ? (
                       <div className="whitespace-pre-wrap text-xs text-muted-foreground">
                         {r.notes}
                       </div>
                     ) : null}
-                    {!r.legacy_id && !r.notes ? (
-                      <span className="text-muted-foreground">—</span>
+                    {!r.order_no && !r.legacy_id && !r.notes ? (
+                      <span className="text-muted-foreground">&mdash;</span>
                     ) : null}
                   </TableCell>
                   <TableCell className="text-muted-foreground">
-                    {r.warehouse_name ?? '—'}
+                    {r.warehouse_name ?? 'â€”'}
                   </TableCell>
                   <TableCell className="text-right tabular-nums">
                     {formatUSD(r.usd_total)}
@@ -406,7 +409,7 @@ export function PurchasesListTable({
       {total > 0 && (
         <div className="flex items-center justify-between text-sm text-muted-foreground">
           <div>
-            Page {page} of {totalPages} · {total} {total === 1 ? 'order' : 'orders'}
+            Page {page} of {totalPages} Â· {total} {total === 1 ? 'order' : 'orders'}
           </div>
           <div className="flex items-center gap-2">
             <Button

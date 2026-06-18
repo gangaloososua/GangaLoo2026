@@ -61,6 +61,7 @@ export type PurchaseOrderRow = {
   completed_at: string | null
   notes: string | null
   legacy_id: string | null
+  order_no: string | null
   legacy_lot_numbers: string[] | null
   created_at: string
   updated_at: string

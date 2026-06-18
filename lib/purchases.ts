@@ -59,7 +59,7 @@ const PURCHASE_ORDER_COLUMNS =
   'official_rate_at_payment, ' +
   'dop_refund_total, refund_at_dop, refund_account_id, ' +
   'ordered_at, expected_at, paid_at_dop, received_at, completed_at, ' +
-  'notes, legacy_id, legacy_lot_numbers, ' +
+  'notes, legacy_id, legacy_lot_numbers, order_no, ' +
   'created_at, updated_at'
 
 type RawPurchaseOrder = {
@@ -87,6 +87,7 @@ type RawPurchaseOrder = {
   completed_at: string | null
   notes: string | null
   legacy_id: string | null
+  order_no: string | null
   legacy_lot_numbers: string[] | null
   created_at: string
   updated_at: string
