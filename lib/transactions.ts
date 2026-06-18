@@ -82,8 +82,8 @@ export async function fetchTransactions(
       'id, occurred_at, money_account_id, category_id, amount_cents, scope, ' +
       'description, is_manual, money_accounts(name, currency), account_categories(name, type)',
     )
-    .order('created_at', { ascending: false })
     .order('occurred_at', { ascending: false })
+    .order('created_at', { ascending: false })
     .limit(TXN_CAP)
 
   if (filters.accountId) q = q.eq('money_account_id', filters.accountId)
