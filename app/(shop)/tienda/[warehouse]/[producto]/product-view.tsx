@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useState } from 'react'
 import Link from 'next/link'
@@ -80,14 +80,14 @@ export function ProductView({
   const addToCart = () => {
     cart.add(
       warehouse.slug,
-      { id: product.id, slug: product.slug, name: product.name, imageUrl: product.images[0]?.url ?? null, priceCents: product.priceCents },
+      { id: product.id, slug: product.slug, name: product.name, imageUrl: product.images[0]?.url ?? null, priceCents: product.priceCents, maxQty: product.stock },
       qty,
     )
     setBump(true)
     window.setTimeout(() => setBump(false), 350)
   }
 
-  const shareText = `${product.name} · ${price(product.priceCents)}`
+  const shareText = `${product.name} Â· ${price(product.priceCents)}`
   const doShare = async () => {
     // Only use the OS share sheet on real mobile devices. Desktop browsers
     // often advertise navigator.share but then fail to present a sheet, so we
@@ -117,7 +117,7 @@ export function ProductView({
       setCopied(true)
       window.setTimeout(() => setCopied(false), 1500)
     } catch {
-      /* clipboard blocked — ignore */
+      /* clipboard blocked â€” ignore */
     }
   }
 
@@ -241,7 +241,7 @@ export function ProductView({
                   </button>
                   <button type="button" onClick={copyLink} className="flex items-center gap-2 px-3 py-2.5 text-left text-[13px]" style={{ color: INK }}>
                     <span style={{ color: copied ? '#1d9e75' : NAVY }}><Icon d={copied ? ICON.check : ICON.link} size={18} /></span>
-                    {copied ? (locale === 'es' ? '¡Copiado!' : 'Copied!') : (locale === 'es' ? 'Copiar enlace' : 'Copy link')}
+                    {copied ? (locale === 'es' ? 'Â¡Copiado!' : 'Copied!') : (locale === 'es' ? 'Copiar enlace' : 'Copy link')}
                   </button>
                 </div>
               </>
@@ -271,3 +271,4 @@ export function ProductView({
     </div>
   )
 }
+

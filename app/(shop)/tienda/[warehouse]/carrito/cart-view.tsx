@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useState } from 'react'
 import Link from 'next/link'
@@ -13,6 +13,12 @@ const MUTED = '#6b7280'
 
 function price(cents: number) {
   return formatDOP(cents, { decimals: 0 })
+}
+
+// A line is at its cap when its known stock (maxQty) is reached. Lines added
+// before maxQty existed have no cap, so they're never "at max".
+function atMax(item: { qty: number; maxQty?: number }): boolean {
+  return typeof item.maxQty === 'number' && item.maxQty > 0 && item.qty >= item.maxQty
 }
 
 function Icon({ d, size = 22 }: { d: string; size?: number }) {
@@ -65,7 +71,7 @@ export function CartView({
       <main className="mx-auto w-full max-w-[900px] px-4 py-6">
         <div className="mb-4 flex items-baseline gap-2">
           <h1 className="text-[22px] font-semibold" style={{ color: NAVY }}>{ts(locale, 'shop.cartTitle')}</h1>
-          <span className="text-[13px]" style={{ color: MUTED }}>· {warehouseName}</span>
+          <span className="text-[13px]" style={{ color: MUTED }}>Â· {warehouseName}</span>
         </div>
 
         {cart.items.length === 0 ? (
@@ -96,10 +102,15 @@ export function CartView({
                       <div className="flex items-center rounded-full" style={{ border: '1px solid #d7dde6' }}>
                         <button onClick={() => cart.setQty(item.id, item.qty - 1)} className="flex h-8 w-8 items-center justify-center" aria-label="-" style={{ color: NAVY }}><Icon d={ICON.minus} size={16} /></button>
                         <span className="w-7 text-center text-[14px] font-medium">{item.qty}</span>
-                        <button onClick={() => cart.setQty(item.id, item.qty + 1)} className="flex h-8 w-8 items-center justify-center" aria-label="+" style={{ color: NAVY }}><Icon d={ICON.plus} size={16} /></button>
+                        <button onClick={() => cart.setQty(item.id, item.qty + 1)} disabled={atMax(item)} className="flex h-8 w-8 items-center justify-center disabled:opacity-40" aria-label="+" style={{ color: NAVY }}><Icon d={ICON.plus} size={16} /></button>
                       </div>
                       <span className="text-[15px] font-semibold" style={{ color: NAVY }}>{price(item.priceCents * item.qty)}</span>
                     </div>
+                    {atMax(item) && typeof item.maxQty === 'number' && (
+                      <p className="mt-1 text-right text-[11px]" style={{ color: MUTED }}>
+                        {locale === 'es' ? `Solo ${item.maxQty} disponible${item.maxQty === 1 ? '' : 's'}` : `Only ${item.maxQty} in stock`}
+                      </p>
+                    )}
                   </div>
                 </div>
               ))}
@@ -121,3 +132,4 @@ export function CartView({
     </div>
   )
 }
+
