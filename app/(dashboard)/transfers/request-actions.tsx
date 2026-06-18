@@ -11,6 +11,13 @@
 // internal scroll and a pinned footer, so "Approve & send" is always reachable
 // even with many line items. The button group also wraps to full width on
 // phones (it stacks under the request details — see transfers/page.tsx).
+//
+// 2026-06-17: the approve dialog now also shows how much is ACTUALLY in the
+// source warehouse per line ("In source") and CAPS the "Send" input at the
+// lower of {requested, available}. If any line is over the available stock the
+// "Approve & send" button is disabled with a clear note — so the owner can
+// never approve more than is on hand and the engine never has to reject it with
+// a raw error.
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
@@ -42,8 +49,17 @@ export function RequestReviewButtons({ request }: { request: PendingRequest }) {
   const [note, setNote] = useState('')
   const [reason, setReason] = useState('')
   const [qtys, setQtys] = useState<Record<string, number>>(() =>
-    Object.fromEntries(request.items.map((it) => [it.id, it.qty])),
+    // Start each line at the lower of what was requested and what's actually in
+    // the source warehouse, so the default is never an impossible quantity.
+    Object.fromEntries(
+      request.items.map((it) => [it.id, Math.min(it.qty, it.qty_available)]),
+    ),
   )
+
+  // The most we can send for a line = lower of requested and available.
+  function maxSend(it: PendingRequest['items'][number]): number {
+    return Math.min(it.qty, it.qty_available)
+  }
 
   function setQty(itemId: string, max: number, raw: string) {
     const n = parseInt(raw, 10)
@@ -52,9 +68,17 @@ export function RequestReviewButtons({ request }: { request: PendingRequest }) {
   }
 
   const approvedItems = request.items
-    .map((it) => ({ productId: it.product_id, qty: qtys[it.id] ?? it.qty }))
+    .map((it) => ({ productId: it.product_id, qty: qtys[it.id] ?? 0 }))
     .filter((x) => x.qty > 0)
-  const canApprove = approvedItems.length > 0 && !submitting
+
+  // True if any line is being sent for more than its source warehouse holds.
+  // With the capped input this shouldn't happen, but it's a hard backstop that
+  // matches the create form's guard and the engine's own check.
+  const anyOverStock = request.items.some(
+    (it) => (qtys[it.id] ?? 0) > it.qty_available,
+  )
+
+  const canApprove = approvedItems.length > 0 && !anyOverStock && !submitting
 
   async function doApprove() {
     if (!canApprove) return
@@ -123,8 +147,10 @@ export function RequestReviewButtons({ request }: { request: PendingRequest }) {
             <AlertDialogTitle>Approve transfer request</AlertDialogTitle>
             <AlertDialogDescription>
               Set how much of each product to send from {request.from_warehouse_name}{' '}
-              to {request.to_warehouse_name}. Set a line to 0 to leave it out. The
-              stock leaves {request.from_warehouse_name} as soon as you approve.
+              to {request.to_warehouse_name}. You can only send what&apos;s in{' '}
+              {request.from_warehouse_name} now — &quot;In source&quot; is the limit. Set a
+              line to 0 to leave it out. The stock leaves {request.from_warehouse_name} as
+              soon as you approve.
             </AlertDialogDescription>
           </AlertDialogHeader>
 
@@ -135,35 +161,63 @@ export function RequestReviewButtons({ request }: { request: PendingRequest }) {
                   <tr className="border-b text-left text-xs text-muted-foreground">
                     <th className="py-2 pr-3 font-medium">Product</th>
                     <th className="py-2 pr-3 font-medium">Requested</th>
+                    <th className="py-2 pr-3 font-medium">In source</th>
                     <th className="py-2 font-medium">Send</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {request.items.map((it) => (
-                    <tr key={it.id} className="border-b align-top">
-                      <td className="py-2 pr-3">
-                        <div className="font-medium">{it.product_name}</div>
-                        {it.product_sku ? (
-                          <div className="text-xs text-muted-foreground">{it.product_sku}</div>
-                        ) : null}
-                      </td>
-                      <td className="py-2 pr-3 text-muted-foreground">{it.qty}</td>
-                      <td className="py-2">
-                        <Input
-                          type="number"
-                          min={0}
-                          max={it.qty}
-                          step={1}
-                          value={qtys[it.id] ?? it.qty}
-                          onChange={(e) => setQty(it.id, it.qty, e.target.value)}
-                          className="w-24"
-                        />
-                      </td>
-                    </tr>
-                  ))}
+                  {request.items.map((it) => {
+                    const cap = maxSend(it)
+                    const noneAvailable = it.qty_available <= 0
+                    const short = it.qty_available < it.qty
+                    return (
+                      <tr key={it.id} className="border-b align-top">
+                        <td className="py-2 pr-3">
+                          <div className="font-medium">{it.product_name}</div>
+                          {it.product_sku ? (
+                            <div className="text-xs text-muted-foreground">
+                              {it.product_sku}
+                            </div>
+                          ) : null}
+                        </td>
+                        <td className="py-2 pr-3 text-muted-foreground">{it.qty}</td>
+                        <td className="py-2 pr-3">
+                          {noneAvailable ? (
+                            <span className="text-rose-700">0 (none in stock)</span>
+                          ) : short ? (
+                            <span className="text-amber-700">
+                              {it.qty_available} (only this many available)
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground">
+                              {it.qty_available}
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-2">
+                          <Input
+                            type="number"
+                            min={0}
+                            max={cap}
+                            step={1}
+                            value={qtys[it.id] ?? 0}
+                            disabled={noneAvailable}
+                            onChange={(e) => setQty(it.id, cap, e.target.value)}
+                            className="w-24"
+                          />
+                        </td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>
+            {anyOverStock && (
+              <p className="text-sm text-rose-700">
+                One or more lines are set above what&apos;s in {request.from_warehouse_name}.
+                Reduce them — you can only send stock that&apos;s actually there.
+              </p>
+            )}
             <div className="space-y-1">
               <Label className="text-xs">Note (optional)</Label>
               <Textarea

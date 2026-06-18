@@ -8,6 +8,13 @@
 // Round 36a — adds the request stage. A 'requested' transfer has NO shipped
 // stock_transfer_items yet; its lines live in stock_transfer_requested_items.
 // So list counts come from the requested items until it ships (in_transit).
+//
+// 2026-06-17 — the approve screen now needs to know how much is ACTUALLY in
+// the source warehouse, so the owner can't approve more than is on hand.
+// listPendingRequests attaches qty_available per requested line, read from
+// v_inventory_current (sum of inventory_lots.qty_remaining per product +
+// warehouse) — the SAME number approve_stock_transfer consumes against, so the
+// dialog cap and the engine agree.
 
 import { createClient } from '@/lib/supabase/server'
 
@@ -54,6 +61,9 @@ export type RequestedItem = {
   product_name: string
   product_sku: string | null
   qty: number
+  // How many units are physically in the SOURCE warehouse right now (lot
+  // qty_remaining). The approve dialog caps "Send" at min(qty, qty_available).
+  qty_available: number
 }
 
 export type PendingRequest = TransferListRow & { items: RequestedItem[] }
@@ -107,7 +117,13 @@ function mapListRow(row: any): TransferListRow {
   }
 }
 
-function mapRequestedItems(row: any): RequestedItem[] {
+// availByProduct: product_id -> units on hand in the relevant SOURCE warehouse.
+// Passed in so a request's lines show the right available number; defaults to
+// 0 (treated as "none available") when a product isn't found in the source.
+function mapRequestedItems(
+  row: any,
+  availByProduct: Record<string, number> = {},
+): RequestedItem[] {
   const items = Array.isArray(row.req_items) ? row.req_items : []
   return items
     .map((it: any) => ({
@@ -116,6 +132,7 @@ function mapRequestedItems(row: any): RequestedItem[] {
       product_name: it.product?.name ?? '—',
       product_sku: it.product?.sku ?? null,
       qty: Number(it.qty) || 0,
+      qty_available: availByProduct[it.product_id as string] ?? 0,
     }))
     .sort((a: RequestedItem, b: RequestedItem) =>
       a.product_name.localeCompare(b.product_name),
@@ -141,6 +158,13 @@ export async function listTransfers(opts: {
 }
 
 // Owner/admin: all parked requests awaiting a decision, with their lines.
+//
+// Each request also gets, per line, how many units are actually in its SOURCE
+// warehouse right now (qty_available) so the approve dialog can cap "Send" and
+// the owner never approves more than is on hand. We read this from
+// v_inventory_current (the same view the product search uses, and the same
+// lot-derived number approve_stock_transfer consumes against), in ONE batched
+// query keyed by (warehouse_id, product_id).
 export async function listPendingRequests(): Promise<PendingRequest[]> {
   const supabase = await createClient()
   const { data, error } = await supabase
@@ -149,9 +173,41 @@ export async function listPendingRequests(): Promise<PendingRequest[]> {
     .eq('status', 'requested')
     .order('requested_at', { ascending: false })
   if (error) throw new Error(`listPendingRequests: ${error.message}`)
-  return (data ?? []).map((row: any) => ({
+
+  const rows = data ?? []
+
+  // Gather the distinct source warehouses and product ids across all requests
+  // so we can look up on-hand once instead of per line.
+  const warehouseIds = new Set<string>()
+  const productIds = new Set<string>()
+  for (const row of rows as any[]) {
+    if (row.from_warehouse_id) warehouseIds.add(row.from_warehouse_id as string)
+    const reqItems = Array.isArray(row.req_items) ? row.req_items : []
+    for (const it of reqItems) {
+      if (it.product_id) productIds.add(it.product_id as string)
+    }
+  }
+
+  // availByWh: warehouse_id -> { product_id -> qty_on_hand }.
+  const availByWh: Record<string, Record<string, number>> = {}
+  if (warehouseIds.size > 0 && productIds.size > 0) {
+    const { data: stock, error: stockErr } = await supabase
+      .from('v_inventory_current')
+      .select('product_id, warehouse_id, qty_on_hand')
+      .in('warehouse_id', [...warehouseIds])
+      .in('product_id', [...productIds])
+    if (stockErr) throw new Error(`listPendingRequests stock: ${stockErr.message}`)
+    for (const s of stock ?? []) {
+      const wh = s.warehouse_id as string
+      const pid = s.product_id as string
+      if (!availByWh[wh]) availByWh[wh] = {}
+      availByWh[wh][pid] = Number(s.qty_on_hand) || 0
+    }
+  }
+
+  return (rows as any[]).map((row) => ({
     ...mapListRow(row),
-    items: mapRequestedItems(row),
+    items: mapRequestedItems(row, availByWh[row.from_warehouse_id as string] ?? {}),
   }))
 }
 
