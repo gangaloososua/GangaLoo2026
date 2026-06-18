@@ -17,10 +17,14 @@
 // cumulative), computed in SQL across ALL movements. The year/month/tipo
 // filters only HIDE rows - they never recompute the saldo. The header stat
 // cards are always account-wide totals, never filter-dependent.
+//
+// Round 73a: a split payment (one receipt across several invoices) arrives as
+// ONE movement with group_size > 1 and an `invoices` list. Such a row is
+// tappable and expands to show the invoice numbers it covered.
 
 import * as React from 'react'
 import { useRouter } from 'next/navigation'
-import { Receipt } from 'lucide-react'
+import { Receipt, ChevronRight, ChevronDown } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -125,6 +129,9 @@ export function AccountStatementModal({ accountId, accountName }: Props) {
   const [year, setYear] = React.useState<string>('all')
   const [month, setMonth] = React.useState<string>('all')
 
+  // Expanded grouped rows (split payments).
+  const [expanded, setExpanded] = React.useState<Set<string>>(new Set())
+
   // Adjust-saldo panel.
   const [adjustOpen, setAdjustOpen] = React.useState(false)
   const [mode, setMode] = React.useState<AdjustMode>('opening')
@@ -188,6 +195,15 @@ export function AccountStatementModal({ accountId, accountName }: Props) {
       return true
     })
   }, [data, tipo, year, month])
+
+  function toggleRow(id: string) {
+    setExpanded((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
 
   function resetAdjust() {
     setAdjustOpen(false)
@@ -465,30 +481,63 @@ export function AccountStatementModal({ accountId, accountName }: Props) {
                 ) : (
                   visibleMovements.map((m) => {
                     const isIn = m.amount_cents >= 0
+                    const grouped = m.group_size > 1
+                    const isOpen = expanded.has(m.id)
                     return (
-                      <TableRow key={m.id}>
-                        <TableCell className="whitespace-nowrap text-muted-foreground">
-                          {formatDate(m.occurred_at)}
-                        </TableCell>
-                        <TableCell
-                          className="truncate font-medium"
-                          title={m.description ?? undefined}
+                      <React.Fragment key={m.id}>
+                        <TableRow
+                          className={grouped ? 'cursor-pointer' : undefined}
+                          onClick={grouped ? () => toggleRow(m.id) : undefined}
                         >
-                          {m.description ?? '—'}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline">{m.tipo}</Badge>
-                        </TableCell>
-                        <TableCell className="whitespace-nowrap text-right tabular-nums text-emerald-600 dark:text-emerald-400">
-                          {isIn ? moneyAbs(m.amount_cents, currency) : '—'}
-                        </TableCell>
-                        <TableCell className="whitespace-nowrap text-right tabular-nums text-red-600 dark:text-red-400">
-                          {!isIn ? moneyAbs(m.amount_cents, currency) : '—'}
-                        </TableCell>
-                        <TableCell className="whitespace-nowrap text-right font-medium tabular-nums">
-                          {money(m.saldo_cents, currency)}
-                        </TableCell>
-                      </TableRow>
+                          <TableCell className="whitespace-nowrap text-muted-foreground">
+                            {formatDate(m.occurred_at)}
+                          </TableCell>
+                          <TableCell
+                            className="truncate font-medium"
+                            title={
+                              grouped
+                                ? m.invoices.join(', ')
+                                : m.description ?? undefined
+                            }
+                          >
+                            <span className="flex items-center gap-1.5">
+                              {grouped &&
+                                (isOpen ? (
+                                  <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" />
+                                ) : (
+                                  <ChevronRight className="size-3.5 shrink-0 text-muted-foreground" />
+                                ))}
+                              <span className="truncate">
+                                {grouped
+                                  ? `Pago recibido · ${m.group_size} facturas`
+                                  : m.description ?? '—'}
+                              </span>
+                            </span>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline">{m.tipo}</Badge>
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap text-right tabular-nums text-emerald-600 dark:text-emerald-400">
+                            {isIn ? moneyAbs(m.amount_cents, currency) : '—'}
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap text-right tabular-nums text-red-600 dark:text-red-400">
+                            {!isIn ? moneyAbs(m.amount_cents, currency) : '—'}
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap text-right font-medium tabular-nums">
+                            {money(m.saldo_cents, currency)}
+                          </TableCell>
+                        </TableRow>
+
+                        {grouped && isOpen && (
+                          <TableRow className="bg-muted/30">
+                            <TableCell />
+                            <TableCell colSpan={5} className="text-xs text-muted-foreground">
+                              <span className="font-medium">Facturas pagadas:</span>{' '}
+                              {m.invoices.join(' · ')}
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </React.Fragment>
                     )
                   })
                 )}

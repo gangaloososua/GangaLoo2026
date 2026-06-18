@@ -13,9 +13,13 @@
 // the account currently shows on its card. These two can differ (migration
 // drift) - stage 2 reconciles them by letting the owner set the opening
 // (the "starting saldo"), which also re-syncs the stored balance.
-
+//
+// Round 73a: a SPLIT PAYMENT (one receipt allocated across several invoices)
+// is collapsed by account_statement() into ONE movement. `group_size` is how
+// many invoices it covered (1 = a normal single movement) and `invoices` lists
+// their numbers, so the UI can show one deposit line that expands to the
+// invoices it paid.
 import { createClient } from '@/lib/supabase/server'
-
 export type StatementTipo =
   | 'Cobros'
   | 'Transacciones'
@@ -23,7 +27,6 @@ export type StatementTipo =
   | 'Transferencias'
   | 'Comisiones'
   | 'Courier'
-
 export type StatementMovement = {
   id: string
   occurred_at: string
@@ -34,14 +37,16 @@ export type StatementMovement = {
   /** Running balance after this movement (opening + cumulative to here). */
   saldo_cents: number
   is_manual: boolean
+  /** How many ledger rows were collapsed into this movement (1 = normal). */
+  group_size: number
+  /** Invoice numbers covered by a grouped receipt (empty for non-sale rows). */
+  invoices: string[]
 }
-
 export type StatementDirection = {
   count: number
   /** entradas: positive; salidas: negative (natural ledger sign). */
   total_cents: number
 }
-
 export type AccountStatement = {
   account: {
     id: string
@@ -60,7 +65,6 @@ export type AccountStatement = {
   salidas: StatementDirection
   movements: StatementMovement[]
 }
-
 export async function fetchAccountStatement(
   accountId: string,
 ): Promise<AccountStatement> {
