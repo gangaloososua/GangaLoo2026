@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
@@ -297,7 +297,7 @@ export function StorePage({ catalog, stores = [] }: { catalog: StoreCatalog; sto
     setVisible(PAGE)
   }
   const handleAdd = (p: StoreProduct) => {
-    cart.add(warehouse.slug, { id: p.id, slug: p.slug, name: p.name, imageUrl: p.imageUrl, priceCents: p.priceCents })
+    cart.add(warehouse.slug, { id: p.id, slug: p.slug, name: p.name, imageUrl: p.imageUrl, priceCents: p.priceCents, maxQty: p.stock })
     setBump(true)
     window.setTimeout(() => setBump(false), 350)
   }
@@ -1133,3 +1133,4 @@ function MenuLink({ href, d, label, badge, onClose }: { href: string; d: string;
     </Link>
   )
 }
+
