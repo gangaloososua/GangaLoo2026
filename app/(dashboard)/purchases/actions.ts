@@ -367,7 +367,7 @@ export async function correctSupplierPayment(
 }
 
 // ---------------------------------------------------------------------------
-// editPendingPurchaseCosts (round-38a) — narrow shipping/tax/discount only.
+// editPendingPurchaseCosts (round-38a) â€” narrow shipping/tax/discount only.
 // Kept for back-compat. The UI now uses updatePendingPurchaseOrder (round-40)
 // which supersedes this.
 // ---------------------------------------------------------------------------
@@ -407,7 +407,7 @@ export async function editPendingPurchaseCosts(
 }
 
 // ---------------------------------------------------------------------------
-// updatePendingPurchaseOrder (round-40) — FULL edit of a pending PO.
+// updatePendingPurchaseOrder (round-40) â€” FULL edit of a pending PO.
 // Items (qty/price/product, add/remove), supplier, warehouse, dates, notes,
 // and the three USD adjustments. Calls update_pending_purchase_order RPC which
 // rejects anything that isn't strictly pending + unpaid + no transport.
@@ -570,7 +570,7 @@ export async function completePaymentRecord(
 }
 
 // ---------------------------------------------------------------------------
-// addSupplierPayment (round-41a) — record ONE part-payment toward a pending PO.
+// addSupplierPayment (round-41a) â€” record ONE part-payment toward a pending PO.
 // The order stays 'pending' until the parts cover the USD total, then the DB
 // flips it to 'paid_supplier' on its own and locks in the landed cost.
 // ---------------------------------------------------------------------------
@@ -583,6 +583,8 @@ export type AddSupplierPaymentInput = {
   supplierPaymentAccountId: string
   paidAt: string // ISO
   categoryId: string
+  // round-75a: DOP-per-EUR rate, only used when paying from a EUR account
+  eurRate?: number
 }
 
 export async function addSupplierPayment(
@@ -612,6 +614,7 @@ export async function addSupplierPayment(
     p_supplier_payment_account_id: input.supplierPaymentAccountId,
     p_paid_at: input.paidAt,
     p_category_id: input.categoryId,
+    p_eur_rate: input.eurRate ?? null,
   })
   if (error) return { ok: false, error: error.message }
 
@@ -621,7 +624,7 @@ export async function addSupplierPayment(
 }
 
 // ---------------------------------------------------------------------------
-// removeSupplierPayment (round-41a) — undo one part-payment while still pending.
+// removeSupplierPayment (round-41a) â€” undo one part-payment while still pending.
 // Reverses its ledger line and deletes the part-payment row.
 // ---------------------------------------------------------------------------
 
@@ -646,7 +649,7 @@ export async function removeSupplierPayment(
 
 
 // ---------------------------------------------------------------------------
-// waiveSupplierRemainder (round-49a) — forgive a small uncovered remainder on a
+// waiveSupplierRemainder (round-49a) â€” forgive a small uncovered remainder on a
 // partly-paid pending order and finalize it to 'paid_supplier' using the pesos
 // actually paid. Invents no payment and posts no extra ledger line. Owner-only.
 // ---------------------------------------------------------------------------

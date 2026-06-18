@@ -49,7 +49,7 @@ export type SaleListResult = {
 // ---------------------------------------------------------------------------
 // listSales: paginated, filtered list of POS sales
 // ---------------------------------------------------------------------------
-// Round 9 is POS-only — source is hardcoded to 'pos'. Online Orders gets
+// Round 9 is POS-only Ã¢â‚¬â€ source is hardcoded to 'pos'. Online Orders gets
 // its own future module.
 //
 // The query joins to profiles (twice: customer + seller) and warehouses,
@@ -115,7 +115,7 @@ export async function listSales(filters: SaleFilters = {}): Promise<SaleListResu
     paid_cents: row.paid_cents,
     customer_name: row.customer?.full_name ?? null,
     seller_name: row.seller?.full_name ?? null,
-    warehouse_name: row.warehouse?.name ?? '—',
+    warehouse_name: row.warehouse?.name ?? 'Ã¢â‚¬â€',
     item_count: Array.isArray(row.sale_items) ? row.sale_items.length : 0,
   }))
 
@@ -318,7 +318,7 @@ export async function getSale(id: string): Promise<SaleDetail | null> {
   const items: SaleDetailItem[] = ((sale as any).items ?? []).map((it: any) => ({
     id: it.id,
     product_id: it.product_id,
-    product_name: it.product?.name ?? '—',
+    product_name: it.product?.name ?? 'Ã¢â‚¬â€',
     product_sku: it.product?.sku ?? null,
     qty: Number(it.qty),
     unit_price_cents: it.unit_price_cents,
@@ -347,7 +347,7 @@ export async function getSale(id: string): Promise<SaleDetail | null> {
         id: c.id,
         sale_item_id: c.sale_item_id,
         earner_id: c.earner_id,
-        earner_name: c.earner?.full_name ?? '—',
+        earner_name: c.earner?.full_name ?? 'Ã¢â‚¬â€',
         earner_role: c.earner_role,
         percent: Number(c.percent),
         amount_cents: c.amount_cents,
@@ -360,7 +360,7 @@ export async function getSale(id: string): Promise<SaleDetail | null> {
     method: p.method,
     amount_cents: p.amount_cents,
     money_account_id: p.money_account_id,
-    money_account_name: p.account?.name ?? '—',
+    money_account_name: p.account?.name ?? 'Ã¢â‚¬â€',
     paid_at: p.paid_at,
     reference: p.reference,
   }))
@@ -395,7 +395,7 @@ export async function getSale(id: string): Promise<SaleDetail | null> {
     source_warehouse_id: s.source_warehouse_id,
     source_warehouse_name: s.source_wh?.name ?? null,
     fulfillment_warehouse_id: s.fulfillment_warehouse_id,
-    fulfillment_warehouse_name: s.fulfillment_wh?.name ?? '—',
+    fulfillment_warehouse_name: s.fulfillment_wh?.name ?? 'Ã¢â‚¬â€',
     fulfillment_method: s.fulfillment_method,
     is_mixed_warehouse: s.is_mixed_warehouse,
     subtotal_cents: s.subtotal_cents,
@@ -430,13 +430,14 @@ export type MoneyAccount = {
   id: string
   name: string
   kind: 'bank' | 'cash' | 'card' | 'digital' | 'credit_line'
+  currency: string
 }
 
 export async function listMoneyAccounts(): Promise<MoneyAccount[]> {
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('money_accounts')
-    .select('id, name, kind')
+    .select('id, name, kind, currency')
     .eq('is_active', true)
     .order('kind')
     .order('name')
@@ -498,7 +499,7 @@ export async function getCurrentSeller(): Promise<SellerOption | null> {
 }
 
 // ============================================================
-// 9.7 — product search for the POS create flow
+// 9.7 Ã¢â‚¬â€ product search for the POS create flow
 // ============================================================
 
 export type ProductSearchResult = {
@@ -520,7 +521,7 @@ export type ProductSearchResult = {
  * so we can attach the warehouse-specific override price and the
  * warehouse-specific stock (already lot-rolled-up via v_inventory_current).
  *
- * Does NOT resolve the default unit price — that depends on the customer's
+ * Does NOT resolve the default unit price Ã¢â‚¬â€ that depends on the customer's
  * club tier, which the cart owns. Returns all three price candidates and
  * lets the cart pick at add-time.
  */
@@ -534,7 +535,7 @@ export async function searchProductsForSale(opts: {
   const categoryId = opts.categoryId ?? null
   const limit = opts.limit ?? (categoryId ? 100 : 20)
 
-  // Sanitize for PostgREST .or() — strip chars that would break the
+  // Sanitize for PostgREST .or() Ã¢â‚¬â€ strip chars that would break the
   // filter expression, then collapse whitespace.
   const q = query
     .replace(/[,'"()*%]/g, ' ')

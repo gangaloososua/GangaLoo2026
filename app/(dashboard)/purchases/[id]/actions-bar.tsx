@@ -74,6 +74,9 @@ type Props = {
   // round-41a: running totals for the part-payment summary in the Pay dialog.
   usdTotalForPay?: number
   usdCoveredForPay?: number
+  // round-75a: latest monthly rates, to auto-fill the EUR / USD payment fields.
+  monthlyEurRate?: number | null
+  monthlyUsdRate?: number | null
 }
 
 function alreadyReceivedQty(lineId: string, lotTrail: Map<string, LotTrailEntry[]>): number {
@@ -126,6 +129,8 @@ export function PurchaseActionsBar({
   hasTransport,
   usdTotalForPay,
   usdCoveredForPay,
+  monthlyEurRate,
+  monthlyUsdRate,
 }: Props) {
   const router = useRouter()
 
@@ -141,6 +146,12 @@ export function PurchaseActionsBar({
   const [waiveOpen, setWaiveOpen] = useState(false)
 
   const catBlocks = useMemo(() => buildExpenseBlocks(categories), [categories])
+
+  // round-75a: helper to read the currency of a chosen money account.
+  const currencyOf = (accountId: string): string => {
+    const a = moneyAccounts.find((m) => m.id === accountId)
+    return (a?.currency ?? 'DOP').toUpperCase()
+  }
 
   // ---- Receive dialog state ----
   const initialReceipts = useMemo(() => {
@@ -198,9 +209,47 @@ export function PurchaseActionsBar({
   const [payOfficial, setPayOfficial]   = useState<string>('')
   const [payAccount,  setPayAccount]    = useState<string>('')
   const [payCategory, setPayCategory]   = useState<string>('')
+  const [payEurRate,  setPayEurRate]    = useState<string>('')   // round-75a: DOP per EUR
   const [payAt,       setPayAt]         = useState<string>(
     toLocalDatetimeInputValue(new Date()),
   )
+
+  // round-75a: is the chosen pay account a EUR account?
+  const payIsEur = payAccount.length > 0 && currencyOf(payAccount) === 'EUR'
+
+  // round-75a: when the account changes, auto-fill the rates from the monthly
+  // settings so the owner barely types. We only set a field if it is still empty,
+  // so we never clobber something already typed.
+  function onPayAccountChange(accountId: string) {
+    setPayAccount(accountId)
+    const cur = currencyOf(accountId)
+    if (cur === 'EUR') {
+      if (!payEurRate && monthlyEurRate && monthlyEurRate > 0) {
+        setPayEurRate(String(monthlyEurRate))
+      }
+      // for EUR, the USD rate (exchange/official) drives the order coverage
+      if (!payExchange && monthlyUsdRate && monthlyUsdRate > 0) {
+        setPayExchange(String(monthlyUsdRate))
+      }
+      if (!payOfficial && monthlyUsdRate && monthlyUsdRate > 0) {
+        setPayOfficial(String(monthlyUsdRate))
+      }
+    } else if (cur === 'USD') {
+      if (!payExchange && monthlyUsdRate && monthlyUsdRate > 0) {
+        setPayExchange(String(monthlyUsdRate))
+      }
+      if (!payOfficial && monthlyUsdRate && monthlyUsdRate > 0) {
+        setPayOfficial(String(monthlyUsdRate))
+      }
+    }
+  }
+
+  // round-75a: the peso figure that will be sent as dopAmount.
+  //   EUR account  -> EUR paid x DOP-per-EUR
+  //   DOP / USD     -> the typed number is already the peso total (unchanged)
+  const payPesoFigure = payIsEur
+    ? Number(payDopTotal) * Number(payEurRate || '0')
+    : Number(payDopTotal)
 
   const payValid =
     Number(payDopTotal) > 0 &&
@@ -208,7 +257,8 @@ export function PurchaseActionsBar({
     Number(payOfficial) > 0 &&
     payAccount.length > 0 &&
     payCategory.length > 0 &&
-    payAt.length > 0
+    payAt.length > 0 &&
+    (!payIsEur || Number(payEurRate) > 0)
 
   // ---- Correct payment dialog state (Round 24g) ----
   const [corDopTotal, setCorDopTotal] = useState<string>('')
@@ -291,9 +341,15 @@ export function PurchaseActionsBar({
   async function handleMarkPaidSupplier() {
     if (!payValid) return
     setBusyAction('paid')
+    // round-75a: for a EUR account the peso figure is EUR x DOP-per-EUR; for
+    // DOP/USD accounts it is the typed number unchanged. The USD rate
+    // (payExchange) is what tells the order how much of its USD total this covers.
+    const pesoAmount = payIsEur
+      ? Number(payDopTotal) * Number(payEurRate)
+      : Number(payDopTotal)
     const payload = {
       orderId,
-      dopPaidTotal:          Number(payDopTotal),
+      dopPaidTotal:          pesoAmount,
       exchangeRate:          Number(payExchange),
       officialRateAtPayment: Number(payOfficial),
       supplierPaymentAccountId: payAccount,
@@ -303,12 +359,13 @@ export function PurchaseActionsBar({
     const res = status === 'pending'
       ? await addSupplierPayment({
           orderId,
-          dopAmount:                Number(payDopTotal),
+          dopAmount:                pesoAmount,
           exchangeRate:             Number(payExchange),
           officialRateAtPayment:    Number(payOfficial),
           supplierPaymentAccountId: payAccount,
           paidAt:                   new Date(payAt).toISOString(),
           categoryId:               payCategory,
+          eurRate:                  payIsEur ? Number(payEurRate) : undefined,
         })
       : await paySupplierForReceived(payload)
     if (!res.ok) { toast.error(res.error); setBusyAction(null); return }
@@ -523,7 +580,9 @@ export function PurchaseActionsBar({
 
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div className="space-y-1.5">
-                <Label htmlFor="pay-dop-total">DOP paid total</Label>
+                <Label htmlFor="pay-dop-total">
+                  {payIsEur ? 'EUR paid' : 'DOP paid total'}
+                </Label>
                 <Input
                   id="pay-dop-total"
                   type="number"
@@ -533,10 +592,15 @@ export function PurchaseActionsBar({
                   onChange={(e) => setPayDopTotal(e.target.value)}
                   placeholder="0.00"
                 />
+                {payIsEur && (
+                  <p className="text-xs text-muted-foreground">
+                    The euros that left this account for this payment.
+                  </p>
+                )}
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="pay-account">From account</Label>
-                <Select value={payAccount} onValueChange={setPayAccount}>
+                <Select value={payAccount} onValueChange={onPayAccountChange}>
                   <SelectTrigger id="pay-account">
                     <SelectValue placeholder="Pick an account..." />
                   </SelectTrigger>
@@ -544,11 +608,34 @@ export function PurchaseActionsBar({
                     {moneyAccounts.map((a) => (
                       <SelectItem key={a.id} value={a.id}>
                         {a.name}
+                        {a.currency && a.currency.toUpperCase() !== 'DOP'
+                          ? ` (${a.currency.toUpperCase()})`
+                          : ''}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
+
+              {/* round-75a: DOP-per-EUR rate, only for EUR accounts */}
+              {payIsEur && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="pay-eur-rate">Rate (DOP per EUR)</Label>
+                  <Input
+                    id="pay-eur-rate"
+                    type="number"
+                    min="0"
+                    step="0.0001"
+                    value={payEurRate}
+                    onChange={(e) => setPayEurRate(e.target.value)}
+                    placeholder="0.0000"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    How many pesos one euro is worth (this month&apos;s rate, editable).
+                  </p>
+                </div>
+              )}
+
               <div className="space-y-1.5">
                 <Label htmlFor="pay-category">Expense category</Label>
                 <Select value={payCategory} onValueChange={setPayCategory}>
@@ -584,7 +671,9 @@ export function PurchaseActionsBar({
                   placeholder="0.0000"
                 />
                 <p className="text-xs text-muted-foreground">
-                  The negotiated rate you paid at.
+                  {payIsEur
+                    ? 'Used to work out how much of the USD order this payment covers.'
+                    : 'The negotiated rate you paid at.'}
                 </p>
               </div>
               <div className="space-y-1.5">
@@ -602,6 +691,20 @@ export function PurchaseActionsBar({
                   Market reference at payment time. Used to book the bank fee.
                 </p>
               </div>
+
+              {/* round-75a: live preview of what gets recorded for a EUR payment */}
+              {payIsEur && Number(payDopTotal) > 0 && Number(payEurRate) > 0 && (
+                <div className="md:col-span-2 rounded-md border bg-muted/30 px-3 py-2 text-xs tabular-nums text-foreground">
+                  Leaves this account: &euro;{Number(payDopTotal).toFixed(2)}
+                  {' '}&middot; Peso cost: RD${payPesoFigure.toFixed(2)}
+                  {Number(payExchange) > 0 && (
+                    <>
+                      {' '}&middot; Covers ${ (payPesoFigure / Number(payExchange)).toFixed(2) } of the order
+                    </>
+                  )}
+                </div>
+              )}
+
               <div className="space-y-1.5 md:col-span-2">
                 <Label htmlFor="pay-at">Paid at</Label>
                 <Input

@@ -31,6 +31,7 @@ import {
 
 import { listMoneyAccounts } from '@/lib/sales'
 import { listAccountCategories } from '@/lib/transactions'
+import { createClient } from '@/lib/supabase/server'
 
 import { PurchaseDetailLineRow } from './detail-line-row'
 import { PurchaseActionsBar } from './actions-bar'
@@ -41,9 +42,9 @@ export const dynamic = 'force-dynamic'
 // ---- formatting helpers -----------------------------------
 
 function formatDate(iso: string | null | undefined): string {
-  if (!iso) return '—'
+  if (!iso) return 'â€”'
   const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return '—'
+  if (Number.isNaN(d.getTime())) return 'â€”'
   return d.toLocaleDateString('en-GB', {
     day: '2-digit',
     month: 'short',
@@ -179,6 +180,21 @@ export default async function PurchaseDetailPage({
   ])
   const expenseCategories = categories.filter((c) => c.type === 'expense')
 
+  // round-75a: latest monthly EUR + USD rates, to auto-fill the EUR payment dialog
+  const sb = await createClient()
+  const { data: rateRows } = await sb
+    .from('monthly_exchange_rates')
+    .select('currency, rate, year, month')
+    .in('currency', ['EUR', 'USD'])
+    .order('year', { ascending: false })
+    .order('month', { ascending: false })
+  const latestRate = (cur: string): number | null => {
+    const r = (rateRows ?? []).find((x) => String(x.currency).toUpperCase() === cur)
+    return r && Number(r.rate) > 0 ? Number(r.rate) : null
+  }
+  const monthlyEurRate = latestRate('EUR')
+  const monthlyUsdRate = latestRate('USD')
+
   const stored = order.status
   const derived = derivedStatus(order)
   const mismatch = statusMismatch(order)
@@ -193,7 +209,7 @@ export default async function PurchaseDetailPage({
     : null
   const storedRate = order.exchange_rate && order.exchange_rate > 0 ? order.exchange_rate : null
 
-  // round-41a: partial payments — dollars covered so far and what's still open.
+  // round-41a: partial payments â€” dollars covered so far and what's still open.
   const usdCovered = supplierPayments.reduce((s, p) => s + p.usd_covered, 0)
   const usdRemaining = Math.max(usdTotal - usdCovered, 0)
   const hasPartialPayments = supplierPayments.length > 0
@@ -230,7 +246,7 @@ export default async function PurchaseDetailPage({
             Purchase <span className="font-mono text-xl">{headerLabel}</span>
           </h1>
           <p className="text-sm text-muted-foreground">
-            {order.supplier_name ?? 'Unknown supplier'} ·{' '}
+            {order.supplier_name ?? 'Unknown supplier'} Â·{' '}
             <span className="tabular-nums">{formatDate(order.ordered_at)}</span>
           </p>
         </div>
@@ -248,6 +264,8 @@ export default async function PurchaseDetailPage({
             hasTransport={transport.allocation_count > 0}
             usdTotalForPay={usdTotal}
             usdCoveredForPay={usdCovered}
+            monthlyEurRate={monthlyEurRate}
+            monthlyUsdRate={monthlyUsdRate}
           />
         </div>
       </div>
@@ -359,15 +377,15 @@ export default async function PurchaseDetailPage({
                   </div>
                   <div className="flex justify-between pt-1.5 border-t font-semibold">
                     <dt>Effective rate</dt>
-                    <dd className="tabular-nums">{effectiveRate != null ? formatNumber(effectiveRate, 4) : '—'}</dd>
+                    <dd className="tabular-nums">{effectiveRate != null ? formatNumber(effectiveRate, 4) : 'â€”'}</dd>
                   </div>
                   <div className="flex justify-between text-xs text-muted-foreground">
                     <dt>Stored rate</dt>
-                    <dd className="tabular-nums">{storedRate != null ? formatNumber(storedRate, 4) : '—'}</dd>
+                    <dd className="tabular-nums">{storedRate != null ? formatNumber(storedRate, 4) : 'â€”'}</dd>
                   </div>
                   <div className="flex justify-between text-xs text-muted-foreground">
                     <dt>Official rate at payment</dt>
-                    <dd className="tabular-nums">{officialRate != null ? formatNumber(officialRate, 4) : '—'}</dd>
+                    <dd className="tabular-nums">{officialRate != null ? formatNumber(officialRate, 4) : 'â€”'}</dd>
                   </div>
                   <div className="flex justify-between pt-1.5 text-xs">
                     <dt className="text-muted-foreground">Paid on</dt>
@@ -381,7 +399,7 @@ export default async function PurchaseDetailPage({
                       </div>
                       <div className="flex justify-between text-xs">
                         <dt className="text-muted-foreground">To</dt>
-                        <dd>{order.refund_account_name ?? '—'}</dd>
+                        <dd>{order.refund_account_name ?? 'â€”'}</dd>
                       </div>
                       <div className="flex justify-between text-xs">
                         <dt className="text-muted-foreground">Refunded on</dt>
@@ -452,8 +470,8 @@ export default async function PurchaseDetailPage({
                         {transport.allocations.map((a) => (
                           <TableRow key={a.allocation_id}>
                             <TableCell className="text-xs tabular-nums">{formatDate(a.paid_at)}</TableCell>
-                            <TableCell className="text-xs">{a.courier_name ?? '—'}</TableCell>
-                            <TableCell className="text-xs text-muted-foreground">{a.money_account_name ?? '—'}</TableCell>
+                            <TableCell className="text-xs">{a.courier_name ?? 'â€”'}</TableCell>
+                            <TableCell className="text-xs text-muted-foreground">{a.money_account_name ?? 'â€”'}</TableCell>
                             <TableCell className="text-xs text-right tabular-nums">{formatNumber(a.amount_dop)}</TableCell>
                           </TableRow>
                         ))}
@@ -475,7 +493,7 @@ export default async function PurchaseDetailPage({
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base">
-            Items <span className="text-sm font-normal text-muted-foreground">· {items.length}</span>
+            Items <span className="text-sm font-normal text-muted-foreground">Â· {items.length}</span>
           </CardTitle>
         </CardHeader>
         <CardContent>
