@@ -8,6 +8,44 @@
 
 import { createClient } from '@/lib/supabase/server'
 
+// --- ID batching ------------------------------------------------------------
+// PostgREST sends `.in('col', ids)` as a URL query, and a URL has a finite
+// length. Once the visible-product list grew past a few hundred ids, a single
+// `.in(..., ids)` request silently returned empty (no error thrown) -> every
+// product read as out-of-stock -> the whole grid went blank. To stay safe at
+// any catalogue size we split id lists into batches and merge the results.
+//
+// 200 ids/batch keeps each request comfortably small (each id is a 36-char
+// UUID). Batches run concurrently, so this is no slower in practice.
+const ID_BATCH = 200
+
+function chunkIds(ids: string[], size: number = ID_BATCH): string[][] {
+  if (ids.length <= size) return ids.length ? [ids] : []
+  const out: string[][] = []
+  for (let i = 0; i < ids.length; i += size) out.push(ids.slice(i, i + size))
+  return out
+}
+
+// Run `query(batch)` for each chunk of `ids` and concatenate the rows. The
+// callback receives one batch of ids and returns a Supabase query (a thenable
+// that resolves to { data, error }). Throws if any batch errors, matching the
+// original single-request behaviour.
+async function fetchByIds<Row>(
+  ids: string[],
+  query: (batch: string[]) => PromiseLike<{ data: Row[] | null; error: unknown }>,
+): Promise<Row[]> {
+  const batches = chunkIds(ids)
+  if (batches.length === 0) return []
+  const results = await Promise.all(batches.map((batch) => query(batch)))
+  const rows: Row[] = []
+  for (const res of results) {
+    if (res.error) throw res.error
+    if (res.data) rows.push(...res.data)
+  }
+  return rows
+}
+// ---------------------------------------------------------------------------
+
 export type StoreWarehouse = {
   id: string
   name: string // cleaned display name, e.g. "Maranatha"
@@ -83,7 +121,7 @@ export type StoreWithDeals = StoreWarehouse & {
 }
 
 function cleanName(raw: string): string {
-  return raw.replace(/^\s*\d+\s*[-–—]\s*/, '').trim()
+  return raw.replace(/^\s*\d+\s*[-\u2013\u2014]\s*/, '').trim()
 }
 
 function slugify(s: string): string {
@@ -140,13 +178,21 @@ export async function listStoreWarehousesWithDeals(): Promise<StoreWithDeals[]> 
   const productIds = [...new Set(featured.map((p) => p.product_id))]
   const nameById = new Map<string, { name: string; slug: string; base: number; img: string | null }>()
   if (productIds.length > 0) {
-    const { data: prods } = await supabase
-      .from('store_products')
-      .select('id, name, slug, price_cents, primary_image_url')
-      .in('id', productIds)
-      .eq('is_active', true)
-      .eq('visible_in_store', true)
-    for (const p of prods ?? []) {
+    const prods = await fetchByIds<{
+      id: string
+      name: string
+      slug: string
+      price_cents: number
+      primary_image_url: string | null
+    }>(productIds, (batch) =>
+      supabase
+        .from('store_products')
+        .select('id, name, slug, price_cents, primary_image_url')
+        .in('id', batch)
+        .eq('is_active', true)
+        .eq('visible_in_store', true),
+    )
+    for (const p of prods) {
       nameById.set(p.id, { name: p.name, slug: p.slug, base: p.price_cents, img: p.primary_image_url })
     }
   }
@@ -160,13 +206,19 @@ export async function listStoreWarehousesWithDeals(): Promise<StoreWithDeals[]> 
 
       // Per-store price overrides for the deal products in this store.
       const ids = [...new Set(relevant.map((r) => r.product_id))]
-      const { data: settings } = await supabase
-        .from('store_product_settings')
-        .select('product_id, is_visible, price_override_cents')
-        .eq('warehouse_id', store.id)
-        .in('product_id', ids)
+      const settings = await fetchByIds<{
+        product_id: string
+        is_visible: boolean
+        price_override_cents: number | null
+      }>(ids, (batch) =>
+        supabase
+          .from('store_product_settings')
+          .select('product_id, is_visible, price_override_cents')
+          .eq('warehouse_id', store.id)
+          .in('product_id', batch),
+      )
       const settingByProduct = new Map(
-        (settings ?? []).map((s) => [s.product_id, s]),
+        settings.map((s) => [s.product_id, s]),
       )
 
       const seen = new Set<string>()
@@ -252,45 +304,63 @@ export async function fetchStoreCatalog(
 
   const ids = products.map((p) => p.id)
 
-  // WAVE 1 — every lookup that only needs the product ids runs concurrently
+  // WAVE 1 - every lookup that only needs the product ids runs concurrently
   // (was previously one-after-another). Same data, far less waiting per switch.
-  const [
-    { data: whSettings },
-    { data: stockRows },
-    { data: dealRows },
-    { data: primaryLinks },
-    { data: pavRows },
-  ] = await Promise.all([
-    supabase
-      .from('store_product_settings')
-      .select('product_id, is_visible, price_override_cents')
-      .eq('warehouse_id', warehouse.id)
-      .in('product_id', ids),
-    supabase
-      .from('store_inventory')
-      .select('product_id, qty_on_hand')
-      .eq('warehouse_id', warehouse.id)
-      .in('product_id', ids),
-    // Active, in-window promotions for this store. Round 62: store_promotions
-    // now exposes ALL active promotions (not only featured daily/weekly ones);
-    // warehouse_id is null for "all stores" or a specific store id. A plain
-    // promotion (deal_slot null) lowers the price but is NOT a featured deal.
-    supabase
-      .from('store_promotions')
-      .select('product_id, warehouse_id, deal_slot, delta_percent, ends_at, priority')
-      .or(`warehouse_id.is.null,warehouse_id.eq.${warehouse.id}`)
-      .in('product_id', ids),
-    supabase
-      .from('store_product_categories')
-      .select('product_id, category_id')
-      .in('product_id', ids)
-      .eq('is_primary', true),
-    // Attribute assignments for these products (Stage 4 store views).
-    supabase
-      .from('store_product_attribute_values')
-      .select('product_id, attribute_value_id')
-      .in('product_id', ids),
-  ])
+  // Each lookup is now batched (fetchByIds) so a large product list can never
+  // overflow a single request and silently return empty.
+  const [whSettings, stockRows, dealRows, primaryLinks, pavRows] =
+    await Promise.all([
+      fetchByIds<{
+        product_id: string
+        is_visible: boolean
+        price_override_cents: number | null
+      }>(ids, (batch) =>
+        supabase
+          .from('store_product_settings')
+          .select('product_id, is_visible, price_override_cents')
+          .eq('warehouse_id', warehouse.id)
+          .in('product_id', batch),
+      ),
+      fetchByIds<{ product_id: string; qty_on_hand: number }>(ids, (batch) =>
+        supabase
+          .from('store_inventory')
+          .select('product_id, qty_on_hand')
+          .eq('warehouse_id', warehouse.id)
+          .in('product_id', batch),
+      ),
+      // Active, in-window promotions for this store. Round 62: store_promotions
+      // now exposes ALL active promotions (not only featured daily/weekly ones);
+      // warehouse_id is null for "all stores" or a specific store id. A plain
+      // promotion (deal_slot null) lowers the price but is NOT a featured deal.
+      fetchByIds<{
+        product_id: string
+        warehouse_id: string | null
+        deal_slot: 'daily' | 'weekly' | null
+        delta_percent: number | null
+        ends_at: string | null
+        priority: number | null
+      }>(ids, (batch) =>
+        supabase
+          .from('store_promotions')
+          .select('product_id, warehouse_id, deal_slot, delta_percent, ends_at, priority')
+          .or(`warehouse_id.is.null,warehouse_id.eq.${warehouse.id}`)
+          .in('product_id', batch),
+      ),
+      fetchByIds<{ product_id: string; category_id: string }>(ids, (batch) =>
+        supabase
+          .from('store_product_categories')
+          .select('product_id, category_id')
+          .in('product_id', batch)
+          .eq('is_primary', true),
+      ),
+      // Attribute assignments for these products (Stage 4 store views).
+      fetchByIds<{ product_id: string; attribute_value_id: string }>(ids, (batch) =>
+        supabase
+          .from('store_product_attribute_values')
+          .select('product_id, attribute_value_id')
+          .in('product_id', batch),
+      ),
+    ])
 
   const settingByProduct = new Map<
     string,
@@ -354,16 +424,34 @@ export async function fetchStoreCatalog(
     allValueIds.add(r.attribute_value_id)
   }
 
-  // WAVE 2 — category names (needs catIds) and attribute values (needs value
+  // WAVE 2 - category names (needs catIds) and attribute values (needs value
   // ids) are independent of each other, so fetch them together too. Empty id
-  // lists return no rows (no extra cost, no error).
-  const [{ data: cats }, { data: avRows }] = await Promise.all([
-    supabase.from('store_categories').select('id, name, parent_id, display_order').in('id', catIds),
-    supabase
-      .from('store_attribute_values')
-      .select('id, attribute_id, value, slug, display_order')
-      .in('id', [...allValueIds])
-      .eq('is_active', true),
+  // lists return no rows (no extra cost, no error). Both batched.
+  const [cats, avRows] = await Promise.all([
+    fetchByIds<{
+      id: string
+      name: string
+      parent_id: string | null
+      display_order: number | null
+    }>(catIds, (batch) =>
+      supabase
+        .from('store_categories')
+        .select('id, name, parent_id, display_order')
+        .in('id', batch),
+    ),
+    fetchByIds<{
+      id: string
+      attribute_id: string
+      value: string
+      slug: string
+      display_order: number
+    }>([...allValueIds], (batch) =>
+      supabase
+        .from('store_attribute_values')
+        .select('id, attribute_id, value, slug, display_order')
+        .in('id', batch)
+        .eq('is_active', true),
+    ),
   ])
 
   // Round 63: carry each category's admin order (display_order) and parent so
@@ -398,15 +486,22 @@ export async function fetchStoreCatalog(
   >()
   for (const v of avRows ?? []) valueMeta.set(v.id, v)
 
-  // WAVE 3 — attribute metadata (needs the attribute ids from wave 2).
+  // WAVE 3 - attribute metadata (needs the attribute ids from wave 2).
   const attrIds = [...new Set((avRows ?? []).map((v) => v.attribute_id))]
   if (attrIds.length > 0) {
-    const { data: aRows } = await supabase
-      .from('store_attributes')
-      .select('id, name, slug, display_order')
-      .in('id', attrIds)
-      .eq('is_active', true)
-    for (const a of aRows ?? []) attrMeta.set(a.id, a)
+    const aRows = await fetchByIds<{
+      id: string
+      name: string
+      slug: string
+      display_order: number
+    }>(attrIds, (batch) =>
+      supabase
+        .from('store_attributes')
+        .select('id, name, slug, display_order')
+        .in('id', batch)
+        .eq('is_active', true),
+    )
+    for (const a of aRows) attrMeta.set(a.id, a)
   }
 
   // Guest markup: visitors who are NOT logged in see prices marked up by the
@@ -563,7 +658,7 @@ export async function fetchStoreCatalog(
       return pa - pb || sa - sb || na.localeCompare(nb)
     })
 
-  // Build attribute filter facets from the SHOWN rows only — so the filter only
+  // Build attribute filter facets from the SHOWN rows only - so the filter only
   // offers attributes/values that actually exist among visible products. Order
   // attributes and values by their display_order (then name/value as tiebreak).
   const facetMap = new Map<
