@@ -1,10 +1,15 @@
-// Round 37c — product loader for the Caja (register) grid.
+// Round 37c â€” product loader for the Caja (register) grid.
 //
 // The POS search (lib/sales.ts > searchProductsForSale) returns nothing until
 // the operator types. The register needs a browsable grid, so this lists
 // active products for a warehouse with NO query required, using the SAME
 // warehouse-price-override + warehouse-stock + primary-category enrichment as
 // the proven search. lib/sales.ts is intentionally left untouched.
+//
+// 2026-06-24: after enrichment, the result is sorted so IN-STOCK products
+// (qty_on_hand > 0) appear first, then out-of-stock, name-ordered within each
+// group. This only re-orders the loaded set (DB still fetches up to `limit`
+// products ordered by name), so in-stock items float to the top of what shows.
 import { createClient } from '@/lib/supabase/server'
 import type { ProductSearchResult } from '@/lib/sales'
 
@@ -99,7 +104,7 @@ export async function listProductsForRegister(opts: {
     categoryMap[c.product_id as string] = c.category_id as string
   }
 
-  return rows.map((r) => ({
+  const enriched: ProductSearchResult[] = rows.map((r) => ({
     id: r.id as string,
     sku: r.sku as string,
     name: r.name as string,
@@ -112,4 +117,15 @@ export async function listProductsForRegister(opts: {
     qty_on_hand: stockMap[r.id as string] ?? 0,
     primary_category_id: categoryMap[r.id as string] ?? null,
   }))
+
+  // In-stock first (qty_on_hand > 0), then out-of-stock. Name order within each
+  // group keeps the grid stable and predictable.
+  enriched.sort((a, b) => {
+    const aOut = (a.qty_on_hand ?? 0) <= 0 ? 1 : 0
+    const bOut = (b.qty_on_hand ?? 0) <= 0 ? 1 : 0
+    if (aOut !== bOut) return aOut - bOut
+    return a.name.localeCompare(b.name)
+  })
+
+  return enriched
 }

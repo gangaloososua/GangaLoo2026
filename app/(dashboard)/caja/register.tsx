@@ -1,5 +1,5 @@
 'use client'
-// Round 37c — Caja (interactive register). [v4: + camera scan to cart]
+// Round 37c — Caja (interactive register). [v5: + seller picker (owner/admin)]
 //
 // MOBILE (default): product grid fills the screen; a FIXED bottom bar shows the
 // running total + a "Carrito (n)" button that slides the full cart up as a
@@ -7,6 +7,12 @@
 // also shows as a sticky side box. One cart definition (renderCart) is reused
 // in both places. The sale still goes through the existing confirmPosSale
 // engine — stock/discounts/ledger/invoice unchanged.
+//
+// v5 (2026-06-24): owner/admin can pick WHICH seller a register sale is credited
+// to (commission + My Sales follow the chosen seller). The picker shows only
+// when `canChooseSeller` is true; everyone else stays locked to the logged-in
+// caller. The chosen seller resets back to the caller after each completed sale
+// so a later sale is never accidentally credited to the previous seller.
 
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
@@ -41,6 +47,7 @@ import { CustomerPicker } from './customer-picker'
 import type { ScannedMember } from './member-scan-actions'
 
 type LookupItem = { id: string; name: string }
+type SellerOption = { id: string; full_name: string; role: string }
 
 type Props = {
   warehouses: LookupItem[]
@@ -49,6 +56,8 @@ type Props = {
   moneyAccounts: MoneyAccount[]
   activeDiscountRules: DiscountRuleRow[]
   sellerId: string | null
+  sellers: SellerOption[]
+  canChooseSeller: boolean
   customers: CustomerPickerItem[]
   canTakePayment: boolean
   locale: Locale
@@ -94,6 +103,8 @@ export function Register({
   moneyAccounts,
   activeDiscountRules,
   sellerId,
+  sellers,
+  canChooseSeller,
   customers,
   canTakePayment,
   locale,
@@ -106,6 +117,9 @@ export function Register({
   const [lines, setLines] = useState<CartLine[]>([])
   const [saleDiscountCents, setSaleDiscountCents] = useState(0)
   const [member, setMember] = useState<ScannedMember | null>(null)
+  // Who the sale is credited to. Defaults to the logged-in caller; only
+  // owner/admin can change it (canChooseSeller).
+  const [activeSellerId, setActiveSellerId] = useState<string | null>(sellerId)
   const [cartOpen, setCartOpen] = useState(false)
   const [pending, start] = useTransition()
   const didMount = useRef(false)
@@ -235,6 +249,9 @@ export function Register({
     setLines([])
     setSaleDiscountCents(0)
     setMember(null)
+    // Reset the credited seller back to the logged-in caller so the next sale
+    // is never accidentally attributed to the previous one.
+    setActiveSellerId(sellerId)
   }
 
   const totals = useMemo(() => {
@@ -260,7 +277,7 @@ export function Register({
       toast.error(tc(locale, 'rg.toast.empty'))
       return
     }
-    if (!sellerId) {
+    if (!activeSellerId) {
       toast.error(tc(locale, 'rg.toast.noSeller'))
       return
     }
@@ -271,7 +288,7 @@ export function Register({
 
     const input: ConfirmPosInput = {
       customer_id: member?.customerId ?? null,
-      seller_id: sellerId,
+      seller_id: activeSellerId,
       source_warehouse_id: warehouseId,
       fulfillment_warehouse_id: warehouseId,
       fulfillment_method: 'in_store',
@@ -326,6 +343,29 @@ export function Register({
   function renderCart() {
     return (
       <div className="space-y-3">
+        {canChooseSeller && sellers.length > 0 ? (
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-muted-foreground">
+              {locale === 'es' ? 'Vendedor' : 'Seller'}
+            </label>
+            <Select
+              value={activeSellerId ?? ''}
+              onValueChange={(v) => setActiveSellerId(v)}
+            >
+              <SelectTrigger className="h-9">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {sellers.map((s) => (
+                  <SelectItem key={s.id} value={s.id}>
+                    {(s.full_name || s.id) +
+                      (s.id === sellerId ? (locale === 'es' ? ' (yo)' : ' (me)') : '')}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        ) : null}
         <MemberScan member={member} onMember={setMember} locale={locale} />
         {!member ? (
           <CustomerPicker customers={customers} onPick={setMember} locale={locale} />
