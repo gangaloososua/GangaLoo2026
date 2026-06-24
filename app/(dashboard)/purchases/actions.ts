@@ -329,6 +329,8 @@ export type CorrectSupplierPaymentInput = {
   supplierPaymentAccountId: string
   paidAtDop: string // ISO
   categoryId: string
+  // round-77a: DOP-per-EUR rate, only when paying from a EUR account
+  eurRate?: number
 }
 
 export async function correctSupplierPayment(
@@ -358,6 +360,7 @@ export async function correctSupplierPayment(
     p_supplier_payment_account_id: input.supplierPaymentAccountId,
     p_paid_at_dop: input.paidAtDop,
     p_category_id: input.categoryId,
+    p_eur_rate: input.eurRate ?? null,
   })
   if (error) return { ok: false, error: error.message }
 

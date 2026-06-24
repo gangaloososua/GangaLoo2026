@@ -260,15 +260,50 @@ export function PurchaseActionsBar({
     payAt.length > 0 &&
     (!payIsEur || Number(payEurRate) > 0)
 
-  // ---- Correct payment dialog state (Round 24g) ----
+  // ---- Correct payment dialog state (Round 24g; round-77a: + EUR) ----
   const [corDopTotal, setCorDopTotal] = useState<string>('')
   const [corExchange, setCorExchange] = useState<string>('')
   const [corOfficial, setCorOfficial] = useState<string>('')
   const [corAccount,  setCorAccount]  = useState<string>('')
   const [corCategory, setCorCategory] = useState<string>('')
+  const [corEurRate,  setCorEurRate]  = useState<string>('')   // round-77a: DOP per EUR
   const [corAt,       setCorAt]       = useState<string>(
     toLocalDatetimeInputValue(new Date()),
   )
+
+  // round-77a: is the chosen correct-payment account a EUR account?
+  const corIsEur = corAccount.length > 0 && currencyOf(corAccount) === 'EUR'
+
+  // round-77a: auto-fill rates from the monthly settings when the account
+  // changes (only fills an empty field, never clobbers). Mirrors the pay dialog.
+  function onCorAccountChange(accountId: string) {
+    setCorAccount(accountId)
+    const cur = currencyOf(accountId)
+    if (cur === 'EUR') {
+      if (!corEurRate && monthlyEurRate && monthlyEurRate > 0) {
+        setCorEurRate(String(monthlyEurRate))
+      }
+      if (!corExchange && monthlyUsdRate && monthlyUsdRate > 0) {
+        setCorExchange(String(monthlyUsdRate))
+      }
+      if (!corOfficial && monthlyUsdRate && monthlyUsdRate > 0) {
+        setCorOfficial(String(monthlyUsdRate))
+      }
+    } else if (cur === 'USD') {
+      if (!corExchange && monthlyUsdRate && monthlyUsdRate > 0) {
+        setCorExchange(String(monthlyUsdRate))
+      }
+      if (!corOfficial && monthlyUsdRate && monthlyUsdRate > 0) {
+        setCorOfficial(String(monthlyUsdRate))
+      }
+    }
+  }
+
+  // round-77a: the peso figure sent as dopPaidTotal.
+  //   EUR account -> EUR paid x DOP-per-EUR ; DOP / USD -> the typed number unchanged.
+  const corPesoFigure = corIsEur
+    ? Number(corDopTotal) * Number(corEurRate || '0')
+    : Number(corDopTotal)
 
   const corValid =
     Number(corDopTotal) > 0 &&
@@ -276,7 +311,8 @@ export function PurchaseActionsBar({
     Number(corOfficial) > 0 &&
     corAccount.length > 0 &&
     corCategory.length > 0 &&
-    corAt.length > 0
+    corAt.length > 0 &&
+    (!corIsEur || Number(corEurRate) > 0)
 
   // ---- Complete payment record dialog state (round-38e) ----
   const [cprAccount, setCprAccount] = useState<string>('')
@@ -380,14 +416,21 @@ export function PurchaseActionsBar({
   async function handleCorrectPayment() {
     if (!corValid) return
     setBusyAction('correcting')
+    // round-77a: for a EUR account, send the peso figure (EUR x DOP-per-EUR) as
+    // the DOP paid total and pass the DOP-per-EUR rate so the function deducts
+    // euros from the account, not pesos. DOP/USD accounts are unchanged.
+    const pesoAmount = corIsEur
+      ? Number(corDopTotal) * Number(corEurRate)
+      : Number(corDopTotal)
     const res = await correctSupplierPayment({
       orderId,
-      dopPaidTotal:          Number(corDopTotal),
+      dopPaidTotal:          pesoAmount,
       exchangeRate:          Number(corExchange),
       officialRateAtPayment: Number(corOfficial),
       supplierPaymentAccountId: corAccount,
       paidAtDop: new Date(corAt).toISOString(),
       categoryId: corCategory,
+      eurRate: corIsEur ? Number(corEurRate) : undefined,
     })
     if (!res.ok) { toast.error(res.error); setBusyAction(null); return }
     toast.success('Payment corrected. Ledger and cost basis updated.')
@@ -769,7 +812,7 @@ export function PurchaseActionsBar({
         </AlertDialog>
       )}
 
-      {/* Correct payment (Round 24g) - paid_supplier orders with no receipts */}
+      {/* Correct payment (Round 24g; round-77a: + EUR) - paid_supplier, no receipts */}
       {canCorrect && (
         <AlertDialog open={correctOpen} onOpenChange={setCorrectOpen}>
           <AlertDialogTrigger asChild>
@@ -798,7 +841,9 @@ export function PurchaseActionsBar({
 
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div className="space-y-1.5">
-                <Label htmlFor="cor-dop-total">DOP paid total</Label>
+                <Label htmlFor="cor-dop-total">
+                  {corIsEur ? 'EUR paid' : 'DOP paid total'}
+                </Label>
                 <Input
                   id="cor-dop-total"
                   type="number"
@@ -808,10 +853,15 @@ export function PurchaseActionsBar({
                   onChange={(e) => setCorDopTotal(e.target.value)}
                   placeholder="0.00"
                 />
+                {corIsEur && (
+                  <p className="text-xs text-muted-foreground">
+                    The euros that left this account for this payment.
+                  </p>
+                )}
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="cor-account">From account</Label>
-                <Select value={corAccount} onValueChange={setCorAccount}>
+                <Select value={corAccount} onValueChange={onCorAccountChange}>
                   <SelectTrigger id="cor-account">
                     <SelectValue placeholder="Pick an account..." />
                   </SelectTrigger>
@@ -819,11 +869,34 @@ export function PurchaseActionsBar({
                     {moneyAccounts.map((a) => (
                       <SelectItem key={a.id} value={a.id}>
                         {a.name}
+                        {a.currency && a.currency.toUpperCase() !== 'DOP'
+                          ? ` (${a.currency.toUpperCase()})`
+                          : ''}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
+
+              {/* round-77a: DOP-per-EUR rate, only for EUR accounts */}
+              {corIsEur && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="cor-eur-rate">Rate (DOP per EUR)</Label>
+                  <Input
+                    id="cor-eur-rate"
+                    type="number"
+                    min="0"
+                    step="0.0001"
+                    value={corEurRate}
+                    onChange={(e) => setCorEurRate(e.target.value)}
+                    placeholder="0.0000"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    How many pesos one euro is worth (this month&apos;s rate, editable).
+                  </p>
+                </div>
+              )}
+
               <div className="space-y-1.5">
                 <Label htmlFor="cor-category">Expense category</Label>
                 <Select value={corCategory} onValueChange={setCorCategory}>
@@ -859,7 +932,9 @@ export function PurchaseActionsBar({
                   placeholder="0.0000"
                 />
                 <p className="text-xs text-muted-foreground">
-                  The negotiated rate you paid at.
+                  {corIsEur
+                    ? 'Used to work out how much of the USD order this payment covers.'
+                    : 'The negotiated rate you paid at.'}
                 </p>
               </div>
               <div className="space-y-1.5">
@@ -877,6 +952,20 @@ export function PurchaseActionsBar({
                   Market reference at payment time. Used to book the bank fee.
                 </p>
               </div>
+
+              {/* round-77a: live preview of what gets recorded for a EUR correction */}
+              {corIsEur && Number(corDopTotal) > 0 && Number(corEurRate) > 0 && (
+                <div className="md:col-span-2 rounded-md border bg-muted/30 px-3 py-2 text-xs tabular-nums text-foreground">
+                  Leaves this account: &euro;{Number(corDopTotal).toFixed(2)}
+                  {' '}&middot; Peso cost: RD${corPesoFigure.toFixed(2)}
+                  {Number(corExchange) > 0 && (
+                    <>
+                      {' '}&middot; Covers ${ (corPesoFigure / Number(corExchange)).toFixed(2) } of the order
+                    </>
+                  )}
+                </div>
+              )}
+
               <div className="space-y-1.5 md:col-span-2">
                 <Label htmlFor="cor-at">Paid at</Label>
                 <Input
