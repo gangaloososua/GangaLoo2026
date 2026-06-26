@@ -41,6 +41,8 @@ export type StatementMovement = {
   group_size: number
   /** Invoice numbers covered by a grouped receipt (empty for non-sale rows). */
   invoices: string[]
+  category_name: string | null
+  category_type: string | null
 }
 export type StatementDirection = {
   count: number

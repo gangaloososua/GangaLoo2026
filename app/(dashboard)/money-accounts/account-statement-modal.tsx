@@ -21,6 +21,10 @@
 // Round 73a: a split payment (one receipt across several invoices) arrives as
 // ONE movement with group_size > 1 and an `invoices` list. Such a row is
 // tappable and expands to show the invoice numbers it covered.
+//
+// round-79a: a Categoría column (the accounting category, shown like the
+// Accounting list: "Name (Type)") sits between Descripción and Tipo. Rows with
+// no category (transfers, receipts) show "—".
 
 import * as React from 'react'
 import { useRouter } from 'next/navigation'
@@ -74,6 +78,11 @@ const MONTHS_ES = [
   'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
   'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
 ]
+
+// round-79a: same labels Accounting uses for the category type suffix.
+const TYPE_LABEL: Record<string, string> = {
+  income: 'Income', expense: 'Expense', asset: 'Asset', liability: 'Liability', equity: 'Equity',
+}
 
 const CURRENCY_PREFIX: Record<string, string> = {
   DOP: 'RD$',
@@ -462,6 +471,7 @@ export function AccountStatementModal({ accountId, accountName }: Props) {
                 <TableRow>
                   <TableHead className="w-28">Fecha</TableHead>
                   <TableHead>Descripción</TableHead>
+                  <TableHead className="w-40">Categoría</TableHead>
                   <TableHead className="w-32">Tipo</TableHead>
                   <TableHead className="w-32 text-right">Entrada</TableHead>
                   <TableHead className="w-32 text-right">Salida</TableHead>
@@ -472,7 +482,7 @@ export function AccountStatementModal({ accountId, accountName }: Props) {
                 {visibleMovements.length === 0 ? (
                   <TableRow>
                     <TableCell
-                      colSpan={6}
+                      colSpan={7}
                       className="py-8 text-center text-sm text-muted-foreground"
                     >
                       No hay movimientos para este filtro.
@@ -514,6 +524,20 @@ export function AccountStatementModal({ accountId, accountName }: Props) {
                               </span>
                             </span>
                           </TableCell>
+                          <TableCell className="truncate">
+                            {m.category_name ? (
+                              <span>
+                                <span>{m.category_name}</span>
+                                {m.category_type && (
+                                  <span className="ml-1 text-xs text-muted-foreground">
+                                    ({TYPE_LABEL[m.category_type] ?? m.category_type})
+                                  </span>
+                                )}
+                              </span>
+                            ) : (
+                              <span className="text-muted-foreground">—</span>
+                            )}
+                          </TableCell>
                           <TableCell>
                             <Badge variant="outline">{m.tipo}</Badge>
                           </TableCell>
@@ -531,7 +555,7 @@ export function AccountStatementModal({ accountId, accountName }: Props) {
                         {grouped && isOpen && (
                           <TableRow className="bg-muted/30">
                             <TableCell />
-                            <TableCell colSpan={5} className="text-xs text-muted-foreground">
+                            <TableCell colSpan={6} className="text-xs text-muted-foreground">
                               <span className="font-medium">Facturas pagadas:</span>{' '}
                               {m.invoices.join(' · ')}
                             </TableCell>
