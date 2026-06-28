@@ -1,4 +1,4 @@
-// Round 37c â€” product loader for the Caja (register) grid.
+// Round 37c - product loader for the Caja (register) grid.
 //
 // The POS search (lib/sales.ts > searchProductsForSale) returns nothing until
 // the operator types. The register needs a browsable grid, so this lists
@@ -8,10 +8,40 @@
 //
 // 2026-06-24: after enrichment, the result is sorted so IN-STOCK products
 // (qty_on_hand > 0) appear first, then out-of-stock, name-ordered within each
-// group. This only re-orders the loaded set (DB still fetches up to `limit`
-// products ordered by name), so in-stock items float to the top of what shows.
+// group.
+//
+// 2026-06-28: the DEFAULT grid (no search text, no category chosen) is now
+// driven by the SELECTED WAREHOUSE'S STOCK instead of the first 60 product
+// names. Before, the DB fetched 60 active products ordered by name and only
+// then sorted in-stock to the top - so a product in stock at the chosen
+// warehouse whose name sorted past position 60 never appeared in the grid
+// (e.g. the Cabellos/bundle products in stock at Montellano). Now we first
+// fetch EVERY active product in stock at the warehouse (name order), then
+// append a short tail of out-of-stock active products so they stay visible
+// below. Search and category browsing are unchanged - they still scan the
+// full catalog with the prior 50-row cap.
 import { createClient } from '@/lib/supabase/server'
 import type { ProductSearchResult } from '@/lib/sales'
+
+const PRODUCT_SELECT =
+  'id, sku, name, primary_image_url, price_cents, club_price_cents, sale_price_cents, commission_percent'
+
+// Default-grid caps (no query / no category). In-stock items are shown in full
+// up to IN_STOCK_CAP; a short tail of out-of-stock items is appended below.
+const IN_STOCK_CAP = 300
+const OOS_TAIL = 40
+const OOS_SCAN = 120
+
+type ProductRow = {
+  id: string
+  sku: string
+  name: string
+  primary_image_url: string | null
+  price_cents: number | string | null
+  club_price_cents: number | string | null
+  sale_price_cents: number | string | null
+  commission_percent: number | string | null
+}
 
 export async function listProductsForRegister(opts: {
   warehouseId: string
@@ -52,21 +82,70 @@ export async function listProductsForRegister(opts: {
     if (categoryProductIds.length === 0) return []
   }
 
-  // 1) Active products (optionally filtered by text and/or category).
-  let pq = supabase
-    .from('products')
-    .select('id, sku, name, primary_image_url, price_cents, club_price_cents, sale_price_cents, commission_percent')
-    .eq('is_active', true)
-  if (q) pq = pq.or(`sku.ilike.%${q}%,name.ilike.%${q}%`)
-  if (categoryProductIds) pq = pq.in('id', categoryProductIds)
-  const { data: products, error: pErr } = await pq
-    .order('name', { ascending: true })
-    .limit(limit)
-  if (pErr) throw pErr
+  // 1) Build the product set.
+  let rows: ProductRow[] = []
 
-  const rows = products ?? []
+  if (q || categoryId) {
+    // SEARCH / CATEGORY: scan the whole catalog (prior behaviour, 50-row cap).
+    let pq = supabase
+      .from('products')
+      .select(PRODUCT_SELECT)
+      .eq('is_active', true)
+    if (q) pq = pq.or(`sku.ilike.%${q}%,name.ilike.%${q}%`)
+    if (categoryProductIds) pq = pq.in('id', categoryProductIds)
+    const { data, error: pErr } = await pq
+      .order('name', { ascending: true })
+      .limit(limit)
+    if (pErr) throw pErr
+    rows = (data ?? []) as ProductRow[]
+  } else {
+    // DEFAULT GRID: warehouse stock drives the list (in-stock first, then a
+    // short out-of-stock tail). See the 2026-06-28 note above.
+
+    // a) ids in stock at THIS warehouse. v_inventory_current only holds rows
+    //    whose summed qty_remaining > 0, so every id here is genuinely in stock.
+    const { data: stockIdRows, error: stockIdErr } = await supabase
+      .from('v_inventory_current')
+      .select('product_id')
+      .eq('warehouse_id', warehouseId)
+    if (stockIdErr) throw stockIdErr
+    const inStockIds = [
+      ...new Set((stockIdRows ?? []).map((r) => r.product_id as string)),
+    ].slice(0, IN_STOCK_CAP)
+
+    // b) the in-stock products themselves (active), name-ordered.
+    let inStockRows: ProductRow[] = []
+    if (inStockIds.length > 0) {
+      const { data, error } = await supabase
+        .from('products')
+        .select(PRODUCT_SELECT)
+        .eq('is_active', true)
+        .in('id', inStockIds)
+        .order('name', { ascending: true })
+      if (error) throw error
+      inStockRows = (data ?? []) as ProductRow[]
+    }
+
+    // c) a short tail of out-of-stock active products so they remain visible
+    //    below the in-stock ones. Fetch a small alphabetical page and drop any
+    //    already shown as in-stock. (Search/category still reach everything.)
+    const inStockSet = new Set(inStockIds)
+    const { data: scanRows, error: scanErr } = await supabase
+      .from('products')
+      .select(PRODUCT_SELECT)
+      .eq('is_active', true)
+      .order('name', { ascending: true })
+      .limit(OOS_SCAN)
+    if (scanErr) throw scanErr
+    const oosRows = ((scanRows ?? []) as ProductRow[])
+      .filter((r) => !inStockSet.has(r.id))
+      .slice(0, OOS_TAIL)
+
+    rows = [...inStockRows, ...oosRows]
+  }
+
   if (rows.length === 0) return []
-  const productIds = rows.map((r) => r.id as string)
+  const productIds = rows.map((r) => r.id)
 
   // 2 + 3) Warehouse override prices, warehouse stock, primary category.
   const [settingsRes, stockRes, catRes] = await Promise.all([
@@ -105,17 +184,17 @@ export async function listProductsForRegister(opts: {
   }
 
   const enriched: ProductSearchResult[] = rows.map((r) => ({
-    id: r.id as string,
-    sku: r.sku as string,
-    name: r.name as string,
-    primary_image_url: (r.primary_image_url as string | null) ?? null,
+    id: r.id,
+    sku: r.sku,
+    name: r.name,
+    primary_image_url: r.primary_image_url ?? null,
     base_price_cents: Number(r.price_cents) || 0,
     club_price_cents: r.club_price_cents == null ? null : Number(r.club_price_cents),
     sale_price_cents: r.sale_price_cents == null ? null : Number(r.sale_price_cents),
-    warehouse_price_override_cents: overrideMap[r.id as string] ?? null,
+    warehouse_price_override_cents: overrideMap[r.id] ?? null,
     commission_percent: Number(r.commission_percent) || 0,
-    qty_on_hand: stockMap[r.id as string] ?? 0,
-    primary_category_id: categoryMap[r.id as string] ?? null,
+    qty_on_hand: stockMap[r.id] ?? 0,
+    primary_category_id: categoryMap[r.id] ?? null,
   }))
 
   // In-stock first (qty_on_hand > 0), then out-of-stock. Name order within each
