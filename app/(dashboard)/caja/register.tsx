@@ -13,6 +13,15 @@
 // when `canChooseSeller` is true; everyone else stays locked to the logged-in
 // caller. The chosen seller resets back to the caller after each completed sale
 // so a later sale is never accidentally credited to the previous seller.
+//
+// 2026-06-28: priceFor now honors a product's own Sale price / offer
+// (sale_price_cents) — the same price the storefront charges online. Before,
+// the register only used the warehouse override or base price and ignored the
+// Sale price field entirely, so a product on offer (e.g. 10% off) still rang up
+// at full price at the register. Now, when a sale price is set and is lower
+// than the regular/override price, the register uses it for the grid card, the
+// cart line, and the charged amount. Discount RULES still apply on top via the
+// resolver, exactly as before.
 
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
@@ -93,7 +102,20 @@ function centsToDopString(c: number): string {
   return Math.round(c / 100).toString()
 }
 function priceFor(p: ProductSearchResult): number {
-  return p.warehouse_price_override_cents ?? p.base_price_cents
+  // Regular price for this warehouse (per-warehouse override else base).
+  const regular = p.warehouse_price_override_cents ?? p.base_price_cents
+  // A product's own Sale price / offer (sale_price_cents) is the price the
+  // customer pays online. Mirror that at the register: use it when it is set
+  // and actually lower than the regular price. Discount RULES still stack on
+  // top via the resolver, just as they did before.
+  if (
+    p.sale_price_cents != null &&
+    p.sale_price_cents > 0 &&
+    p.sale_price_cents < regular
+  ) {
+    return p.sale_price_cents
+  }
+  return regular
 }
 
 export function Register({
