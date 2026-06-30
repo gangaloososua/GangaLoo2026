@@ -3,7 +3,7 @@
 // Two concerns, deliberately separated:
 //   - fetchStockOnHand(): current quantity per product per warehouse,
 //     summed from inventory_lots.qty_remaining (the authoritative live
-//     stock source the sale/lot system maintains). NO costs â€” this feeds
+//     stock source the sale/lot system maintains). NO costs — this feeds
 //     the seller/distributor stock view.
 //   - fetchStockMovements(): the owner/admin history ledger (added next).
 import { createClient } from '@/lib/supabase/server'
@@ -312,6 +312,14 @@ export type InventoryProductOption = { id: string; name: string; sku: string | n
 // Lightweight global product search for the ledger filter: id + name + sku
 // only, active products, matched by name or SKU. Warehouse-agnostic and
 // price-agnostic (unlike searchProductsForSale).
+//
+// Match each word INDEPENDENTLY (AND across words, name OR sku per word). The
+// query is first cleaned of `% " ( ) * , '` (which would otherwise act as SQL
+// wildcards), so a phrase like "13x4 180% 26" becomes "13x4 180 26" — and the
+// stored name "13x4 180% 26\"..." still contains the % between 180 and 26, so a
+// single continuous match would never find it. Splitting into words sidesteps
+// that and also lets the words be typed in any order. (Same fix as the POS
+// search, commit d0efa71.)
 export async function searchInventoryProducts(
   query: string,
   limit = 20,
@@ -319,11 +327,14 @@ export async function searchInventoryProducts(
   const q = query.replace(/[,'"()*%]/g, ' ').replace(/\s+/g, ' ').trim()
   if (!q) return []
   const supabase = await createClient()
-  const { data, error } = await supabase
+  let pq = supabase
     .from('products')
     .select('id, name, sku')
     .eq('is_active', true)
-    .or('name.ilike.%' + q + '%,sku.ilike.%' + q + '%')
+  for (const term of q.split(' ')) {
+    if (term) pq = pq.or('name.ilike.%' + term + '%,sku.ilike.%' + term + '%')
+  }
+  const { data, error } = await pq
     .order('name', { ascending: true })
     .limit(limit)
   if (error) throw error
