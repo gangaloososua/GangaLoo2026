@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
@@ -49,6 +49,19 @@ const ICON = {
   chat: 'M4 5h16v10H8l-4 4z',
   link: 'M10 13a5 5 0 0 0 7 0l2-2a5 5 0 0 0-7-7l-1 1M14 11a5 5 0 0 0-7 0l-2 2a5 5 0 0 0 7 7l1-1',
   filter: 'M3 5h18M6 12h12M10 19h4',
+}
+
+// Build a wa.me chat link for a store. Strips any non-digits from the stored
+// number (so a saved "+1 (829)…" still works) and pre-fills a friendly,
+// locale-aware message. Returns null when the store has no number.
+function whatsappHref(raw: string | null | undefined, storeName: string, locale: Locale): string | null {
+  const digits = (raw ?? '').replace(/[^0-9]/g, '')
+  if (!digits) return null
+  const msg =
+    (locale === 'es' ? 'Hola, vengo de la tienda online de ' : 'Hi, I came from the online store of ') +
+    'GangaLoo ' +
+    storeName
+  return `https://wa.me/${digits}?text=${encodeURIComponent(msg)}`
 }
 
 function ProductCard({
@@ -208,6 +221,8 @@ export function StorePage({ catalog, stores = [] }: { catalog: StoreCatalog; sto
 
   const { warehouse, products, offers, categories, attributes, dailyDeal, weeklyDeal, isGuest, guestMarkupPct } = catalog
   const cart = useCart(warehouse.slug)
+
+  const waHref = whatsappHref(warehouse.whatsapp, warehouse.name, locale)
 
   // --- Shareable URL sync (slugs <-> selected value ids) ---------------------
   // Uses window.location + history.replaceState so no <Suspense> boundary is
@@ -431,6 +446,19 @@ export function StorePage({ catalog, stores = [] }: { catalog: StoreCatalog; sto
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src="/logo-g.png" alt="GangaLoo" className="h-9 w-9 flex-shrink-0 object-contain" />
             <span className="truncate text-[18px] font-semibold tracking-wide sm:text-[20px]">GangaLoo <span className="hidden font-normal opacity-90 sm:inline">{warehouse.name}</span></span>
+            {waHref && (
+              <a
+                href={waHref}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="WhatsApp"
+                title={locale === 'es' ? 'Escríbenos por WhatsApp' : 'Message us on WhatsApp'}
+                className="ml-1 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full transition active:scale-90"
+                style={{ background: '#25D366', color: '#fff' }}
+              >
+                <Icon d={ICON.chat} size={16} />
+              </a>
+            )}
             </div>
             <div className="flex flex-shrink-0 items-center gap-4 pl-2">
               <div className="flex overflow-hidden rounded-full text-[11px]" style={{ border: '1px solid rgba(255,255,255,.5)' }}>
@@ -669,6 +697,20 @@ export function StorePage({ catalog, stores = [] }: { catalog: StoreCatalog; sto
               <MenuLink href={accountHref} d={ICON.user} label={MENU_T[locale].account} onClose={() => setMenuOpen(false)} />
               <MenuLink href={cartHref} d={ICON.cart} label={MENU_T[locale].cart} badge={cart.count} onClose={() => setMenuOpen(false)} />
               <MenuLink href="/tienda" d={ICON.warehouse} label={MENU_T[locale].stores} onClose={() => setMenuOpen(false)} />
+
+              {waHref && (
+                <a
+                  href={waHref}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() => setMenuOpen(false)}
+                  className="flex items-center gap-3 px-4 py-3 text-[14px]"
+                  style={{ color: INK }}
+                >
+                  <span style={{ color: '#25D366' }}><Icon d={ICON.chat} size={20} /></span>
+                  <span className="flex-1">{locale === 'es' ? 'WhatsApp ' : 'WhatsApp '}{warehouse.name}</span>
+                </a>
+              )}
 
               {categories.length > 0 && (
                 <>
@@ -1133,4 +1175,3 @@ function MenuLink({ href, d, label, badge, onClose }: { href: string; d: string;
     </Link>
   )
 }
-
