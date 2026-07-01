@@ -275,6 +275,11 @@ export async function resolveStoreWarehouse(
     name: cleanName(match.name),
     rawName: match.name,
     slug: wanted,
+    whatsapp: match.whatsapp ?? null,
+    phone: match.phone ?? null,
+    address: match.address ?? null,
+    city: match.city ?? null,
+    mapsUrl: match.maps_url ?? null,
   }
 }
 
