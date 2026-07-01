@@ -141,6 +141,11 @@ type StatusBearer = {
 }
 
 export function derivedStatus(po: StatusBearer): PurchaseStatus {
+  // Terminal states are authoritative: a cancelled or lost order derives to
+  // itself, regardless of any timestamps left on the row. Without this a
+  // cancelled order would always "derive" to paid_supplier/received/complete
+  // from its lingering timestamps and show a false Mismatch badge.
+  if (po.status === 'cancelled' || po.status === 'lost') return po.status
   if (po.completed_at) return 'complete'
   if (po.received_at) return 'received'
   if (po.paid_at_dop) return 'paid_supplier'
