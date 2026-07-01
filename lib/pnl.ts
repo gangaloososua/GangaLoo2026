@@ -11,6 +11,12 @@
 // pure client switch with no refetch. Each line also carries its own `scope`
 // so the line table can filter to match the toggle.
 //
+// Each line ALSO carries its MAIN category (main_id / main_name) and an
+// is_main flag, so the screen can group subs under their main category and
+// show a proper hierarchical statement. A line where is_main is true is a
+// category that had money posted directly to a main category (parent_id null);
+// it is its own main.
+//
 // computePnlPeriods() turns a period mode into the four date bounds the RPC
 // needs (current window + the comparison window before it). customPnlPeriods()
 // does the same for an explicit start/end, with a prior window of equal length
@@ -146,6 +152,12 @@ export type PnlLine = {
   name: string
   type: PnlLineType
   scope: PnlScope
+  /** The main (top-level) category this line rolls up into. */
+  main_id: string
+  /** The main category's name (equals `name` when this line IS a main). */
+  main_name: string
+  /** True when this line is itself a main category (money posted directly to it). */
+  is_main: boolean
   /** Natural ledger sign: income positive, expense negative. */
   current_cents: number
   prior_cents: number

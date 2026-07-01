@@ -8,7 +8,11 @@
 //   - three summary cards (Income, Expenses, Net) with vs-prior deltas
 //   - four recharts charts (profit waterfall, income donut, expense donut,
 //     this-vs-last bars)
-//   - the full P&L statement table (every active line, this vs last, % change)
+//   - the full P&L statement table, GROUPED BY MAIN CATEGORY: each main is a
+//     bold subtotal row, with its sub-categories indented underneath.
+//
+// Each line carries main_id / main_name / is_main, so we roll subs up into
+// their main for the subtotals and the charts, while still listing every sub.
 //
 // Money is in CENTS throughout. Per-line current_cents/prior_cents keep their
 // natural ledger sign (income +, expense -); we flip expenses to positive
@@ -50,6 +54,18 @@ const EXPENSE_PALETTE = [
 type Scope = 'business' | 'all'
 type Item = { name: string; value: number }
 
+// A main category with its rolled-up totals and its sub-lines.
+type MainGroup = {
+  main_id: string
+  main_name: string
+  type: 'income' | 'expense'
+  current_cents: number
+  prior_cents: number
+  subs: PnlLine[]
+  /** True when the main itself had direct postings (a line where is_main). */
+  hasDirect: boolean
+}
+
 // --- helpers ---------------------------------------------------------------
 
 function pct(cur: number, prev: number): number | null {
@@ -71,6 +87,43 @@ function topNWithOther(items: Item[], n: number): Item[] {
   const head = sorted.slice(0, n)
   const other = sorted.slice(n).reduce((s, x) => s + x.value, 0)
   return other > 0 ? [...head, { name: 'Other', value: other }] : head
+}
+
+// Roll a set of lines up into main groups, preserving natural ledger sign.
+function groupByMain(lines: PnlLine[], type: 'income' | 'expense'): MainGroup[] {
+  const byMain = new Map<string, MainGroup>()
+  for (const l of lines) {
+    if (l.type !== type) continue
+    let g = byMain.get(l.main_id)
+    if (!g) {
+      g = {
+        main_id: l.main_id,
+        main_name: l.main_name,
+        type,
+        current_cents: 0,
+        prior_cents: 0,
+        subs: [],
+        hasDirect: false,
+      }
+      byMain.set(l.main_id, g)
+    }
+    g.current_cents += l.current_cents
+    g.prior_cents += l.prior_cents
+    if (l.is_main) g.hasDirect = true
+    else g.subs.push(l)
+  }
+  const groups = [...byMain.values()]
+  // Sort subs within each group by magnitude, then name.
+  for (const g of groups) {
+    g.subs.sort(
+      (a, b) => Math.abs(b.current_cents) - Math.abs(a.current_cents) || a.name.localeCompare(b.name),
+    )
+  }
+  // Sort groups by magnitude of current, then name.
+  groups.sort(
+    (a, b) => Math.abs(b.current_cents) - Math.abs(a.current_cents) || a.main_name.localeCompare(b.main_name),
+  )
+  return groups
 }
 
 function Delta({
@@ -228,14 +281,18 @@ function DonutPanel({
   )
 }
 
-// --- statement table -------------------------------------------------------
+// --- statement rows --------------------------------------------------------
 
+// A single statement row. `indent` shifts sub-lines to the right; `bold` and
+// `muted` control the main-subtotal vs sub styling.
 function StatementRow({
   name,
   cur,
   prev,
   goodWhenUp,
   bold,
+  muted,
+  indent,
   emphasizeColor,
 }: {
   name: string
@@ -243,6 +300,8 @@ function StatementRow({
   prev: number
   goodWhenUp: boolean
   bold?: boolean
+  muted?: boolean
+  indent?: boolean
   emphasizeColor?: 'pos' | 'neg' | null
 }) {
   const p = pct(cur, prev)
@@ -256,21 +315,78 @@ function StatementRow({
     <div
       className={
         'grid grid-cols-[1fr_auto_auto_auto] items-center gap-3 px-4 py-2 text-sm ' +
-        (bold ? 'font-semibold' : '')
+        (bold ? 'font-semibold ' : '') +
+        (muted ? 'text-muted-foreground ' : '')
       }
     >
-      <span className="truncate">{name}</span>
+      <span className={'truncate ' + (indent ? 'pl-5' : '')}>{name}</span>
       <span className={'w-28 text-right tabular-nums ' + valueClass}>{formatDOP(cur)}</span>
       <span className="hidden w-28 text-right tabular-nums text-muted-foreground sm:block">
         {formatDOP(prev)}
       </span>
       <span className="w-16 text-right">
         {p === null ? (
-          <span className="text-xs text-muted-foreground">—</span>
+          <span className="text-xs text-muted-foreground">&mdash;</span>
         ) : (
           <Delta cur={cur} prev={prev} goodWhenUp={goodWhenUp} />
         )}
       </span>
+    </div>
+  )
+}
+
+// Renders one main group: a bold subtotal row, then its subs indented.
+// `sign` is +1 for income (display as-is) or -1 for expenses (flip to positive
+// magnitudes for display).
+function GroupBlock({
+  group,
+  sign,
+  goodWhenUp,
+}: {
+  group: MainGroup
+  sign: 1 | -1
+  goodWhenUp: boolean
+}) {
+  // A main with direct postings AND subs shows a "(direct)" sub line for the
+  // portion booked straight to the main, so the subs add up to the subtotal.
+  const subsTotal = group.subs.reduce((s, l) => s + l.current_cents, 0)
+  const subsPrior = group.subs.reduce((s, l) => s + l.prior_cents, 0)
+  const directCur = group.current_cents - subsTotal
+  const directPrev = group.prior_cents - subsPrior
+  const showDirect = group.hasDirect && group.subs.length > 0 && (directCur !== 0 || directPrev !== 0)
+
+  return (
+    <div>
+      <StatementRow
+        name={group.main_name}
+        cur={sign * group.current_cents}
+        prev={sign * group.prior_cents}
+        goodWhenUp={goodWhenUp}
+        bold
+      />
+      <div className="divide-y">
+        {group.subs.map((l) => (
+          <StatementRow
+            key={l.id}
+            name={l.name}
+            cur={sign * l.current_cents}
+            prev={sign * l.prior_cents}
+            goodWhenUp={goodWhenUp}
+            muted
+            indent
+          />
+        ))}
+        {showDirect ? (
+          <StatementRow
+            name={`${group.main_name} (direct)`}
+            cur={sign * directCur}
+            prev={sign * directPrev}
+            goodWhenUp={goodWhenUp}
+            muted
+            indent
+          />
+        ) : null}
+      </div>
     </div>
   )
 }
@@ -289,43 +405,41 @@ export function PnlView({
   const [scope, setScope] = useState<Scope>('business')
   const totals = report.totals[scope]
 
-  const { incomeLines, expenseLines } = useMemo(() => {
-    const lines = report.lines.filter((l) =>
-      scope === 'business' ? l.scope === 'business' : true,
-    )
-    const inc = lines
-      .filter((l) => l.type === 'income')
-      .sort((a, b) => Math.abs(b.current_cents) - Math.abs(a.current_cents))
-    const exp = lines
-      .filter((l) => l.type === 'expense')
-      .sort((a, b) => Math.abs(b.current_cents) - Math.abs(a.current_cents))
-    return { incomeLines: inc, expenseLines: exp }
-  }, [report.lines, scope])
+  // Lines filtered to the current scope.
+  const scopedLines = useMemo(
+    () =>
+      report.lines.filter((l) => (scope === 'business' ? l.scope === 'business' : true)),
+    [report.lines, scope],
+  )
 
-  // Donut data (positive magnitudes, top 8 + Other)
+  // Main groups for income and expenses.
+  const incomeGroups = useMemo(() => groupByMain(scopedLines, 'income'), [scopedLines])
+  const expenseGroups = useMemo(() => groupByMain(scopedLines, 'expense'), [scopedLines])
+
+  // Donut data from MAIN groups (positive magnitudes, top 8 + Other).
   const incomeDonut = useMemo(
     () =>
       topNWithOther(
-        incomeLines.map((l) => ({ name: l.name, value: l.current_cents })).filter((x) => x.value > 0),
+        incomeGroups.map((g) => ({ name: g.main_name, value: g.current_cents })).filter((x) => x.value > 0),
         8,
       ),
-    [incomeLines],
+    [incomeGroups],
   )
   const expenseDonut = useMemo(
     () =>
       topNWithOther(
-        expenseLines.map((l) => ({ name: l.name, value: -l.current_cents })).filter((x) => x.value > 0),
+        expenseGroups.map((g) => ({ name: g.main_name, value: -g.current_cents })).filter((x) => x.value > 0),
         8,
       ),
-    [expenseLines],
+    [expenseGroups],
   )
 
-  // Waterfall: income, then top expense groups stepping down, landing on net.
+  // Waterfall: income, then top MAIN expense groups stepping down, landing on net.
   const waterfall = useMemo(() => {
     const income = totals.income_cents
     const net = totals.net_cents
-    const expItems = expenseLines
-      .map((l) => ({ name: l.name, value: -l.current_cents }))
+    const expItems = expenseGroups
+      .map((g) => ({ name: g.main_name, value: -g.current_cents }))
       .filter((x) => x.value > 0)
       .sort((a, b) => b.value - a.value)
     const top = expItems.slice(0, 6)
@@ -350,7 +464,7 @@ export function PnlView({
       raw: net,
     })
     return rows
-  }, [totals, expenseLines])
+  }, [totals, expenseGroups])
 
   // This-vs-last comparison
   const compare = useMemo(
@@ -522,6 +636,9 @@ export function PnlView({
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-base">Statement</CardTitle>
+          <p className="text-xs text-muted-foreground">
+            Main categories in bold; sub-categories indented beneath each.
+          </p>
         </CardHeader>
         <CardContent className="p-0">
           {/* column header */}
@@ -529,25 +646,19 @@ export function PnlView({
             <span>Category</span>
             <span className="w-28 text-right">{periodLabel}</span>
             <span className="hidden w-28 text-right sm:block">{prevLabel}</span>
-            <span className="w-16 text-right">Δ</span>
+            <span className="w-16 text-right">&Delta;</span>
           </div>
 
           {/* Income */}
           <div className="bg-muted/40 px-4 py-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             Income
           </div>
-          {incomeLines.length === 0 ? (
+          {incomeGroups.length === 0 ? (
             <div className="px-4 py-2 text-sm text-muted-foreground">No income.</div>
           ) : (
             <div className="divide-y">
-              {incomeLines.map((l: PnlLine) => (
-                <StatementRow
-                  key={l.id}
-                  name={l.name}
-                  cur={l.current_cents}
-                  prev={l.prior_cents}
-                  goodWhenUp
-                />
+              {incomeGroups.map((g) => (
+                <GroupBlock key={g.main_id} group={g} sign={1} goodWhenUp />
               ))}
             </div>
           )}
@@ -565,18 +676,12 @@ export function PnlView({
           <div className="bg-muted/40 px-4 py-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             Expenses
           </div>
-          {expenseLines.length === 0 ? (
+          {expenseGroups.length === 0 ? (
             <div className="px-4 py-2 text-sm text-muted-foreground">No expenses.</div>
           ) : (
             <div className="divide-y">
-              {expenseLines.map((l: PnlLine) => (
-                <StatementRow
-                  key={l.id}
-                  name={l.name}
-                  cur={-l.current_cents}
-                  prev={-l.prior_cents}
-                  goodWhenUp={false}
-                />
+              {expenseGroups.map((g) => (
+                <GroupBlock key={g.main_id} group={g} sign={-1} goodWhenUp={false} />
               ))}
             </div>
           )}
