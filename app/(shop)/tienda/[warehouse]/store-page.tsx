@@ -444,7 +444,9 @@ export function StorePage({ catalog, stores = [] }: { catalog: StoreCatalog; sto
             <div className="flex min-w-0 flex-1 items-center gap-2">
               <button type="button" aria-label="menu" onClick={() => setMenuOpen(true)} className="flex-shrink-0 opacity-90 transition active:scale-90"><Icon d={ICON.menu} />   </button>
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/logo-g.png" alt="GangaLoo" className="h-9 w-9 flex-shrink-0 object-contain" />
+              <Link href="/" aria-label={locale === 'es' ? 'Ir al inicio' : 'Go to home'} className="flex-shrink-0">
+                <img src="/logo-g.png" alt="GangaLoo" className="h-9 w-9 object-contain" />
+              </Link>
             <span className="truncate text-[18px] font-semibold tracking-wide sm:text-[20px]">GangaLoo <span className="hidden font-normal opacity-90 sm:inline">{warehouse.name}</span></span>
             {waHref && (
               <a
