@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import Link from 'next/link'
 import { useMemo, useState } from 'react'
@@ -48,6 +48,7 @@ import {
   completePaymentRecord,
   addSupplierPayment,
   waiveSupplierRemainder,
+  settleZeroSupplierPurchase,
 } from '../actions'
 import type {
   PurchaseStatus,
@@ -135,7 +136,7 @@ export function PurchaseActionsBar({
   const router = useRouter()
 
   const [busyAction, setBusyAction] =
-    useState<null | 'complete' | 'lost' | 'received' | 'cancelled' | 'paid' | 'correcting' | 'completingpay' | 'waiving'>(null)
+    useState<null | 'complete' | 'lost' | 'received' | 'cancelled' | 'paid' | 'correcting' | 'completingpay' | 'waiving' | 'settlingzero'>(null)
   const [completeOpen, setCompleteOpen] = useState(false)
   const [lostOpen, setLostOpen] = useState(false)
   const [receiveOpen, setReceiveOpen] = useState(false)
@@ -144,6 +145,7 @@ export function PurchaseActionsBar({
   const [correctOpen, setCorrectOpen] = useState(false)
   const [cprOpen, setCprOpen] = useState(false)
   const [waiveOpen, setWaiveOpen] = useState(false)
+  const [settleZeroOpen, setSettleZeroOpen] = useState(false)
 
   const catBlocks = useMemo(() => buildExpenseBlocks(categories), [categories])
 
@@ -459,6 +461,14 @@ export function PurchaseActionsBar({
     setWaiveOpen(false); setBusyAction(null); router.refresh()
   }
 
+  async function handleSettleZero() {
+    setBusyAction('settlingzero')
+    const res = await settleZeroSupplierPurchase(orderId)
+    if (!res.ok) { toast.error(res.error); setBusyAction(null); return }
+    toast.success('Order marked paid. Nothing owed to the supplier. You can now receive it.')
+    setSettleZeroOpen(false); setBusyAction(null); router.refresh()
+  }
+
   // ---- Visibility ----
   const canReceive  = status === 'paid_supplier' || status === 'received'
   const canComplete = status === 'received'
@@ -475,6 +485,10 @@ export function PurchaseActionsBar({
   // round-49a: a partly-paid pending order with a leftover sliver can be waived.
   const usdOpen     = Math.max((usdTotalForPay ?? 0) - (usdCoveredForPay ?? 0), 0)
   const canWaive    = status === 'pending' && (usdCoveredForPay ?? 0) > 0 && usdOpen > 0
+  // Free order: pending with a zero USD total and nothing paid. Advance it to
+  // paid_supplier with no payment (there is nothing to pay); transport still
+  // lands as inventory cost at receive time.
+  const canSettleZero = status === 'pending' && (usdTotalForPay ?? 0) === 0 && (usdCoveredForPay ?? 0) === 0
 
   return (
     <div className="flex flex-wrap gap-2">
@@ -766,6 +780,47 @@ export function PurchaseActionsBar({
                 onClick={(e) => { e.preventDefault(); void handleMarkPaidSupplier() }}
               >
                 {busyAction === 'paid' ? 'Recording...' : 'Record payment'}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
+
+      {/* Settle zero-cost order - free purchase, nothing owed to supplier */}
+      {canSettleZero && (
+        <AlertDialog open={settleZeroOpen} onOpenChange={setSettleZeroOpen}>
+          <AlertDialogTrigger asChild>
+            <Button type="button" variant="default" size="sm">
+              <BadgeCheck className="mr-1.5 h-4 w-4" />
+              Mark as paid (nothing owed)
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent className="max-w-xl">
+            <AlertDialogHeader>
+              <AlertDialogTitle>Mark this order as paid?</AlertDialogTitle>
+              <AlertDialogDescription asChild>
+                <div className="space-y-2 text-sm">
+                  <div>
+                    This order costs nothing (USD total is 0.00), so there is no
+                    supplier payment to record. This moves it straight to{' '}
+                    <span className="font-medium">Paid supplier</span> so you can
+                    receive the goods.
+                  </div>
+                  <div className="text-muted-foreground">
+                    No money moves and nothing is posted to your accounts. Any
+                    transport you allocated still becomes the item cost when you
+                    receive it.
+                  </div>
+                </div>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={busyAction === 'settlingzero'}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                disabled={busyAction === 'settlingzero'}
+                onClick={(e) => { e.preventDefault(); void handleSettleZero() }}
+              >
+                {busyAction === 'settlingzero' ? 'Working...' : 'Mark as paid'}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>

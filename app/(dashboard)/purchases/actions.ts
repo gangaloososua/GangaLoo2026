@@ -674,3 +674,29 @@ export async function waiveSupplierRemainder(
   revalidatePath('/purchases')
   return { ok: true }
 }
+
+// ---------------------------------------------------------------------------
+// settleZeroSupplierPurchase — advance a genuinely FREE purchase order
+// (usd_total = 0, no payments) from 'pending' to 'paid_supplier' without any
+// payment or ledger post. There is nothing to pay the supplier; transport (if
+// any) still lands as inventory landed cost at receive time. The DB function
+// enforces all three guards (pending, usd_total = 0, no payments). Owner-only.
+// ---------------------------------------------------------------------------
+
+export async function settleZeroSupplierPurchase(
+  orderId: string,
+): Promise<ActionResult> {
+  await requireOwner()
+
+  if (!orderId) return { ok: false, error: 'Order id is required.' }
+
+  const supabase = await createClient()
+  const { error } = await supabase.rpc('settle_zero_supplier_purchase', {
+    p_purchase_order_id: orderId,
+  })
+  if (error) return { ok: false, error: error.message }
+
+  revalidatePath(`/purchases/${orderId}`)
+  revalidatePath('/purchases')
+  return { ok: true }
+}
