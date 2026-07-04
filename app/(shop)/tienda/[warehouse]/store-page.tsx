@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
@@ -52,7 +52,7 @@ const ICON = {
 }
 
 // Build a wa.me chat link for a store. Strips any non-digits from the stored
-// number (so a saved "+1 (829)…" still works) and pre-fills a friendly,
+// number (so a saved "+1 (829)â€¦" still works) and pre-fills a friendly,
 // locale-aware message. Returns null when the store has no number.
 function whatsappHref(raw: string | null | undefined, storeName: string, locale: Locale): string | null {
   const digits = (raw ?? '').replace(/[^0-9]/g, '')
@@ -144,12 +144,12 @@ function ProductCard({
 }
 
 const DEAL_T = {
-  es: { daily: 'Oferta del Día', weekly: 'Oferta de la Semana', endsIn: 'Termina en' },
+  es: { daily: 'Oferta del DÃ­a', weekly: 'Oferta de la Semana', endsIn: 'Termina en' },
   en: { daily: 'Deal of the Day', weekly: 'Deal of the Week', endsIn: 'Ends in' },
 } as const
 
 const MENU_T = {
-  es: { home: 'Inicio', account: 'Mi cuenta', cart: 'Carrito', stores: 'Todas las tiendas', browse: 'Explorar por categoría', filters: 'Filtrar', lang: 'Idioma' },
+  es: { home: 'Inicio', account: 'Mi cuenta', cart: 'Carrito', stores: 'Todas las tiendas', browse: 'Explorar por categorÃ­a', filters: 'Filtrar', lang: 'Idioma' },
   en: { home: 'Home', account: 'My account', cart: 'Cart', stores: 'All stores', browse: 'Browse by category', filters: 'Filter', lang: 'Language' },
 } as const
 
@@ -319,7 +319,7 @@ export function StorePage({ catalog, stores = [] }: { catalog: StoreCatalog; sto
 
   const productUrl = (p: StoreProduct) =>
     `${window.location.origin}/tienda/${warehouse.slug}/${p.slug}`
-  const shareMsg = (p: StoreProduct) => `${p.name} · ${price(p.priceCents)}`
+  const shareMsg = (p: StoreProduct) => `${p.name} Â· ${price(p.priceCents)}`
 
   const handleShare = async (p: StoreProduct) => {
     const isMobile = typeof navigator !== 'undefined' && /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
@@ -347,7 +347,7 @@ export function StorePage({ catalog, stores = [] }: { catalog: StoreCatalog; sto
       setShareCopied(true)
       window.setTimeout(() => setShareCopied(false), 1500)
     } catch {
-      /* clipboard blocked — ignore */
+      /* clipboard blocked â€” ignore */
     }
   }
 
@@ -412,12 +412,20 @@ export function StorePage({ catalog, stores = [] }: { catalog: StoreCatalog; sto
       }
       return true
     }
+    // In the default view (all categories, no search) the "Ofertas" strip above
+    // already shows the first 8 in-stock offers. Exclude those from the main
+    // grid so a product never appears twice. Category views and search are
+    // unaffected (the strip is hidden there, so everything still shows).
+    const offerIdsShown =
+      activeCat === 'all'
+        ? new Set(offers.filter((p) => p.stock > 0).slice(0, 8).map((p) => p.id))
+        : new Set<string>()
     const byCat =
       activeCat === 'all'
-        ? products
+        ? products.filter((p) => !offerIdsShown.has(p.id))
         : products.filter((p) => p.category?.id === activeCat)
     return byCat.filter(inStock).filter(attrOk)
-  }, [searching, trimmedQuery, activeCat, products, attributes, selectedValues])
+  }, [searching, trimmedQuery, activeCat, products, attributes, selectedValues, offers])
 
   const shown = filtered.slice(0, visible)
   const cartHref = `/tienda/${warehouse.slug}/carrito`
@@ -454,7 +462,7 @@ export function StorePage({ catalog, stores = [] }: { catalog: StoreCatalog; sto
                 target="_blank"
                 rel="noopener noreferrer"
                 aria-label="WhatsApp"
-                title={locale === 'es' ? 'Escríbenos por WhatsApp' : 'Message us on WhatsApp'}
+                title={locale === 'es' ? 'EscrÃ­benos por WhatsApp' : 'Message us on WhatsApp'}
                 className="ml-1 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full transition active:scale-90"
                 style={{ background: '#25D366', color: '#fff' }}
               >
@@ -555,8 +563,8 @@ export function StorePage({ catalog, stores = [] }: { catalog: StoreCatalog; sto
           style={{ background: '#eaf2ff', color: NAVY, padding: '8px 16px', borderBottom: '1px solid #d8e4f7' }}
         >
           {locale === 'es'
-            ? 'Inicia sesión y obtén mejores precios →'
-            : 'Sign in for better prices →'}
+            ? 'Inicia sesiÃ³n y obtÃ©n mejores precios â†’'
+            : 'Sign in for better prices â†’'}
         </a>
       )}
 
@@ -653,7 +661,7 @@ export function StorePage({ catalog, stores = [] }: { catalog: StoreCatalog; sto
           {searching
             ? `${locale === 'es' ? 'Resultados' : 'Results'} "${query.trim()}"`
             : ts(locale, 'shop.allProducts')}{' '}
-          <span style={{ color: MUTED, fontWeight: 400 }}>· {filtered.length}</span>
+          <span style={{ color: MUTED, fontWeight: 400 }}>Â· {filtered.length}</span>
         </h2>
         {filtered.length === 0 ? (
           <p className="py-12 text-center text-[14px]" style={{ color: MUTED }}>{ts(locale, 'shop.empty')}</p>
@@ -667,7 +675,7 @@ export function StorePage({ catalog, stores = [] }: { catalog: StoreCatalog; sto
             {visible < filtered.length && (
               <div className="mt-7 flex justify-center">
                 <button type="button" onClick={() => setVisible((v) => v + PAGE)} className="rounded-full px-7 py-2.5 text-[13px] font-semibold transition active:scale-95" style={{ color: NAVY, background: '#fff', border: `1.5px solid ${NAVY}` }}>
-                  {ts(locale, 'shop.loadMore')} · {filtered.length - visible}
+                  {ts(locale, 'shop.loadMore')} Â· {filtered.length - visible}
                 </button>
               </div>
             )}
@@ -681,7 +689,7 @@ export function StorePage({ catalog, stores = [] }: { catalog: StoreCatalog; sto
         <div className="fixed inset-0 z-[60]">
           <button
             type="button"
-            aria-label={locale === 'es' ? 'Cerrar menú' : 'Close menu'}
+            aria-label={locale === 'es' ? 'Cerrar menÃº' : 'Close menu'}
             onClick={() => setMenuOpen(false)}
             className="absolute inset-0"
             style={{ background: 'rgba(10,16,28,.45)' }}
@@ -797,7 +805,7 @@ export function StorePage({ catalog, stores = [] }: { catalog: StoreCatalog; sto
             </button>
             <button type="button" onClick={shareCopyLink} className="mt-2 flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-[14px]" style={{ border: '1px solid #eceef2', color: INK }}>
               <span style={{ color: shareCopied ? '#1d9e75' : NAVY }}><Icon d={shareCopied ? 'M5 12l4 4 10-10' : ICON.link} size={20} /></span>
-              {shareCopied ? (locale === 'es' ? '¡Copiado!' : 'Copied!') : (locale === 'es' ? 'Copiar enlace' : 'Copy link')}
+              {shareCopied ? (locale === 'es' ? 'Â¡Copiado!' : 'Copied!') : (locale === 'es' ? 'Copiar enlace' : 'Copy link')}
             </button>
           </div>
         </div>
