@@ -69,8 +69,20 @@ export async function fetchProductsWithStock(
     )
 
   if (filters.search) {
-    const s = filters.search.trim().replace(/[%,]/g, '')
-    if (s) query = query.or(`name.ilike.%${s}%,sku.ilike.%${s}%`)
+    // per-word AND match: split what the user typed into words and require
+    // EACH word to appear somewhere in name OR sku (any order). Escape the
+    // PostgREST/LIKE specials so a literal % (e.g. "180%") and _ are matched
+    // as themselves, not as wildcards. Commas/parens are dropped because they
+    // would break the .or() filter expression.
+    const words = filters.search
+      .replace(/[(),]/g, ' ')
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean)
+    for (const w of words) {
+      const esc = w.replace(/[%_\\]/g, (ch) => `\\${ch}`)
+      query = query.or(`name.ilike.%${esc}%,sku.ilike.%${esc}%`)
+    }
   }
   if (filters.active === 'active') query = query.eq('is_active', true)
   if (filters.active === 'inactive') query = query.eq('is_active', false)
