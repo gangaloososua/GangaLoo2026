@@ -1,10 +1,14 @@
-'use client'
+﻿'use client'
 
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 
 // Round 25a - dashboard period switcher.
 // Updates the ?period= query param; the server page re-renders with new data.
+
+// The dashboard lives at /panel (not /). Navigate there so ?period= is read
+// by the dashboard page instead of falling through to the landing page.
+const BASE = '/panel'
 
 const OPTIONS: { value: string; label: string }[] = [
   { value: 'this-month', label: 'This month' },
@@ -21,7 +25,7 @@ export function DashboardPeriodSwitcher({ current }: { current: string }) {
     if (value === 'this-month') params.delete('period')
     else params.set('period', value)
     const qs = params.toString()
-    router.push(qs ? `/?${qs}` : '/')
+    router.push(qs ? `${BASE}?${qs}` : BASE)
   }
 
   return (
