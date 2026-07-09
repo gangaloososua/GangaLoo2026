@@ -1,4 +1,4 @@
-// Loads ONE product for a warehouse store from the SAFE public views (store_*),
+﻿// Loads ONE product for a warehouse store from the SAFE public views (store_*),
 // so customer browsers never touch costs/commissions. Effective price mirrors
 // the grid (lib/store/catalog.ts): guest markup, club price, direct sale price,
 // and featured deal -- so the product page agrees with the grid, cart, and the
@@ -9,6 +9,9 @@ import { createClient } from '@/lib/supabase/server'
 import type { StoreWarehouse } from './catalog'
 
 export type StoreProductImage = { url: string; alt: string | null }
+
+// One attribute (e.g. "Color") and the product's value(s) for it (e.g. "Negro").
+export type StoreProductAttributeGroup = { name: string; values: string[] }
 
 export type StoreProductDetail = {
   id: string
@@ -24,6 +27,7 @@ export type StoreProductDetail = {
   category: { id: string; name: string } | null
   stock: number
   images: StoreProductImage[]
+  attributes: StoreProductAttributeGroup[]
 }
 
 function pickDescription(row: Record<string, unknown>): string | null {
@@ -205,6 +209,50 @@ export async function fetchStoreProduct(
     /* ignore -- video is optional */
   }
 
+  // Attributes shown as specs on the product page. Group active values under
+  // their attribute name, both ordered by display_order.
+  const attributes: StoreProductAttributeGroup[] = []
+  {
+    const { data: pav } = await supabase
+      .from('store_product_attribute_values')
+      .select('attribute_value_id')
+      .eq('product_id', product.id)
+    const valueIds = [...new Set((pav ?? []).map((r) => r.attribute_value_id as string))]
+    if (valueIds.length > 0) {
+      const { data: vals } = await supabase
+        .from('store_attribute_values')
+        .select('id, attribute_id, value, display_order, is_active')
+        .in('id', valueIds)
+        .eq('is_active', true)
+      const attrIds = [...new Set((vals ?? []).map((v) => v.attribute_id as string))]
+      const { data: attrs } = attrIds.length
+        ? await supabase
+            .from('store_attributes')
+            .select('id, name, display_order, is_active')
+            .in('id', attrIds)
+            .eq('is_active', true)
+        : { data: [] as Record<string, unknown>[] }
+      const attrMeta = new Map<string, { name: string; order: number }>()
+      for (const a of attrs ?? []) {
+        attrMeta.set(a.id as string, { name: a.name as string, order: (a.display_order as number) ?? 0 })
+      }
+      const grouped = new Map<string, { name: string; order: number; values: { text: string; order: number }[] }>()
+      for (const v of vals ?? []) {
+        const meta = attrMeta.get(v.attribute_id as string)
+        if (!meta) continue
+        if (!grouped.has(v.attribute_id as string)) {
+          grouped.set(v.attribute_id as string, { name: meta.name, order: meta.order, values: [] })
+        }
+        grouped.get(v.attribute_id as string)!.values.push({ text: v.value as string, order: (v.display_order as number) ?? 0 })
+      }
+      const ordered = [...grouped.values()].sort((a, b) => a.order - b.order || a.name.localeCompare(b.name))
+      for (const g of ordered) {
+        const values = g.values.sort((a, b) => a.order - b.order || a.text.localeCompare(b.text)).map((x) => x.text)
+        attributes.push({ name: g.name, values })
+      }
+    }
+  }
+
   return {
     id: product.id as string,
     sku: product.sku as string,
@@ -219,5 +267,6 @@ export async function fetchStoreProduct(
     category,
     stock,
     images,
+    attributes,
   }
 }

@@ -266,6 +266,20 @@ export function ProductView({
               <p className="whitespace-pre-line text-[14px] leading-relaxed" style={{ color: '#3a4452' }}>{product.description}</p>
             </div>
           )}
+
+          {product.attributes.length > 0 && (
+            <div className="mt-7">
+              <h2 className="mb-2 text-[15px] font-semibold" style={{ color: NAVY }}>{ts(locale, 'shop.specs')}</h2>
+              <dl className="divide-y" style={{ borderColor: '#eef1f5' }}>
+                {product.attributes.map((a) => (
+                  <div key={a.name} className="flex gap-3 py-1.5 text-[14px]">
+                    <dt className="w-32 shrink-0" style={{ color: MUTED }}>{a.name}</dt>
+                    <dd style={{ color: '#3a4452' }}>{a.values.join(', ')}</dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
+          )}
         </div>
       </main>
     </div>
