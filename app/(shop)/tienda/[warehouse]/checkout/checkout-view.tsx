@@ -77,6 +77,7 @@ const CT = {
     regionNational: 'Nacional (resto del país)',
     free: 'Gratis',
     deliveryFee: 'Envío',
+    feeNonRefundable: 'El costo de envío no es reembolsable. Se debe pagar aunque luego se cancele o rechace el pedido.',
     payTitle: 'Forma de pago',
     payCash: 'Efectivo',
     payCashSub: 'Pagas al recibir / al recoger',
@@ -122,6 +123,7 @@ const CT = {
     regionNational: 'National (rest of the country)',
     free: 'Free',
     deliveryFee: 'Delivery',
+    feeNonRefundable: 'The delivery fee is non-refundable. It remains due even if the order is later cancelled or refused.',
     payTitle: 'Payment method',
     payCash: 'Cash',
     payCashSub: 'Pay on delivery / on pickup',
@@ -909,6 +911,11 @@ export function CheckoutView({
                 <span style={{ color: MUTED }}>{tx.deliveryFee}</span>
                 <span style={{ color: INK }}>{fee > 0 ? price(fee) : tx.free}</span>
               </div>
+              {fee > 0 && (
+                <p className="mt-1 text-[12px] leading-snug" style={{ color: RED }}>
+                  {tx.feeNonRefundable}
+                </p>
+              )}
               {surcharge > 0 && (
                 <div className="mt-1 flex items-center justify-between text-[13px]">
                   <span style={{ color: MUTED }}>{tx.surcharge}{surchargeRate.pct > 0 ? ` (${surchargeRate.pct}%)` : ''}</span>
