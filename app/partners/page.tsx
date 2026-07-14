@@ -34,7 +34,7 @@ const SELLER_BENEFITS = [
 const SELLER_STEPS = [
   { n: 1, t: 'Compras al precio regular', d: 'Como vendedor, adquieres los productos GangaLoo al precio normal de venta al público.' },
   { n: 2, t: 'Ganas comisión por cada venta', d: 'Cada mes recibes una comisión sobre todas las ventas registradas a tu nombre.' },
-  { n: 3, t: 'Requisito de calificación', d: 'Durante los primeros 3 meses, compra un mínimo de 2 productos por mes para mantenerte activo.' },
+  { n: 3, t: 'Requisito de calificación', d: 'Durante los primeros 3 meses, califica vendiendo un mínimo de 2 productos por mes.' },
 ]
 
 const ERR_ES: Record<string, string> = {
