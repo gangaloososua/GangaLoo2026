@@ -1,9 +1,10 @@
-﻿'use client'
+'use client'
 
 import { useState, useEffect, useTransition } from 'react'
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { Search, Plus } from 'lucide-react'
+import { QrScanButton } from '@/components/qr-scanner'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import {
@@ -109,6 +110,8 @@ export function ProductsClient({
             onChange={(e) => setSearchInput(e.target.value)}
           />
         </div>
+
+            <QrScanButton onScan={(text) => setSearchInput(text)} label="Scan" />
 
         <Select
           value={currentFilters.categoryId ?? 'all'}
