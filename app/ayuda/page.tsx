@@ -207,7 +207,8 @@ export default function AyudaPage() {
           Como vendedora, compras los productos al precio normal y los vendes a
           tus clientas. Al final de cada mes recibes una comisión sobre todas las
           ventas registradas a tu nombre. ¡Ganas dinero sin tener que comprar
-          inventario por adelantado!
+          inventario por adelantado! Tu primera comisión se paga después de tu
+          primer mes completo; luego se paga cada dos semanas.
         </InfoBox>
         <div className="ay-steps">
           <Step n={1} title="Llena la solicitud">
@@ -236,7 +237,7 @@ export default function AyudaPage() {
           </Step>
         </div>
         <InfoBox tone="red" title="📋 Requisito de los primeros 3 meses">
-          Durante los primeros 3 meses debes comprar un mínimo de 2 productos por
+          Durante los primeros 3 meses debes vender un mínimo de 2 productos por
           mes para mantenerte activa como vendedora. Después de los 3 meses no
           hay mínimo obligatorio.
         </InfoBox>
