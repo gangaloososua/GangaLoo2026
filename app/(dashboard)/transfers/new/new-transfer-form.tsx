@@ -224,7 +224,7 @@ export function NewTransferForm({
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="overflow-visible">
         <CardHeader>
           <CardTitle className="text-base">Products</CardTitle>
         </CardHeader>
