@@ -48,6 +48,7 @@ import {
 import type { Locale } from '@/lib/i18n/dictionary'
 import { tc } from '@/lib/i18n/register-i18n'
 import { QrScanButton } from '@/components/qr-scanner'
+import { Checkbox } from '@/components/ui/checkbox'
 import { findProductBySkuAction } from '../scan/actions'
 import { confirmPosSale, type ConfirmPosInput } from '../sales/actions'
 import { loadRegisterProducts } from './actions'
@@ -142,6 +143,7 @@ export function Register({
   // Who the sale is credited to. Defaults to the logged-in caller; only
   // owner/admin can change it (canChooseSeller).
   const [activeSellerId, setActiveSellerId] = useState<string | null>(sellerId)
+  const [noCommission, setNoCommission] = useState(false)
   const [cartOpen, setCartOpen] = useState(false)
   const [pending, start] = useTransition()
   const didMount = useRef(false)
@@ -274,6 +276,7 @@ export function Register({
     // Reset the credited seller back to the logged-in caller so the next sale
     // is never accidentally attributed to the previous one.
     setActiveSellerId(sellerId)
+    setNoCommission(false)
   }
 
   const totals = useMemo(() => {
@@ -315,6 +318,7 @@ export function Register({
       fulfillment_warehouse_id: warehouseId,
       fulfillment_method: 'in_store',
       discount_cents: saleDiscountCents,
+      no_commission: noCommission,
       items: lines.map((l) => ({
         product_id: l.product_id,
         qty: l.qty,
@@ -386,6 +390,18 @@ export function Register({
                 ))}
               </SelectContent>
             </Select>
+          </div>
+        ) : null}
+        {canChooseSeller ? (
+          <div className="flex items-center gap-2">
+            <Checkbox
+              id="no-commission-register"
+              checked={noCommission}
+              onCheckedChange={(v) => setNoCommission(v === true)}
+            />
+            <label htmlFor="no-commission-register" className="text-xs font-normal text-muted-foreground">
+              {locale === 'es' ? 'Sin comisión en esta venta' : 'No commission for this sale'}
+            </label>
           </div>
         ) : null}
         <MemberScan member={member} onMember={setMember} locale={locale} />
