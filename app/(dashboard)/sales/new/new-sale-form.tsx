@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Checkbox } from '@/components/ui/checkbox'
 import {
   Select,
   SelectContent,
@@ -186,6 +187,7 @@ export function NewSaleForm({
   const [tierPct, setTierPct] = useState(0)
   const [tierName, setTierName] = useState('')
   const [sellerId, setSellerId] = useState<string>(defaultSellerId ?? '')
+  const [noCommission, setNoCommission] = useState(false)
   const [sourceWarehouseId, setSourceWarehouseId] = useState<string>('')
   const [fulfillmentWarehouseId, setFulfillmentWarehouseId] = useState<string>('')
   const [fulfillmentMethod, setFulfillmentMethod] =
@@ -570,6 +572,7 @@ export function NewSaleForm({
         fulfillment_method: fulfillmentMethod,
         discount_cents: saleDiscountCents,
         coupon_code: appliedCoupon?.code ?? null,
+        no_commission: noCommission,
         items: lines.map((l) => {
           const gross = l.unit_price_cents * l.qty
           const cap = Math.floor(gross * 0.3)
@@ -697,6 +700,17 @@ export function NewSaleForm({
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="no-commission"
+                checked={noCommission}
+                onCheckedChange={(v) => setNoCommission(v === true)}
+              />
+              <Label htmlFor="no-commission" className="text-xs font-normal">
+                No commission for this sale
+              </Label>
             </div>
 
             <div className="space-y-1">

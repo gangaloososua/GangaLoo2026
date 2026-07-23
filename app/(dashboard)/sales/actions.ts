@@ -535,6 +535,9 @@ export type ConfirmPosInput = {
   // (validate_coupon for channel 'pos') and computes the real amount off the
   // merchandise subtotal — the client value is never trusted.
   coupon_code?: string | null
+  // Owner-decided: this sale should never generate seller commission
+  // (e.g. distributor-owned stock, internal transfer sold on their behalf).
+  no_commission?: boolean
   items: ConfirmPosItem[]
   payments: ConfirmPosPayment[]
 }
