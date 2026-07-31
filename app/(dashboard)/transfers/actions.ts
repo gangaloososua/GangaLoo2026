@@ -12,6 +12,14 @@
 // moves. The RPC enforces that a non-owner caller owns one of the warehouses.
 // approveTransfer: owner/admin only — your double-check; ships approved items.
 // declineTransfer: owner/admin declines, or the requester withdraws.
+//
+// Round 77a — cancel an in-transit transfer.
+// cancelTransfer: owner/admin only (same gate as approve/initiate — the RPC
+// re-checks too). Reverses a transfer that shipped but never actually left,
+// putting the exact quantities back into the exact source lots and flipping
+// status -> cancelled. Only works while status is still in_transit (once
+// received, the destination already has the stock and this is no longer the
+// right tool).
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { requireOwner, requireAdminCaller } from '@/lib/auth/guard'
@@ -66,6 +74,30 @@ export async function receiveTransfer(transferId: string): Promise<ReceiveTransf
   const supabase = await createClient()
   const { error } = await supabase.rpc('receive_stock_transfer', {
     p_transfer_id: transferId,
+  })
+  if (error) return { ok: false, error: error.message }
+  revalidatePath('/transfers')
+  revalidatePath(`/transfers/${transferId}`)
+  revalidatePath('/inventory')
+  revalidatePath('/')
+  return { ok: true }
+}
+
+// --- Round 77a: cancel an in-transit transfer ------------------------------
+
+export type CancelTransferResult = { ok: true } | { ok: false; error: string }
+export async function cancelTransfer(
+  transferId: string,
+  reason?: string | null,
+): Promise<CancelTransferResult> {
+  // Owner/admin only — same gate as approve/initiate. The RPC re-checks and
+  // puts the stock back into the exact source lots it left from.
+  await requireOwner()
+  if (!transferId) return { ok: false, error: 'Transfer id is required.' }
+  const supabase = await createClient()
+  const { error } = await supabase.rpc('cancel_stock_transfer', {
+    p_transfer_id: transferId,
+    p_reason: reason?.trim() || null,
   })
   if (error) return { ok: false, error: error.message }
   revalidatePath('/transfers')

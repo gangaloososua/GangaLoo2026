@@ -4,6 +4,10 @@
 // dictionary stays untouched. Language still follows role (localeForRole):
 // owner/admin -> en, distributor -> es. Reuse plural() + localeForRole() from
 // the main dictionary; this module only adds transfer-specific keys.
+//
+// Round 77a — added tr.cancel.* strings for cancelling an in-transit
+// transfer (owner/admin only, so these are only ever shown in English on the
+// owner view, but both locales are filled in for consistency).
 
 import type { Locale } from '@/lib/i18n/dictionary'
 
@@ -100,6 +104,19 @@ const en: Messages = {
   'tr.recv.doing': 'Receiving…',
   'tr.recv.toastDone': 'Transfer received — stock added to the destination.',
   'tr.recv.cancel': 'Cancel',
+
+  // Cancel-transfer button (owner/admin only — undoes a shipment that never
+  // actually left, putting stock back into the exact source lots)
+  'tr.cancel.button': 'Cancel transfer',
+  'tr.cancel.title': 'Cancel this transfer?',
+  'tr.cancel.bodyPre': 'This puts the stock back into',
+  'tr.cancel.bodyPost': "and marks the transfer as cancelled. Use this if it was shipped by mistake and never actually left the warehouse.",
+  'tr.cancel.reasonLabel': 'Reason (optional)',
+  'tr.cancel.reasonPh': "Why you're cancelling this transfer.",
+  'tr.cancel.keep': 'Keep it',
+  'tr.cancel.doing': 'Cancelling…',
+  'tr.cancel.toastDone': 'Transfer cancelled — stock returned to the source.',
+  'tr.cancel.toastFailed': 'Failed to cancel.',
 }
 
 const es: Messages = {
@@ -193,6 +210,18 @@ const es: Messages = {
   'tr.recv.doing': 'Recibiendo…',
   'tr.recv.toastDone': 'Transferencia recibida — stock agregado al destino.',
   'tr.recv.cancel': 'Cancelar',
+
+  // Cancel-transfer button (owner/admin only)
+  'tr.cancel.button': 'Cancelar transferencia',
+  'tr.cancel.title': '¿Cancelar esta transferencia?',
+  'tr.cancel.bodyPre': 'Esto devuelve el stock a',
+  'tr.cancel.bodyPost': 'y marca la transferencia como cancelada. Úsalo si se envió por error y nunca salió realmente del almacén.',
+  'tr.cancel.reasonLabel': 'Motivo (opcional)',
+  'tr.cancel.reasonPh': 'Por qué cancelas esta transferencia.',
+  'tr.cancel.keep': 'Mantener',
+  'tr.cancel.doing': 'Cancelando…',
+  'tr.cancel.toastDone': 'Transferencia cancelada — stock devuelto al origen.',
+  'tr.cancel.toastFailed': 'No se pudo cancelar.',
 }
 
 const messages: Record<Locale, Messages> = { en, es }

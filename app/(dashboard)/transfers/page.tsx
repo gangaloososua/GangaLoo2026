@@ -18,6 +18,7 @@ import {
   type PendingRequest,
 } from '@/lib/stock-transfers'
 import { ReceiveTransferButton } from './receive-transfer-button'
+import { CancelTransferButton } from './cancel-transfer-button'
 import { RequestReviewButtons, WithdrawRequestButton } from './request-actions'
 
 export const dynamic = 'force-dynamic'
@@ -66,10 +67,12 @@ function RouteLabel({ t }: { t: TransferListRow }) {
 function ShippedRow({
   t,
   showReceive,
+  showCancel,
   locale,
 }: {
   t: TransferListRow
   showReceive: boolean
+  showCancel?: boolean
   locale: Locale
 }) {
   return (
@@ -81,12 +84,23 @@ function ShippedRow({
         </div>
         <div className="mt-0.5 text-xs text-muted-foreground">{metaLine(t, locale)}</div>
       </Link>
-      {showReceive && (
-        <ReceiveTransferButton
-          transferId={t.id}
-          toWarehouseName={t.to_warehouse_name}
-          locale={locale}
-        />
+      {(showReceive || showCancel) && (
+        <div className="flex shrink-0 items-center gap-2">
+          {showCancel && (
+            <CancelTransferButton
+              transferId={t.id}
+              fromWarehouseName={t.from_warehouse_name}
+              locale={locale}
+            />
+          )}
+          {showReceive && (
+            <ReceiveTransferButton
+              transferId={t.id}
+              toWarehouseName={t.to_warehouse_name}
+              locale={locale}
+            />
+          )}
+        </div>
       )}
     </div>
   )
@@ -237,7 +251,7 @@ export default async function TransfersPage() {
           empty={tt(locale, 'tr.empty.inTransit')}
         >
           {inTransit.map((t) => (
-            <ShippedRow key={t.id} t={t} showReceive locale={locale} />
+            <ShippedRow key={t.id} t={t} showReceive showCancel locale={locale} />
           ))}
         </Section>
 
