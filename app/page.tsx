@@ -2,6 +2,11 @@
 // Server component, no client JS. Pure navigation into the rest of the site.
 // "Tienda" -> /tienda (the store chooser that already exists).
 // Other links (/ayuda, /club, /partners, /cotizador) get built in later steps.
+//
+// Round 77c — added a "US Orders" link in the header nav, pointing to /us
+// (the English/USD browse-only storefront from the US-dropship plan). Kept
+// visible on mobile (same treatment as the Admin link) since it's a distinct
+// audience from the DR storefront CTA.
 
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -100,6 +105,7 @@ export default function HomePage() {
           <Link href="/ayuda">Cómo funciona</Link>
           <Link href="/club">Club</Link>
           <Link href="/partners">Mayoreo</Link>
+          <Link href="/us" className="gl-nav-us">🇺🇸 US Orders</Link>
           <Link href="/panel" className="gl-nav-admin">Admin</Link>
           <Link href="/tienda" className="gl-nav-cta">
             Tienda
@@ -254,13 +260,16 @@ const glStyles = `
 .gl-nav-links a:hover{ opacity:1; color:var(--gl-gold2); }
 .gl-nav-cta{ background:var(--gl-red); color:#fff !important; padding:9px 18px; border-radius:3px; opacity:1 !important; }
 .gl-nav-cta:hover{ background:#a50f22; color:#fff !important; }
+.gl-nav-us{ border:1px solid var(--gl-line); padding:7px 14px; border-radius:3px; opacity:1 !important; }
+.gl-nav-us:hover{ border-color:var(--gl-gold); color:var(--gl-gold2) !important; }
 @media (max-width:560px){
-  .gl-nav-links a:not(.gl-nav-cta):not(.gl-nav-admin){ display:none; }
+  .gl-nav-links a:not(.gl-nav-cta):not(.gl-nav-admin):not(.gl-nav-us){ display:none; }
   .gl-nav{ padding:0 4vw; gap:.5rem; }
   .gl-brand{ font-size:1.15rem; white-space:nowrap; flex-shrink:0; }
   .gl-logo-img{ height:30px; width:30px; }
   .gl-nav-links{ gap:.75rem; flex-shrink:0; }
   .gl-nav-admin{ font-size:.72rem; }
+  .gl-nav-us{ font-size:.68rem; padding:6px 10px; }
   .gl-nav-cta{ padding:7px 12px; font-size:.72rem; }
 }
 @media (max-width:360px){
