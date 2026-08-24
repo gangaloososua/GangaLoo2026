@@ -5,7 +5,6 @@
 // select it, then see/add/edit/remove how many units sit at each location.
 // Saves via the placement actions; reads on-hand from the search result so we
 // can gently flag when placed > on-hand.
-
 import { useEffect, useRef, useState, useTransition } from 'react'
 import { toast } from 'sonner'
 import { Search, Plus, Trash2 } from 'lucide-react'
@@ -31,18 +30,14 @@ import {
   removePlacement,
   type PlacementRow,
 } from './actions'
-
 type LookupItem = { id: string; name: string }
 type LocationItem = { id: string; warehouse_id: string; name: string }
-
 type Props = {
   warehouses: LookupItem[]
   locations: LocationItem[]
   locale: Locale
 }
-
 const DEBOUNCE_MS = 250
-
 export function PlacementEditor({ warehouses, locations, locale }: Props) {
   const [warehouseId, setWarehouseId] = useState(warehouses[0]?.id ?? '')
   const [query, setQuery] = useState('')
@@ -54,9 +49,7 @@ export function PlacementEditor({ warehouses, locations, locale }: Props) {
   const [addQty, setAddQty] = useState('1')
   const [pending, start] = useTransition()
   const reqId = useRef(0)
-
   const whLocations = locations.filter((l) => l.warehouse_id === warehouseId)
-
   // Debounced product search within the chosen warehouse.
   useEffect(() => {
     const q = query.trim()
@@ -76,7 +69,6 @@ export function PlacementEditor({ warehouses, locations, locale }: Props) {
     return () => clearTimeout(tmr)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query, warehouseId])
-
   function onWarehouseChange(id: string) {
     setWarehouseId(id)
     setSelected(null)
@@ -85,7 +77,6 @@ export function PlacementEditor({ warehouses, locations, locale }: Props) {
     setQuery('')
     setAddLocId('')
   }
-
   async function selectProduct(p: ProductSearchResult) {
     setSelected(p)
     setResults([])
@@ -95,7 +86,6 @@ export function PlacementEditor({ warehouses, locations, locale }: Props) {
     const res = await listProductPlacements(p.id, warehouseId)
     setPlacements(res.ok ? res.rows : [])
   }
-
   async function handleScan(code: string) {
     const res = await findProductBySkuAction(warehouseId, code)
     if (!res.ok) {
@@ -108,14 +98,12 @@ export function PlacementEditor({ warehouses, locations, locale }: Props) {
       toast.error(locale === 'es' ? 'No se encontró ese código.' : 'No product for that code.')
     }
   }
-
   function refreshPlacements() {
     if (!selected) return
     listProductPlacements(selected.id, warehouseId).then((res) => {
       if (res.ok) setPlacements(res.rows)
     })
   }
-
   function savePlacement(locationId: string, qty: number, okKey: string) {
     if (!selected) return
     start(async () => {
@@ -128,7 +116,6 @@ export function PlacementEditor({ warehouses, locations, locale }: Props) {
       }
     })
   }
-
   function remove(locationId: string) {
     if (!selected) return
     start(async () => {
@@ -141,7 +128,6 @@ export function PlacementEditor({ warehouses, locations, locale }: Props) {
       }
     })
   }
-
   function addNew() {
     if (!addLocId) {
       toast.error(tl(locale, 'loc.assign.toast.pickLoc'))
@@ -152,11 +138,9 @@ export function PlacementEditor({ warehouses, locations, locale }: Props) {
     setAddLocId('')
     setAddQty('1')
   }
-
   const placedTotal = placements.reduce((n, p) => n + p.qty, 0)
   const usedLocIds = new Set(placements.map((p) => p.location_id))
   const addableLocations = whLocations.filter((l) => !usedLocIds.has(l.id))
-
   return (
     <div className="space-y-4">
       {/* Warehouse + search */}
@@ -219,7 +203,6 @@ export function PlacementEditor({ warehouses, locations, locale }: Props) {
         </div>
         <QrScanButton locale={locale} onScan={handleScan} />
       </div>
-
       {/* Selected product + placements */}
       {!selected ? (
         <Card>
@@ -262,7 +245,6 @@ export function PlacementEditor({ warehouses, locations, locale }: Props) {
                 </div>
               )}
             </div>
-
             {/* Add to a location */}
             <div>
               <div className="mb-1 text-xs font-medium text-muted-foreground">
@@ -306,7 +288,6 @@ export function PlacementEditor({ warehouses, locations, locale }: Props) {
     </div>
   )
 }
-
 function PlacementRowEdit({
   row,
   locale,
@@ -321,46 +302,47 @@ function PlacementRowEdit({
   onRemove: () => void
 }) {
   const [qty, setQty] = useState(String(row.qty))
-
   // Keep the input in sync if the row's qty changes after a refresh.
   useEffect(() => {
     setQty(String(row.qty))
   }, [row.qty])
-
   const n = Math.max(0, parseInt(qty, 10) || 0)
   const dirty = n !== row.qty
-
   return (
-    <div className="flex items-center gap-2 px-3 py-2">
-      <span className="min-w-0 flex-1 truncate text-sm">{row.location_name}</span>
-      <Input
-        type="number"
-        min={0}
-        step={1}
-        value={qty}
-        onChange={(e) => setQty(e.target.value)}
-        className="w-20"
-        aria-label={tl(locale, 'loc.assign.qty')}
-      />
-      <Button
-        type="button"
-        size="sm"
-        variant={dirty ? 'default' : 'outline'}
-        disabled={pending || !dirty}
-        onClick={() => onSave(n)}
-      >
-        {tl(locale, 'loc.save')}
-      </Button>
-      <Button
-        type="button"
-        size="icon"
-        variant="ghost"
-        disabled={pending}
-        onClick={onRemove}
-        aria-label={tl(locale, 'loc.assign.remove')}
-      >
-        <Trash2 className="h-4 w-4 text-rose-600" />
-      </Button>
+    <div className="flex flex-wrap items-center gap-2 px-3 py-2 sm:flex-nowrap">
+      <span className="w-full min-w-0 truncate text-sm sm:w-auto sm:flex-1">
+        {row.location_name}
+      </span>
+      <div className="flex items-center gap-2">
+        <Input
+          type="number"
+          min={0}
+          step={1}
+          value={qty}
+          onChange={(e) => setQty(e.target.value)}
+          className="w-20"
+          aria-label={tl(locale, 'loc.assign.qty')}
+        />
+        <Button
+          type="button"
+          size="sm"
+          variant={dirty ? 'default' : 'outline'}
+          disabled={pending || !dirty}
+          onClick={() => onSave(n)}
+        >
+          {tl(locale, 'loc.save')}
+        </Button>
+        <Button
+          type="button"
+          size="icon"
+          variant="ghost"
+          disabled={pending}
+          onClick={onRemove}
+          aria-label={tl(locale, 'loc.assign.remove')}
+        >
+          <Trash2 className="h-4 w-4 text-rose-600" />
+        </Button>
+      </div>
     </div>
   )
 }
