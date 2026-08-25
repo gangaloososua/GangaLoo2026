@@ -1,0 +1,829 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+<title>Cabello 100% Humano — Precios y Pedidos</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Work+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#06101A;
+    --navy:#002D62;
+    --navy-deep:#262958;
+    --card:#0E1721;
+    --card-alt:#131F2C;
+    --gold:#C8A84B;
+    --gold-light:#E5C96A;
+    --red:#CF142B;
+    --red-dark:#8F0F1F;
+    --green:#25D366;
+    --ink:#F3F1EC;
+    --ink-soft:#8B93A1;
+    --line:rgba(255,255,255,0.09);
+    --best:#3a3016;
+    --danger:#E3576B;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--bg);
+    color:var(--ink);
+    font-family:'Work Sans',sans-serif;
+    -webkit-font-smoothing:antialiased;
+    padding-bottom:20px;
+  }
+  header{
+    background:linear-gradient(160deg,var(--navy) 0%,var(--navy-deep) 100%);
+    color:#fff;
+    padding:24px 20px 18px;
+    position:relative;
+    overflow:hidden;
+  }
+  header::after{
+    content:"";
+    position:absolute;
+    right:-40px; top:-40px;
+    width:150px; height:150px;
+    border-radius:50%;
+    border:1px solid rgba(231,200,139,0.32);
+  }
+  .eyebrow{
+    font-size:11px;
+    letter-spacing:.16em;
+    text-transform:uppercase;
+    color:var(--gold-light);
+    font-weight:600;
+    margin-bottom:6px;
+  }
+  h1{
+    font-family:'Fraunces',serif;
+    font-weight:600;
+    font-size:23px;
+    line-height:1.15;
+    margin:0 0 6px;
+    color:#fff;
+  }
+  header p{
+    margin:0;
+    font-size:13px;
+    color:#C7D0DC;
+    max-width:34em;
+    line-height:1.5;
+  }
+
+  /* main nav (Precios / Pedido) */
+  .mainNav{
+    position:sticky; top:0; z-index:40;
+    display:flex;
+    background:#050B12;
+    border-bottom:1px solid var(--line);
+  }
+  .mainNav button{
+    flex:1;
+    border:none;
+    background:transparent;
+    color:#8B93A1;
+    font-family:'Work Sans',sans-serif;
+    font-weight:700;
+    font-size:14px;
+    padding:14px 8px;
+    cursor:pointer;
+    position:relative;
+    display:flex; align-items:center; justify-content:center; gap:6px;
+  }
+  .mainNav button.active{
+    color:#fff;
+    background:var(--red);
+  }
+  .cartBadge{
+    background:var(--gold);
+    color:#2b2107;
+    font-size:11px;
+    font-weight:800;
+    border-radius:999px;
+    padding:1px 7px;
+    min-width:18px;
+    display:inline-block;
+    text-align:center;
+  }
+
+  .controls{
+    position:sticky;
+    top:48px;
+    z-index:20;
+    background:var(--bg);
+    padding:12px 14px 8px;
+    box-shadow:0 4px 10px -6px rgba(0,0,0,0.4);
+  }
+  .scrollRow{
+    display:flex;
+    gap:8px;
+    overflow-x:auto;
+    padding:4px 2px 6px;
+    -webkit-overflow-scrolling:touch;
+    scrollbar-width:none;
+  }
+  .scrollRow::-webkit-scrollbar{display:none;}
+  .scrollRow .lbl{
+    font-size:10.5px;
+    text-transform:uppercase;
+    letter-spacing:.08em;
+    color:var(--ink-soft);
+    font-weight:700;
+    padding:2px 2px 0;
+  }
+  .chip{
+    flex:0 0 auto;
+    border:1px solid var(--line);
+    background:var(--card);
+    color:var(--ink);
+    font-weight:600;
+    font-size:13px;
+    padding:8px 14px;
+    border-radius:999px;
+    cursor:pointer;
+    white-space:nowrap;
+  }
+  .chip.active{
+    background:var(--gold);
+    border-color:var(--gold);
+    color:#2b2107;
+  }
+  .chip.wineActive{
+    background:var(--red);
+    border-color:var(--red);
+    color:#fff;
+  }
+  .seg{
+    display:flex;
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:12px;
+    padding:4px;
+    gap:4px;
+    margin:4px 2px 0;
+  }
+  .seg button{
+    flex:1;
+    border:none;
+    background:transparent;
+    padding:9px 6px;
+    font-family:'Work Sans',sans-serif;
+    font-weight:600;
+    font-size:13.5px;
+    color:var(--ink-soft);
+    border-radius:9px;
+    cursor:pointer;
+  }
+  .seg button.active{
+    background:var(--navy);
+    color:#fff;
+  }
+
+  main{padding:6px 16px 40px;}
+  .view{display:none;}
+  .view.show{display:block;}
+
+  .catTitle{
+    font-family:'Fraunces',serif;
+    font-weight:600;
+    font-size:17px;
+    color:var(--gold-light);
+    margin:14px 2px 2px;
+  }
+  .catSub{font-size:12px; color:var(--ink-soft); margin:0 2px 8px;}
+
+  .tableWrap{
+    background:var(--card);
+    border-radius:14px;
+    border:1px solid var(--line);
+    overflow:hidden;
+    margin-top:10px;
+    box-shadow:0 1px 3px rgba(0,0,0,0.3);
+  }
+  table{
+    width:100%;
+    border-collapse:collapse;
+    font-variant-numeric:tabular-nums;
+  }
+  thead th{
+    background:var(--navy);
+    color:#fff;
+    font-weight:600;
+    font-size:12px;
+    padding:10px 4px;
+    text-align:center;
+  }
+  thead th:first-child{ text-align:left; padding-left:14px; }
+  thead tr.tierRow th{
+    background:#0a4291;
+    font-size:10.5px;
+    font-weight:500;
+    padding:6px 4px;
+    color:#D9E4F5;
+  }
+  thead tr.tierRow th.best{
+    background:var(--gold);
+    color:#2b2107;
+    font-weight:700;
+  }
+  tbody td{
+    padding:9px 4px;
+    text-align:center;
+    font-size:13px;
+    border-top:1px solid var(--line);
+    white-space:nowrap;
+    color:var(--ink);
+  }
+  tbody td:first-child{
+    text-align:left;
+    padding-left:14px;
+    font-weight:700;
+    font-family:'Fraunces',serif;
+    font-size:14.5px;
+    color:var(--gold-light);
+  }
+  tbody tr:nth-child(even){background:var(--card-alt);}
+  td.best{background:var(--best); font-weight:700; color:var(--gold-light);}
+  td.na{color:#4A5361;}
+
+  .legendBox{
+    margin:12px 2px 0;
+    background:var(--card);
+    border:1px dashed var(--line);
+    border-radius:10px;
+    padding:10px 12px;
+    font-size:11.5px;
+    color:var(--ink-soft);
+    line-height:1.6;
+  }
+  .legendBox b{color:var(--ink);}
+
+  .priceCard{
+    margin-top:10px;
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:14px;
+    padding:16px;
+    display:flex;
+    gap:8px;
+    flex-wrap:wrap;
+  }
+  .priceCard .tierPill{
+    flex:1 1 30%;
+    background:var(--card-alt);
+    border:1px solid var(--line);
+    border-radius:10px;
+    padding:10px 8px;
+    text-align:center;
+  }
+  .priceCard .tierPill.best{background:var(--best); border-color:var(--gold);}
+  .priceCard .tierPill .n{font-size:10.5px; color:var(--ink-soft); font-weight:600;}
+  .priceCard .tierPill .p{font-family:'Fraunces',serif; font-weight:700; font-size:16px; color:var(--gold-light); margin-top:2px;}
+
+  /* ---------- PEDIDO (order form) ---------- */
+  .fieldGroup{margin-top:14px;}
+  .fieldGroup label{
+    display:block; font-size:11.5px; font-weight:700; color:var(--ink-soft);
+    text-transform:uppercase; letter-spacing:.04em; margin-bottom:5px;
+  }
+  .fieldGroup input, .fieldGroup textarea{
+    width:100%;
+    border:1px solid var(--line);
+    border-radius:10px;
+    padding:10px 12px;
+    font-family:'Work Sans',sans-serif;
+    font-size:14px;
+    background:var(--card);
+    color:var(--ink);
+  }
+  .fieldGroup input::placeholder, .fieldGroup textarea::placeholder{color:#4A5361;}
+  .qtyRow{
+    display:flex; align-items:center; gap:10px; margin-top:14px;
+  }
+  .qtyBtn{
+    width:38px; height:38px;
+    border-radius:10px;
+    border:1px solid var(--line);
+    background:var(--card);
+    font-size:18px;
+    font-weight:700;
+    color:var(--gold-light);
+    cursor:pointer;
+  }
+  .qtyVal{
+    font-family:'Fraunces',serif;
+    font-weight:700;
+    font-size:19px;
+    min-width:32px;
+    text-align:center;
+    color:#fff;
+  }
+  .addBtn{
+    margin-top:14px;
+    width:100%;
+    background:var(--red);
+    color:#fff;
+    border:none;
+    padding:13px;
+    border-radius:12px;
+    font-weight:700;
+    font-size:14.5px;
+    cursor:pointer;
+  }
+  .addBtn:disabled{background:#2A323D; color:#5B6472; cursor:not-allowed;}
+  .unitPreview{
+    margin-top:10px;
+    font-size:13px;
+    color:var(--ink-soft);
+    text-align:center;
+  }
+  .unitPreview b{color:var(--gold-light); font-size:15px;}
+
+  .cartSection{margin-top:22px;}
+  .cartSection h2{
+    font-family:'Fraunces',serif;
+    font-size:17px;
+    color:var(--gold-light);
+    margin:0 0 8px;
+  }
+  .cartItem{
+    display:flex; justify-content:space-between; align-items:center;
+    background:var(--card); border:1px solid var(--line); border-radius:12px;
+    padding:10px 12px; margin-bottom:8px; gap:10px;
+  }
+  .cartItem .info{flex:1;}
+  .cartItem .info .name{font-weight:700; font-size:13.5px; color:var(--ink);}
+  .cartItem .info .meta{font-size:11.5px; color:var(--ink-soft); margin-top:2px;}
+  .cartItem .price{font-family:'Fraunces',serif; font-weight:700; color:var(--gold-light); font-size:14.5px; white-space:nowrap;}
+  .cartItem .rm{
+    background:none; border:none; color:var(--danger); font-size:18px; cursor:pointer; padding:2px 6px;
+  }
+  .emptyCart{
+    text-align:center; color:var(--ink-soft); font-size:13px; padding:24px 10px;
+    background:var(--card); border:1px dashed var(--line); border-radius:12px;
+  }
+  .totalRow{
+    display:flex; justify-content:space-between; align-items:center;
+    padding:14px 4px; font-family:'Fraunces',serif; font-weight:700; font-size:19px; color:var(--gold-light);
+    border-top:2px solid var(--gold); margin-top:6px;
+  }
+  .actionRow{display:flex; gap:10px; margin-top:10px;}
+  .actionRow button{
+    flex:1;
+    padding:14px 8px;
+    border-radius:12px;
+    font-weight:700;
+    font-size:13.5px;
+    border:none;
+    cursor:pointer;
+    display:flex; align-items:center; justify-content:center; gap:7px;
+  }
+  .btnWhats{background:var(--green); color:#06210f;}
+  .btnCopy{background:transparent; color:var(--gold-light); border:1px solid var(--gold) !important;}
+  .toast{
+    position:fixed; left:50%; bottom:24px; transform:translateX(-50%);
+    background:#fff; color:#06101A; padding:10px 18px; border-radius:999px;
+    font-size:13px; font-weight:600; z-index:100; opacity:0; pointer-events:none;
+    transition:opacity .25s ease;
+  }
+  .toast.show{opacity:1;}
+
+  @media print{
+    .mainNav, .controls, #view-pedido{display:none !important;}
+    body{background:#fff !important; color:#111 !important;}
+    header{background:var(--navy) !important; -webkit-print-color-adjust:exact; print-color-adjust:exact;}
+    thead th, thead tr.tierRow th{-webkit-print-color-adjust:exact; print-color-adjust:exact;}
+    .tableWrap{background:#fff !important; border:1px solid #ccc !important;}
+    tbody td, .catTitle, .catSub, .legendBox{color:#111 !important;}
+    tbody tr:nth-child(even){background:#f5f5f5 !important;}
+    .view{display:block !important;}
+    body{padding:0;}
+  }
+</style>
+
+</head>
+<body>
+
+<header>
+  <div class="eyebrow">Cabello 100% Humano</div>
+  <h1>Precios &amp; Pedidos — Revendedores</h1>
+  <p>Todos nuestros catálogos con precios de mayoreo. Elige un producto, arma tu pedido y envíalo por WhatsApp.</p>
+</header>
+
+<div class="mainNav">
+  <button class="active" id="navPrecios">📋 Ver Precios</button>
+  <button id="navPedido">🛒 Hacer Pedido <span class="cartBadge" id="cartBadge" style="display:none">0</span></button>
+</div>
+
+<!-- ============ VISTA: PRECIOS ============ -->
+<div class="view show" id="view-precios">
+  <div class="controls">
+    <div class="scrollRow" id="groupChips"></div>
+    <div class="scrollRow" id="catalogChips"></div>
+    <div class="seg" id="densitySeg" style="display:none"></div>
+    <div class="scrollRow" id="laceChips" style="display:none"></div>
+  </div>
+  <main>
+    <div id="catTitleBox"></div>
+    <div id="priceOutput"></div>
+  </main>
+</div>
+
+<!-- ============ VISTA: PEDIDO ============ -->
+<div class="view" id="view-pedido">
+  <div class="controls">
+    <div class="scrollRow" id="pGroupChips"></div>
+    <div class="scrollRow" id="pCatalogChips"></div>
+    <div class="seg" id="pDensitySeg" style="display:none"></div>
+    <div class="scrollRow" id="pLaceChips" style="display:none"></div>
+    <div class="scrollRow" id="pLengthChips" style="display:none"></div>
+  </div>
+  <main>
+    <div id="pCatTitleBox"></div>
+    <div class="qtyRow">
+      <button class="qtyBtn" id="qtyMinus">−</button>
+      <div class="qtyVal" id="qtyVal">1</div>
+      <button class="qtyBtn" id="qtyPlus">+</button>
+      <div style="font-size:12px;color:var(--ink-soft);margin-left:4px;">unidad(es)</div>
+    </div>
+    <div class="unitPreview" id="unitPreview"></div>
+    <button class="addBtn" id="addBtn">Agregar al pedido</button>
+
+    <div class="cartSection">
+      <h2>Tu pedido</h2>
+      <div id="cartList"></div>
+      <div class="totalRow" id="totalRow" style="display:none">
+        <span>Total</span><span id="totalVal">RD$ 0</span>
+      </div>
+      <div class="fieldGroup">
+        <label>Nombre</label>
+        <input type="text" id="clientName" placeholder="Tu nombre">
+      </div>
+      <div class="fieldGroup">
+        <label>Teléfono</label>
+        <input type="text" id="clientPhone" placeholder="Tu número">
+      </div>
+      <div class="fieldGroup">
+        <label>Dirección / nota (opcional)</label>
+        <textarea id="clientNote" rows="2" placeholder="Dirección de entrega, nota..."></textarea>
+      </div>
+      <div class="actionRow">
+        <button class="btnWhats" id="btnWhats">📲 Enviar por WhatsApp</button>
+        <button class="btnCopy" id="btnCopy">📋 Copiar pedido</button>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const WHATSAPP_NUMBER = "18292867868";
+const CATALOGS = [{"id":"11A","label":"11A — Frontal (Raw Hair)","group":"Pelucas Frontales","isWig":true,"densities":["200","250","300","400"],"laces":["4x4","5x5","13x4","13x6"],"lengths":[14,16,18,20,22,24,26,28,30,32],"prices":{"200":{"14":{"4x4":[3700,3600,3500,3400,3300],"5x5":[3900,3800,3700,3600,3500],"13x4":[4200,4100,4000,3900,3800],"13x6":[4900,4800,4700,4500,4400]},"16":{"4x4":[4600,4500,4400,4300,4200],"5x5":[4900,4800,4700,4500,4400],"13x4":[5100,5000,4900,4800,4700],"13x6":[5800,5700,5600,5500,5300]},"18":{"4x4":[5400,5300,5200,5100,5000],"5x5":[5600,5500,5400,5300,5200],"13x4":[5900,5800,5700,5500,5400],"13x6":[6600,6500,6300,6200,6100]},"20":{"4x4":[6000,5900,5700,5600,5500],"5x5":[6200,6100,5900,5800,5700],"13x4":[6500,6300,6200,6100,5900],"13x6":[7200,7000,6900,6700,6600]},"22":{"4x4":[6500,6300,6200,6100,5900],"5x5":[6700,6600,6400,6300,6100],"13x4":[7000,6800,6700,6500,6400],"13x6":[7700,7500,7400,7200,7000]},"24":{"4x4":[7600,7500,7300,7100,7000],"5x5":[7800,7700,7500,7300,7200],"13x4":[8100,7900,7800,7600,7400],"13x6":[8800,8600,8400,8200,8100]},"26":{"4x4":[8900,8700,8500,8300,8100],"5x5":[9100,8900,8700,8500,8300],"13x4":[9400,9200,9000,8800,8600],"13x6":[10100,9900,9700,9400,9200]},"28":{"4x4":[10400,10200,9900,9700,9500],"5x5":[10600,10400,10100,9900,9700],"13x4":[10900,10600,10400,10200,9900],"13x6":[11600,11300,11100,10800,10600]},"30":{"4x4":[12400,12100,11800,11600,11300],"5x5":[12600,12300,12000,11800,11500],"13x4":[12900,12600,12300,12000,11700],"13x6":[13600,13300,13000,12700,12400]},"32":{"4x4":[14200,13900,13600,13300,13000],"5x5":[14400,14100,13800,13500,13200],"13x4":[14700,14400,14100,13700,13400],"13x6":[15400,15100,14700,14400,14100]}},"250":{"14":{"4x4":[3900,3800,3700,3600,3500],"5x5":[4200,4100,4000,4000,3900],"13x4":[4500,4400,4300,4200,4100],"13x6":[5200,5100,5000,4900,4800]},"16":{"4x4":[4900,4800,4700,4600,4500],"5x5":[5100,5000,4900,4800,4700],"13x4":[5400,5300,5200,5100,5000],"13x6":[6100,6000,5900,5700,5600]},"18":{"4x4":[5700,5600,5500,5300,5200],"5x5":[6100,5900,5800,5700,5500],"13x4":[6300,6200,6100,5900,5800],"13x6":[7100,6900,6700,6600,6400]},"20":{"4x4":[6300,6200,6100,5900,5800],"5x5":[6600,6400,6300,6100,6000],"13x4":[6800,6700,6500,6400,6200],"13x6":[7500,7400,7200,7100,6900]},"22":{"4x4":[6800,6700,6500,6400,6200],"5x5":[7100,6900,6700,6600,6400],"13x4":[7300,7200,7000,6900,6700],"13x6":[8000,7900,7700,7500,7300]},"24":{"4x4":[8000,7900,7700,7500,7300],"5x5":[8300,8100,7900,7700,7500],"13x4":[8500,8400,8200,8000,7800],"13x6":[9200,9000,8800,8600,8400]},"26":{"4x4":[9500,9300,9000,8800,8600],"5x5":[9700,9500,9300,9000,8800],"13x4":[10000,9700,9500,9300,9100],"13x6":[10700,10400,10200,10000,9700]},"28":{"4x4":[11000,10800,10500,10300,10100],"5x5":[11300,11100,10800,10600,10300],"13x4":[11600,11300,11100,10800,10600],"13x6":[12300,12000,11800,11500,11200]},"30":{"4x4":[13100,12800,12500,12200,11900],"5x5":[13200,12900,12600,12300,12100],"13x4":[13500,13200,12900,12600,12300],"13x6":[14200,13900,13600,13300,13000]},"32":{"4x4":[15000,14600,14300,14000,13700],"5x5":[15000,14700,14400,14100,13700],"13x4":[15300,15000,14700,14300,14000],"13x6":[16000,15700,15300,15000,14600]}},"300":{"14":{"4x4":[4100,4000,3900,3800,3700],"5x5":[4400,4300,4200,4100,4000],"13x4":[4600,4500,4400,4300,4200],"13x6":[5100,5000,4900,4800,4700]},"16":{"4x4":[5300,5200,5100,4900,4800],"5x5":[5400,5300,5200,5100,5000],"13x4":[5600,5500,5400,5300,5200],"13x6":[6100,5900,5800,5700,5500]},"18":{"4x4":[6100,6000,5900,5700,5600],"5x5":[6300,6200,6100,5900,5800],"13x4":[6600,6400,6300,6100,6000],"13x6":[6900,6800,6600,6500,6300]},"20":{"4x4":[6700,6600,6400,6300,6100],"5x5":[6900,6800,6600,6500,6300],"13x4":[7100,7000,6800,6700,6500],"13x6":[7800,7600,7400,7300,7100]},"22":{"4x4":[7300,7100,7000,6800,6600],"5x5":[7500,7300,7200,7000,6800],"13x4":[7700,7500,7400,7200,7000],"13x6":[8300,8100,7900,7700,7500]},"24":{"4x4":[8500,8300,8100,7900,7700],"5x5":[8700,8500,8300,8100,7900],"13x4":[8900,8700,8500,8300,8100],"13x6":[9700,9500,9300,9000,8800]},"26":{"4x4":[10000,9800,9600,9400,9200],"5x5":[10200,10000,9800,9600,9300],"13x4":[10400,10200,10000,9800,9500],"13x6":[10900,10700,10500,10200,10000]},"28":{"4x4":[11600,11400,11100,10900,10600],"5x5":[11900,11700,11400,11200,10900],"13x4":[12100,11900,11600,11400,11100],"13x6":[12600,12400,12100,11800,11500]},"30":{"4x4":[13800,13500,13200,12900,12600],"5x5":[13900,13600,13300,13000,12700],"13x4":[14100,13800,13500,13200,12900],"13x6":[14800,14500,14200,13900,13500]},"32":{"4x4":[15900,15500,15200,14900,14500],"5x5":[16000,15600,15300,14900,14600],"13x4":[16200,15800,15500,15100,14800],"13x6":[16700,16300,15900,15600,15200]}},"400":{"14":{"4x4":[4200,4100,4000,4000,3900],"5x5":[4600,4500,4400,4300,4200],"13x4":[4800,4700,4600,4500,4400],"13x6":[5400,5200,5100,5000,4900]},"16":{"4x4":[5400,5300,5200,5100,5000],"5x5":[5700,5600,5500,5300,5200],"13x4":[5900,5800,5700,5500,5400],"13x6":[6300,6200,6100,5900,5800]},"18":{"4x4":[6500,6300,6200,6100,5900],"5x5":[6700,6600,6400,6300,6100],"13x4":[6900,6800,6600,6500,6300],"13x6":[7300,7100,7000,6800,6600]},"20":{"4x4":[7100,6900,6700,6600,6400],"5x5":[7300,7100,7000,6800,6600],"13x4":[7500,7300,7200,7000,6800],"13x6":[8100,7900,7800,7600,7400]},"22":{"4x4":[7600,7500,7300,7100,7000],"5x5":[7800,7700,7500,7300,7200],"13x4":[8000,7900,7700,7500,7300],"13x6":[8700,8500,8300,8100,7900]},"24":{"4x4":[9000,8800,8600,8400,8300],"5x5":[9200,9000,8800,8600,8400],"13x4":[9500,9300,9000,8800,8600],"13x6":[10100,9900,9700,9400,9200]},"26":{"4x4":[10600,10400,10100,9900,9700],"5x5":[10700,10500,10300,10000,9800],"13x4":[10900,10700,10500,10200,10000],"13x6":[11500,11300,11000,10800,10500]},"28":{"4x4":[12400,12100,11800,11600,11300],"5x5":[12600,12400,12100,11800,11500],"13x4":[12900,12600,12300,12000,11700],"13x6":[13300,13000,12700,12400,12100]},"30":{"4x4":[14500,14200,13900,13600,13300],"5x5":[14700,14400,14100,13700,13400],"13x4":[14900,14600,14300,13900,13600],"13x6":[15600,15300,14900,14600,14300]},"32":{"4x4":[16700,16400,16000,15700,15300],"5x5":[16800,16400,16100,15700,15400],"13x4":[17000,16700,16300,15900,15500],"13x6":[17400,17100,16700,16300,15900]}}},"legend":["Deep Wave +$7, Water Wave +$7","Color especial +$10","HD lace +$20","Glueless wig +$2"]},{"id":"12A","label":"12A — Frontal (Raw Hair)","group":"Pelucas Frontales","isWig":true,"densities":["200","250"],"laces":["2x6","4x4","5x5/6x4 glueless","6x6","7x7","13x4","13x6"],"lengths":[14,16,18,20,22,24,26,28,30,32,34,36,38,40],"prices":{"200":{"14":{"2x6":[4900,4800,4700,4500,4400],"4x4":[4900,4800,4700,4500,4400],"5x5/6x4 glueless":[5100,5000,4900,4700,4600],"6x6":[5300,5200,5100,4900,4800],"7x7":[5400,5200,5100,5000,4900],"13x4":[5300,5200,5100,4900,4800],"13x6":[5500,5400,5300,5100,5000]},"16":{"2x6":[5600,5400,5300,5200,5100],"4x4":[5600,5400,5300,5200,5100],"5x5/6x4 glueless":[5800,5700,5500,5400,5300],"6x6":[6000,5900,5700,5600,5500],"7x7":[6100,5900,5800,5700,5500],"13x4":[6000,5900,5700,5600,5500],"13x6":[6200,6100,5900,5800,5700]},"18":{"2x6":[6600,6400,6300,6100,6000],"4x4":[6600,6400,6300,6100,6000],"5x5/6x4 glueless":[6800,6600,6500,6300,6200],"6x6":[7000,6800,6700,6500,6400],"7x7":[7100,6900,6700,6600,6400],"13x4":[7000,6800,6700,6500,6400],"13x6":[7200,7000,6900,6700,6600]},"20":{"2x6":[7600,7500,7300,7100,7000],"4x4":[7600,7500,7300,7100,7000],"5x5/6x4 glueless":[7800,7700,7500,7300,7200],"6x6":[8000,7900,7700,7500,7300],"7x7":[8100,7900,7800,7600,7400],"13x4":[8100,7900,7800,7600,7400],"13x6":[8300,8100,8000,7800,7600]},"22":{"2x6":[7600,7500,7300,7100,7000],"4x4":[7600,7500,7300,7100,7000],"5x5/6x4 glueless":[8000,7800,7600,7500,7300],"6x6":[8100,7900,7800,7600,7400],"7x7":[8700,8500,8300,8100,7900],"13x4":[8200,8000,7800,7700,7500],"13x6":[8400,8200,8000,7900,7700]},"24":{"2x6":[9000,8800,8600,8400,8200],"4x4":[9000,8800,8600,8400,8200],"5x5/6x4 glueless":[9200,9000,8800,8600,8400],"6x6":[9500,9300,9100,8900,8700],"7x7":[10100,9900,9700,9400,9200],"13x4":[9500,9300,9000,8800,8600],"13x6":[9700,9500,9300,9000,8800]},"26":{"2x6":[10500,10300,10100,9800,9600],"4x4":[10500,10300,10100,9800,9600],"5x5/6x4 glueless":[10800,10600,10300,10100,9900],"6x6":[10900,10600,10400,10200,9900],"7x7":[11400,11100,10900,10600,10400],"13x4":[11000,10800,10500,10300,10100],"13x6":[11200,11000,10700,10500,10300]},"28":{"2x6":[12200,12000,11700,11400,11200],"4x4":[12200,12000,11700,11400,11200],"5x5/6x4 glueless":[12400,12200,11900,11600,11400],"6x6":[12600,12400,12100,11800,11500],"7x7":[12900,12600,12300,12000,11700],"13x4":[12600,12400,12100,11800,11500],"13x6":[12900,12600,12300,12000,11700]},"30":{"2x6":[14300,14000,13600,13300,13000],"4x4":[14300,14000,13600,13300,13000],"5x5/6x4 glueless":[14500,14200,13900,13500,13200],"6x6":[14700,14400,14100,13700,13400],"7x7":[14900,14600,14300,13900,13600],"13x4":[14700,14400,14100,13700,13400],"13x6":[14900,14600,14300,13900,13600]},"32":{"2x6":[16300,16000,15600,15300,14900],"4x4":[16300,16000,15600,15300,14900],"5x5/6x4 glueless":[16500,16200,15800,15500,15100],"6x6":[16700,16400,16000,15700,15300],"7x7":[17000,16600,16200,15900,15500],"13x4":[16700,16400,16000,15700,15300],"13x6":[17000,16600,16200,15900,15500]},"34":{"4x4":[18700,18300,17900,17500,17100],"5x5/6x4 glueless":[18900,18500,18100,17700,17300],"13x4":[19100,18700,18300,17900,17500],"13x6":[19400,18900,18500,18100,17700]},"36":{"4x4":[20100,19700,19300,18800,18400],"5x5/6x4 glueless":[20300,19900,19500,19000,18600],"13x4":[20600,20100,19700,19200,18800],"13x6":[20800,20300,19900,19400,19000]},"38":{"4x4":[23000,22500,22000,21500,21000],"5x5/6x4 glueless":[23200,22700,22200,21700,21200],"13x4":[23400,22900,22400,21900,21400],"13x6":[23600,23100,22600,22100,21600]},"40":{"4x4":[24600,24100,23500,23000,22500],"5x5/6x4 glueless":[24800,24300,23700,23200,22700],"13x4":[25000,24500,23900,23400,22800],"13x6":[25200,24700,24100,23600,23000]}},"250":{"14":{"2x6":[5100,5000,4900,4800,4700],"4x4":[5100,5000,4900,4800,4700],"5x5/6x4 glueless":[5500,5400,5300,5100,5000],"6x6":[5700,5600,5500,5300,5200],"7x7":[5800,5700,5500,5400,5300],"13x4":[5700,5600,5500,5300,5200],"13x6":[5900,5800,5700,5500,5400]},"16":{"2x6":[5900,5800,5700,5500,5400],"4x4":[5900,5800,5700,5500,5400],"5x5/6x4 glueless":[6300,6100,6000,5900,5700],"6x6":[6500,6300,6200,6100,5900],"7x7":[6600,6400,6300,6100,6000],"13x4":[6500,6300,6200,6100,5900],"13x6":[6700,6600,6400,6300,6100]},"18":{"2x6":[7000,6800,6700,6500,6400],"4x4":[7000,6800,6700,6500,6400],"5x5/6x4 glueless":[7300,7200,7000,6900,6700],"6x6":[7500,7400,7200,7100,6900],"7x7":[7600,7500,7300,7100,7000],"13x4":[7500,7400,7200,7100,6900],"13x6":[7800,7600,7400,7300,7100]},"20":{"2x6":[7800,7700,7500,7300,7200],"4x4":[7800,7700,7500,7300,7200],"5x5/6x4 glueless":[8200,8000,7800,7700,7500],"6x6":[8400,8200,8000,7900,7700],"7x7":[8500,8300,8100,7900,7700],"13x4":[8500,8400,8200,8000,7800],"13x6":[8700,8600,8400,8200,8000]},"22":{"2x6":[8000,7900,7700,7500,7300],"4x4":[8000,7900,7700,7500,7300],"5x5/6x4 glueless":[8500,8300,8100,7900,7700],"6x6":[8600,8400,8200,8000,7900],"7x7":[9200,9000,8800,8600,8400],"13x4":[8700,8500,8300,8100,7900],"13x6":[8900,8700,8500,8300,8100]},"24":{"2x6":[9500,9300,9100,8900,8700],"4x4":[9500,9300,9100,8900,8700],"5x5/6x4 glueless":[9900,9700,9500,9200,9000],"6x6":[10100,9900,9700,9400,9200],"7x7":[10700,10400,10200,10000,9700],"13x4":[10100,9900,9700,9400,9200],"13x6":[10400,10200,9900,9700,9500]},"26":{"2x6":[11200,10900,10700,10400,10200],"4x4":[11200,10900,10700,10400,10200],"5x5/6x4 glueless":[11400,11200,10900,10700,10400],"6x6":[11600,11400,11100,10900,10600],"7x7":[12100,11800,11600,11300,11000],"13x4":[11600,11400,11100,10900,10600],"13x6":[11900,11600,11300,11100,10800]},"28":{"2x6":[12900,12600,12400,12100,11800],"4x4":[12900,12600,12400,12100,11800],"5x5/6x4 glueless":[13100,12800,12600,12300,12000],"6x6":[13300,13100,12800,12500,12200],"7x7":[13600,13300,13000,12700,12400],"13x4":[13300,13100,12800,12500,12200],"13x6":[13600,13300,13000,12700,12400]},"30":{"2x6":[15100,14800,14500,14100,13800],"4x4":[15100,14800,14500,14100,13800],"5x5/6x4 glueless":[15300,15000,14700,14300,14000],"6x6":[15500,15200,14900,14500,14200],"7x7":[15800,15400,15100,14700,14400],"13x4":[15500,15200,14900,14500,14200],"13x6":[15800,15400,15100,14700,14400]},"32":{"2x6":[17200,16900,16500,16100,15700],"4x4":[17200,16900,16500,16100,15700],"5x5/6x4 glueless":[17400,17100,16700,16300,15900],"6x6":[17700,17300,16900,16500,16100],"7x7":[17900,17500,17100,16700,16300],"13x4":[17700,17300,16900,16500,16100],"13x6":[17900,17500,17100,16700,16300]},"34":{"4x4":[20100,19600,19200,18800,18300],"5x5/6x4 glueless":[20300,19800,19400,19000,18500],"13x4":[20500,20000,19600,19200,18700],"13x6":[20700,20300,19800,19400,18900]},"36":{"4x4":[21500,21000,20500,20100,19600],"5x5/6x4 glueless":[21700,21200,20800,20300,19800],"13x4":[21900,21400,21000,20500,20000],"13x6":[22100,21600,21200,20700,20200]},"38":{"4x4":[24500,23900,23400,22900,22300],"5x5/6x4 glueless":[24700,24100,23600,23100,22500],"13x4":[24900,24300,23800,23300,22700],"13x6":[25100,24500,24000,23500,22900]},"40":{"4x4":[26100,25500,24900,24400,23800],"5x5/6x4 glueless":[26300,25700,25100,24600,24000],"13x4":[26500,25900,25400,24800,24200],"13x6":[26700,26100,25600,25000,24400]}}},"legend":["Deep Wave +$7, Water Wave +$7","Color especial +$10","HD lace +$20","Glueless wig +$2"]},{"id":"11A-BOB","label":"11A — Bob","group":"Pelucas Bob","isWig":true,"densities":null,"laces":["5x5","13x4"],"lengths":[10,12,14,16,18],"prices":{"10":{"5x5":[2900,2900,2800,2800,2700],"13x4":[2900,2900,2800,2800,2700]},"12":{"5x5":[3200,3100,3000,3000,2900],"13x4":[3200,3100,3000,3000,2900]},"14":{"5x5":[3500,3400,3400,3300,3200],"13x4":[3500,3400,3400,3300,3200]},"16":{"5x5":[4200,4100,4000,3900,3800],"13x4":[4200,4100,4000,4000,3900]},"18":{"5x5":[4600,4500,4400,4300,4200],"13x4":[4700,4600,4500,4400,4300]}},"legend":["Curly +$5","Color especial +$5"]},{"id":"15A-BOB","label":"15A — Bob (180%)","group":"Pelucas Bob","isWig":true,"densities":["180"],"laces":["4x4","13x4"],"lengths":[8,10,12,14,16,18],"prices":{"180":{"8":{"4x4":[4200,4100,4000,4000,3900],"13x4":[4500,4400,4300,4200,4100]},"10":{"4x4":[4600,4500,4400,4300,4200],"13x4":[4900,4800,4700,4600,4500]},"12":{"4x4":[5600,5400,5300,5200,5100],"13x4":[5800,5700,5600,5500,5300]},"14":{"4x4":[6600,6400,6300,6100,6000],"13x4":[6800,6700,6500,6400,6200]},"16":{"4x4":[8000,7800,7600,7500,7300],"13x4":[8300,8100,7900,7700,7500]},"18":{"4x4":[9000,8800,8600,8400,8300],"13x4":[9300,9100,8900,8700,8500]}}},"legend":["Deep Wave +$7, Water Wave +$7, Kinky Curl +$7, Afro Kinky +$20"]},{"id":"10A-BUNDLE","label":"10A — Bundles","group":"Bundles","isWig":false,"densities":null,"laces":null,"lengths":[10,12,14,16,18,20,22,24,26,28,30,32],"prices":{"10":[1300,1300,1300,1200,1200],"12":[1500,1400,1400,1400,1300],"14":[1700,1700,1700,1600,1600],"16":[1900,1800,1800,1800,1700],"18":[2100,2100,2000,2000,1900],"20":[2400,2300,2300,2200,2200],"22":[2700,2600,2600,2500,2400],"24":[3200,3100,3000,3000,2900],"26":[3500,3400,3400,3300,3200],"28":[3900,3900,3800,3700,3600],"30":[4400,4300,4200,4100,4000],"32":[5100,5000,4900,4700,4600]},"legend":["Deep Wave +$2, Water Wave +$2, Jerry Curly +$2, Kinky Curly +$2, Natural Wave +$2"]},{"id":"12A-BUNDLE","label":"12A — Bundles","group":"Bundles","isWig":false,"densities":null,"laces":null,"lengths":[10,12,14,16,18,20,22,24,26,28,30,32],"prices":{"10":[2000,1900,1900,1800,1800],"12":[2300,2300,2200,2200,2100],"14":[2700,2700,2600,2600,2500],"16":[3000,3000,2900,2800,2800],"18":[3200,3200,3100,3000,3000],"20":[3400,3400,3300,3200,3100],"22":[3900,3800,3700,3600,3500],"24":[4400,4300,4200,4100,4000],"26":[4900,4800,4700,4600,4500],"28":[5400,5300,5200,5100,5000],"30":[6400,6300,6100,6000,5900],"32":[6900,6800,6600,6500,6300]},"legend":["Deep Wave +$2, Water Wave +$2, Jerry Curly +$2, Kinky Curly +$2, Natural Wave +$2"]},{"id":"14A-BUNDLE","label":"14A — DD Bundles","group":"Bundles","isWig":false,"densities":null,"laces":null,"lengths":[10,12,14,16,18,20,22,24,26,28],"prices":{"10":[2300,2300,2200,2200,2100],"12":[2700,2700,2600,2600,2500],"14":[3000,3000,2900,2800,2800],"16":[3600,3500,3400,3400,3300],"18":[3900,3800,3700,3600,3500],"20":[4400,4300,4200,4100,4100],"22":[5100,5000,4900,4700,4600],"24":[5800,5700,5500,5400,5300],"26":[6100,5900,5800,5700,5500],"28":[6600,6400,6300,6100,6000]},"legend":["Deep Wave +$2, Water Wave +$2, Jerry Curly +$2, Kinky Curly +$2, Natural Wave +$2"]},{"id":"12A-360","label":"12A — 360 (210%)","group":"Pelucas 360","isWig":true,"densities":["210"],"laces":null,"lengths":[22,24,26,28,30,32],"prices":{"210":{"22":[8000,7900,7700,7500,7300],"24":[9400,9200,9000,8800,8600],"26":[10700,10500,10300,10000,9800],"28":[12100,11900,11600,11400,11100],"30":[14100,13700,13400,13100,12800],"32":[15700,15300,15000,14700,14300]}},"legend":["Water Wave +$7, Deep Wave +$7"]},{"id":"13A-360","label":"13A — 360 (210%)","group":"Pelucas 360","isWig":true,"densities":["210"],"laces":null,"lengths":[14,16,18,20,22,24,26,28,30,32],"prices":{"210":{"14":[5800,5700,5600,5500,5300],"16":[6400,6300,6100,6000,5900],"18":[7200,7000,6900,6700,6600],"20":[8100,7900,7800,7600,7400],"22":[9100,8900,8700,8500,8300],"24":[10400,10200,10000,9800,9500],"26":[11900,11700,11400,11200,10900],"28":[13900,13600,13300,13000,12700],"30":[16100,15800,15400,15100,14700],"32":[17600,17200,16800,16400,16100]}},"legend":["Water Wave +$7, Deep Wave +$7"]},{"id":"PIXIE-13x1","label":"Pixie — 13×1","group":"Pixie","isWig":false,"densities":null,"laces":null,"lengths":null,"prices":[1300,1300,1200,1200,1200],"legend":["Color especial +$1"]},{"id":"PIXIE-13x4","label":"Pixie — 13×4","group":"Pixie","isWig":false,"densities":null,"laces":null,"lengths":null,"prices":[1600,1600,1500,1500,1500],"legend":["Color especial +$1"]},{"id":"12A-FRONTAL-TRANS","label":"12A — Frontal (Transparent Lace)","group":"Cierres y Frontales (encaje)","isWig":false,"densities":null,"laces":["4x4","5x5","13x4"],"lengths":[12,14,16,18,20,22],"prices":{"12":{"4x4":[1700,1600,1600,1600,1500],"5x5":[2100,2100,2000,2000,1900],"13x4":[2500,2400,2400,2300,2200]},"14":{"4x4":[1800,1800,1700,1700,1700],"5x5":[2200,2200,2100,2100,2100],"13x4":[2700,2700,2600,2600,2500]},"16":{"4x4":[2000,1900,1900,1800,1800],"5x5":[2500,2400,2400,2300,2200],"13x4":[3000,3000,2900,2800,2800]},"18":{"4x4":[2200,2100,2100,2000,2000],"5x5":[2700,2600,2600,2500,2400],"13x4":[3400,3400,3300,3200,3100]},"20":{"4x4":[2500,2400,2400,2300,2200],"5x5":[3000,3000,2900,2800,2800],"13x4":[3800,3700,3600,3600,3500]},"22":{"4x4":[2700,2600,2600,2500,2400],"5x5":[3400,3400,3300,3200,3100],"13x4":[4400,4300,4200,4100,4000]}},"legend":["Water Wave +$2, Deep Wave +$2, Kinky Curl +$2","Color especial +$2"]},{"id":"12A-FRONTAL-HD","label":"12A — Frontal (HD Lace)","group":"Cierres y Frontales (encaje)","isWig":false,"densities":null,"laces":["4x4","5x5","13x4"],"lengths":[12,14,16,18,20,22],"prices":{"12":{"4x4":[2200,2200,2100,2100,2100],"5x5":[2800,2700,2700,2600,2600],"13x4":[3700,3600,3500,3400,3300]},"14":{"4x4":[2400,2300,2300,2200,2200],"5x5":[2900,2900,2800,2800,2700],"13x4":[3900,3800,3700,3600,3500]},"16":{"4x4":[2500,2500,2400,2400,2300],"5x5":[3200,3100,3000,3000,2900],"13x4":[4200,4100,4000,4000,3900]},"18":{"4x4":[2700,2600,2600,2500,2400],"5x5":[3400,3300,3200,3200,3100],"13x4":[4600,4500,4400,4300,4200]},"20":{"4x4":[2800,2700,2700,2600,2600],"5x5":[3600,3500,3400,3400,3300],"13x4":[5100,5000,4900,4700,4600]},"22":{"4x4":[3100,3000,3000,2900,2800],"5x5":[4000,3900,3800,3800,3700],"13x4":[5600,5400,5300,5200,5100]}},"legend":["Water Wave +$2, Deep Wave +$2, Kinky Curl +$2","Color especial +$2"]},{"id":"11A-FRONTAL-BASIC","label":"11A — Frontal (13×4, basic)","group":"Cierres y Frontales (encaje)","isWig":false,"densities":null,"laces":null,"lengths":[12,14,16,18],"prices":{"12":[1700,1600,1600,1600,1500],"14":[1700,1700,1700,1600,1600],"16":[1900,1800,1800,1800,1700],"18":[2000,2000,1900,1900,1900]},"legend":[]}]
+;
+
+const GROUP_ORDER = ["Pelucas Frontales","Pelucas Bob","Pelucas 360","Bundles","Cierres y Frontales (encaje)","Pixie"];
+const CATALOG_LABELS = {}; // filled below
+CATALOGS.forEach(c => CATALOG_LABELS[c.id] = c.label);
+
+const TIER_LABELS = ["1 ud","2 uds","3 uds","4 uds","5 uds"];
+
+function fmt(n){ return n.toLocaleString("es-DO"); }
+function byId(id){ return CATALOGS.find(c => c.id === id); }
+function catalogsInGroup(g){ return CATALOGS.filter(c => c.group === g); }
+
+function getLeaf(cat, density, length, lace){
+  let node = cat.prices;
+  if(cat.densities) node = node ? node[density] : undefined;
+  if(cat.lengths) node = node ? node[String(length)] : undefined;
+  if(cat.laces) node = node ? node[lace] : undefined;
+  return node; // array of 5 tier prices, or undefined if combo doesn't exist
+}
+
+/* =================== VISTA PRECIOS =================== */
+let ST = { group: GROUP_ORDER[0], catalogId: null, density: null, lace: null };
+
+function initPrecios(){
+  ST.catalogId = catalogsInGroup(ST.group)[0].id;
+  const c = byId(ST.catalogId);
+  ST.density = c.densities ? c.densities[0] : null;
+  ST.lace = c.laces ? c.laces[0] : null;
+  renderGroupChips();
+  renderCatalogChips();
+  renderDensitySeg();
+  renderLaceChips();
+  renderPriceOutput();
+}
+
+function renderGroupChips(){
+  const el = document.getElementById("groupChips");
+  el.innerHTML = GROUP_ORDER.map(g => `<button class="chip ${g===ST.group?'wineActive':''}" data-g="${g.replace(/"/g,'&quot;')}">${g}</button>`).join("");
+  el.querySelectorAll("button").forEach(b => b.addEventListener("click", () => {
+    ST.group = b.dataset.g;
+    ST.catalogId = catalogsInGroup(ST.group)[0].id;
+    const c = byId(ST.catalogId);
+    ST.density = c.densities ? c.densities[0] : null;
+    ST.lace = c.laces ? c.laces[0] : null;
+    renderGroupChips(); renderCatalogChips(); renderDensitySeg(); renderLaceChips(); renderPriceOutput();
+  }));
+}
+
+function renderCatalogChips(){
+  const el = document.getElementById("catalogChips");
+  const cats = catalogsInGroup(ST.group);
+  el.innerHTML = cats.map(c => `<button class="chip ${c.id===ST.catalogId?'active':''}" data-id="${c.id}">${CATALOG_LABELS[c.id]}</button>`).join("");
+  el.querySelectorAll("button").forEach(b => b.addEventListener("click", () => {
+    ST.catalogId = b.dataset.id;
+    const c = byId(ST.catalogId);
+    ST.density = c.densities ? c.densities[0] : null;
+    ST.lace = c.laces ? c.laces[0] : null;
+    renderCatalogChips(); renderDensitySeg(); renderLaceChips(); renderPriceOutput();
+  }));
+}
+
+function renderDensitySeg(){
+  const el = document.getElementById("densitySeg");
+  const c = byId(ST.catalogId);
+  if(!c.densities || c.densities.length < 2){ el.style.display = "none"; el.innerHTML=""; return; }
+  el.style.display = "flex";
+  el.innerHTML = c.densities.map(d => `<button class="${d===ST.density?'active':''}" data-d="${d}">${d}%</button>`).join("");
+  el.querySelectorAll("button").forEach(b => b.addEventListener("click", () => {
+    ST.density = b.dataset.d;
+    renderDensitySeg(); renderPriceOutput();
+  }));
+}
+
+function renderLaceChips(){
+  const el = document.getElementById("laceChips");
+  const c = byId(ST.catalogId);
+  if(!c.laces){ el.style.display = "none"; el.innerHTML=""; return; }
+  el.style.display = "flex";
+  el.innerHTML = c.laces.map(l => `<button class="chip ${l===ST.lace?'active':''}" data-l="${l.replace(/"/g,'&quot;')}">${l.toUpperCase()}</button>`).join("");
+  el.querySelectorAll("button").forEach(b => b.addEventListener("click", () => {
+    ST.lace = b.dataset.l;
+    renderLaceChips(); renderPriceOutput();
+  }));
+}
+
+function legendHTML(c){
+  if(!c.legend || !c.legend.length) return "";
+  return `<div class="legendBox"><b>Recargos:</b> ${c.legend.join(" · ")}</div>`;
+}
+
+function renderPriceOutput(){
+  const c = byId(ST.catalogId);
+  document.getElementById("catTitleBox").innerHTML =
+    `<div class="catTitle">${c.label}${ST.density?(' — '+ST.density+'%'):''}</div>
+     <div class="catSub">Precios en RD$. Toca cantidad y encaje para comparar.</div>`;
+
+  const out = document.getElementById("priceOutput");
+
+  if(!c.lengths){
+    // flat single SKU (pixie)
+    const arr = getLeaf(c, ST.density, null, ST.lace);
+    out.innerHTML = `<div class="priceCard">` + TIER_LABELS.map((t,i)=>
+      `<div class="tierPill ${i===4?'best':''}"><div class="n">${t}</div><div class="p">RD$ ${fmt(arr[i])}</div></div>`
+    ).join("") + `</div>` + legendHTML(c);
+    return;
+  }
+
+  let rows = "";
+  c.lengths.forEach(len => {
+    const arr = getLeaf(c, ST.density, len, ST.lace);
+    if(!arr){
+      rows += `<tr><td>${len}"</td>` + TIER_LABELS.map(()=>'<td class="na">—</td>').join("") + `</tr>`;
+    } else {
+      rows += `<tr><td>${len}"</td>` + arr.map((p,i)=>`<td class="${i===4?'best':''}">${fmt(p)}</td>`).join("") + `</tr>`;
+    }
+  });
+
+  out.innerHTML = `<div class="tableWrap"><table>
+    <thead><tr><th rowspan="2">Largo</th><th colspan="5">RD$${ST.lace? (' · '+ST.lace.toUpperCase()) : ''}</th></tr>
+    <tr class="tierRow">${TIER_LABELS.map((t,i)=>`<th class="${i===4?'best':''}">${t}</th>`).join("")}</tr></thead>
+    <tbody>${rows}</tbody></table></div>` + legendHTML(c);
+}
+
+/* =================== VISTA PEDIDO =================== */
+let PST = { group: GROUP_ORDER[0], catalogId: null, density: null, lace: null, length: null, qty: 1 };
+let CART = [];
+
+function initPedido(){
+  PST.catalogId = catalogsInGroup(PST.group)[0].id;
+  syncPedidoDefaults();
+  renderPGroupChips(); renderPCatalogChips(); renderPDensitySeg(); renderPLaceChips(); renderPLengthChips();
+  renderQty(); renderUnitPreview(); renderCart();
+}
+
+function syncPedidoDefaults(){
+  const c = byId(PST.catalogId);
+  PST.density = c.densities ? c.densities[0] : null;
+  PST.lace = c.laces ? c.laces[0] : null;
+  PST.length = c.lengths ? c.lengths[0] : null;
+}
+
+function renderPGroupChips(){
+  const el = document.getElementById("pGroupChips");
+  el.innerHTML = GROUP_ORDER.map(g => `<button class="chip ${g===PST.group?'wineActive':''}" data-g="${g.replace(/"/g,'&quot;')}">${g}</button>`).join("");
+  el.querySelectorAll("button").forEach(b => b.addEventListener("click", () => {
+    PST.group = b.dataset.g;
+    PST.catalogId = catalogsInGroup(PST.group)[0].id;
+    syncPedidoDefaults();
+    renderPGroupChips(); renderPCatalogChips(); renderPDensitySeg(); renderPLaceChips(); renderPLengthChips(); renderUnitPreview();
+  }));
+}
+
+function renderPCatalogChips(){
+  const el = document.getElementById("pCatalogChips");
+  const cats = catalogsInGroup(PST.group);
+  el.innerHTML = cats.map(c => `<button class="chip ${c.id===PST.catalogId?'active':''}" data-id="${c.id}">${CATALOG_LABELS[c.id]}</button>`).join("");
+  el.querySelectorAll("button").forEach(b => b.addEventListener("click", () => {
+    PST.catalogId = b.dataset.id;
+    syncPedidoDefaults();
+    renderPCatalogChips(); renderPDensitySeg(); renderPLaceChips(); renderPLengthChips(); renderUnitPreview();
+  }));
+}
+
+function renderPDensitySeg(){
+  const el = document.getElementById("pDensitySeg");
+  const c = byId(PST.catalogId);
+  if(!c.densities || c.densities.length < 2){ el.style.display = "none"; el.innerHTML=""; return; }
+  el.style.display = "flex";
+  el.innerHTML = c.densities.map(d => `<button class="${d===PST.density?'active':''}" data-d="${d}">${d}%</button>`).join("");
+  el.querySelectorAll("button").forEach(b => b.addEventListener("click", () => {
+    PST.density = b.dataset.d;
+    renderPDensitySeg(); renderUnitPreview();
+  }));
+}
+
+function renderPLaceChips(){
+  const el = document.getElementById("pLaceChips");
+  const c = byId(PST.catalogId);
+  if(!c.laces){ el.style.display = "none"; el.innerHTML=""; return; }
+  el.style.display = "flex";
+  el.innerHTML = c.laces.map(l => `<button class="chip ${l===PST.lace?'active':''}" data-l="${l.replace(/"/g,'&quot;')}">${l.toUpperCase()}</button>`).join("");
+  el.querySelectorAll("button").forEach(b => b.addEventListener("click", () => {
+    PST.lace = b.dataset.l;
+    renderPLaceChips(); renderUnitPreview();
+  }));
+}
+
+function renderPLengthChips(){
+  const el = document.getElementById("pLengthChips");
+  const c = byId(PST.catalogId);
+  if(!c.lengths){ el.style.display = "none"; el.innerHTML=""; return; }
+  el.style.display = "flex";
+  el.innerHTML = c.lengths.map(len => `<button class="chip ${len===PST.length?'active':''}" data-len="${len}">${len}"</button>`).join("");
+  el.querySelectorAll("button").forEach(b => b.addEventListener("click", () => {
+    PST.length = parseInt(b.dataset.len);
+    renderPLengthChips(); renderUnitPreview();
+  }));
+}
+
+function renderQty(){ document.getElementById("qtyVal").textContent = PST.qty; }
+
+function currentPUnitArr(){
+  const c = byId(PST.catalogId);
+  return getLeaf(c, PST.density, PST.length, PST.lace);
+}
+
+function renderUnitPreview(){
+  const c = byId(PST.catalogId);
+  const arr = currentPUnitArr();
+  const box = document.getElementById("unitPreview");
+  const addBtn = document.getElementById("addBtn");
+  document.getElementById("pCatTitleBox").innerHTML =
+    `<div class="catTitle">${c.label}${PST.density?(' — '+PST.density+'%'):''}${PST.length?(' — '+PST.length+'"'):''}${PST.lace?(' — '+PST.lace.toUpperCase()):''}</div>`;
+  if(!arr){
+    box.innerHTML = `<span style="color:var(--danger, #a3341f);">Combinación no disponible</span>`;
+    addBtn.disabled = true;
+    return;
+  }
+  const tierIdx = Math.min(PST.qty, 5) - 1;
+  const unit = arr[tierIdx];
+  box.innerHTML = `Precio unitario (${PST.qty} ud): <b>RD$ ${fmt(unit)}</b> &nbsp;·&nbsp; Subtotal: <b>RD$ ${fmt(unit*PST.qty)}</b>`;
+  addBtn.disabled = false;
+}
+
+document.getElementById("qtyMinus").addEventListener("click", () => {
+  PST.qty = Math.max(1, PST.qty - 1);
+  renderQty(); renderUnitPreview();
+});
+document.getElementById("qtyPlus").addEventListener("click", () => {
+  PST.qty = Math.min(50, PST.qty + 1);
+  renderQty(); renderUnitPreview();
+});
+
+document.getElementById("addBtn").addEventListener("click", () => {
+  const c = byId(PST.catalogId);
+  const arr = currentPUnitArr();
+  if(!arr) return;
+  const tierIdx = Math.min(PST.qty, 5) - 1;
+  const unit = arr[tierIdx];
+  const descParts = [c.label];
+  if(PST.density) descParts.push(PST.density + "%");
+  if(PST.length) descParts.push(PST.length + '"');
+  if(PST.lace) descParts.push(PST.lace.toUpperCase());
+  CART.push({
+    desc: descParts.join(" — "),
+    qty: PST.qty,
+    unit: unit,
+    subtotal: unit * PST.qty
+  });
+  renderCart();
+  showToast("Agregado al pedido");
+});
+
+function renderCart(){
+  const list = document.getElementById("cartList");
+  const totalRow = document.getElementById("totalRow");
+  const badge = document.getElementById("cartBadge");
+  if(CART.length === 0){
+    list.innerHTML = `<div class="emptyCart">Aún no has agregado productos.</div>`;
+    totalRow.style.display = "none";
+    badge.style.display = "none";
+    return;
+  }
+  badge.style.display = "inline-block";
+  badge.textContent = CART.length;
+  list.innerHTML = CART.map((item, i) => `
+    <div class="cartItem">
+      <div class="info">
+        <div class="name">${item.desc}</div>
+        <div class="meta">${item.qty} ud × RD$ ${fmt(item.unit)}</div>
+      </div>
+      <div class="price">RD$ ${fmt(item.subtotal)}</div>
+      <button class="rm" data-i="${i}">✕</button>
+    </div>`).join("");
+  list.querySelectorAll(".rm").forEach(b => b.addEventListener("click", () => {
+    CART.splice(parseInt(b.dataset.i), 1);
+    renderCart();
+  }));
+  const total = CART.reduce((s,it) => s + it.subtotal, 0);
+  document.getElementById("totalVal").textContent = "RD$ " + fmt(total);
+  totalRow.style.display = "flex";
+}
+
+function buildOrderText(){
+  const name = document.getElementById("clientName").value.trim();
+  const phone = document.getElementById("clientPhone").value.trim();
+  const note = document.getElementById("clientNote").value.trim();
+  let lines = ["*Pedido — Cabello 100% Humano*",""];
+  CART.forEach(it => {
+    lines.push(`• ${it.desc}`);
+    lines.push(`   ${it.qty} ud × RD$${fmt(it.unit)} = RD$${fmt(it.subtotal)}`);
+  });
+  const total = CART.reduce((s,it) => s + it.subtotal, 0);
+  lines.push("", `*Total: RD$${fmt(total)}*`, "");
+  if(name) lines.push(`Nombre: ${name}`);
+  if(phone) lines.push(`Teléfono: ${phone}`);
+  if(note) lines.push(`Nota: ${note}`);
+  return lines.join("\n");
+}
+
+function showToast(msg){
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  setTimeout(() => t.classList.remove("show"), 1800);
+}
+
+document.getElementById("btnCopy").addEventListener("click", () => {
+  if(CART.length === 0){ showToast("Agrega productos primero"); return; }
+  const text = buildOrderText();
+  navigator.clipboard.writeText(text).then(() => showToast("Pedido copiado ✓")).catch(() => {
+    const ta = document.createElement("textarea");
+    ta.value = text; document.body.appendChild(ta); ta.select();
+    document.execCommand("copy"); document.body.removeChild(ta);
+    showToast("Pedido copiado ✓");
+  });
+});
+
+document.getElementById("btnWhats").addEventListener("click", () => {
+  if(CART.length === 0){ showToast("Agrega productos primero"); return; }
+  if(!WHATSAPP_NUMBER){ showToast("Falta configurar el número de WhatsApp"); return; }
+  const text = encodeURIComponent(buildOrderText());
+  window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${text}`, "_blank");
+});
+
+/* =================== NAV =================== */
+document.getElementById("navPrecios").addEventListener("click", () => {
+  document.getElementById("navPrecios").classList.add("active");
+  document.getElementById("navPedido").classList.remove("active");
+  document.getElementById("view-precios").classList.add("show");
+  document.getElementById("view-pedido").classList.remove("show");
+});
+document.getElementById("navPedido").addEventListener("click", () => {
+  document.getElementById("navPedido").classList.add("active");
+  document.getElementById("navPrecios").classList.remove("active");
+  document.getElementById("view-pedido").classList.add("show");
+  document.getElementById("view-precios").classList.remove("show");
+});
+
+initPrecios();
+initPedido();
+</script>
+</body>
+</html>
