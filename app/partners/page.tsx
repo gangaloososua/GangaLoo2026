@@ -6,6 +6,9 @@
 //   Mayoreo (wholesale)  — marketing for wholesale pricing. Wholesale is NOT
 //                          automatic: partners contact us for a personalized
 //                          quote via WhatsApp. No automatic cart discount.
+//                          A static price list / order tool lives at
+//                          /precios-y-pedidos.html (public/) — linked from
+//                          the hero as "Ver lista de precios".
 //   Vendedores (sellers) — marketing + a seller APPLICATION form. On submit it
 //                          calls submitSellerApplication(), which WhatsApps the
 //                          full application to the owner. It does NOT create an
@@ -147,15 +150,32 @@ export default function PartnersPage() {
                 <span className="gl-pill">✓ Atención personalizada</span>
                 <span className="gl-pill">✓ Respuesta rápida</span>
               </div>
-              <a
-                className="gl-btn gl-btn-wa"
-                href={waMayoreo}
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{ marginTop: '2rem' }}
+              <div
+                style={{
+                  display: 'flex',
+                  gap: '1rem',
+                  justifyContent: 'center',
+                  flexWrap: 'wrap',
+                  marginTop: '2rem',
+                }}
               >
-                Solicitar precios por WhatsApp
-              </a>
+                <a
+                  className="gl-btn gl-btn-wa"
+                  href={waMayoreo}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Solicitar precios por WhatsApp
+                </a>
+                <a
+                  className="gl-btn gl-btn-ghost"
+                  href="/precios-y-pedidos.html"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Ver lista de precios
+                </a>
+              </div>
             </div>
           </section>
 
@@ -174,8 +194,9 @@ export default function PartnersPage() {
             </div>
             <p className="gl-tip">
               💡 Los precios de mayoreo se acuerdan caso por caso, según el
-              producto y la cantidad que necesites. Escríbenos por WhatsApp y con
-              gusto te asesoramos.
+              producto y la cantidad que necesites. Consulta nuestra lista de
+              precios y arma tu pedido, o escríbenos por WhatsApp y con gusto
+              te asesoramos.
             </p>
             <div
               style={{
@@ -186,6 +207,14 @@ export default function PartnersPage() {
                 marginTop: '1.5rem',
               }}
             >
+              <a
+                className="gl-btn gl-btn-ghost"
+                href="/precios-y-pedidos.html"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Ver lista de precios
+              </a>
               <a className="gl-btn gl-btn-wa" href={waMayoreo} target="_blank" rel="noopener noreferrer">
                 Escríbenos por WhatsApp
               </a>
