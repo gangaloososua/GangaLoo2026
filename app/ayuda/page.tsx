@@ -249,17 +249,27 @@ export default function AyudaPage() {
       <section id="mayoreo" className="ay-section">
         <SectionHdr n={6} title="Compras al por mayor (Mayoreo)" />
         <InfoBox tone="gold" title="🏷️ ¿Qué es el mayoreo?">
-          Si compras varios productos a la vez, obtienes un descuento. Ideal para
-          revendedoras o salones de belleza.
+          No es un descuento automático en el carrito de la tienda — es una
+          lista de precios y pedidos aparte, solo para{" "}
+          <strong>nuestros productos de la casa</strong> (cabello y pelucas
+          GangaLoo).
         </InfoBox>
         <div className="ay-steps">
-          <Step n={1} title="Agrega varios productos al carrito">
-            El descuento se aplica cuando tu carrito alcanza la cantidad mínima
-            requerida.
+          <Step n={1} title="Consulta la lista de precios de mayoreo">
+            Abre{" "}
+            <a
+              href="/precios-y-pedidos.html"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              nuestra lista de precios y pedidos
+            </a>
+            , donde ves el precio según la cantidad para cada producto de la
+            casa.
           </Step>
-          <Step n={2} title="Ve el descuento aplicado">
-            En el carrito verás el descuento de mayoreo con el porcentaje de
-            ahorro.
+          <Step n={2} title="Arma tu pedido ahí mismo">
+            Elige el producto, la cantidad y envía tu pedido directo por
+            WhatsApp desde esa misma página.
           </Step>
           <Step n={3} title="O aplica como mayorista">
             Para precios de mayoreo permanentes y condiciones especiales, ve a{" "}
