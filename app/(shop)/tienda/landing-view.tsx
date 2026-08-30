@@ -1,9 +1,9 @@
-'use client'
+﻿'use client'
 
-import { useState, useEffect } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { formatDOP } from '@/lib/format'
-import type { StoreWithDeals } from '@/lib/store/catalog'
+import type { StoreWithDeals, StoreLandingTeaser } from '@/lib/store/catalog'
 
 const NAVY = '#0A2A66'
 const RED = '#CE1126'
@@ -16,11 +16,14 @@ const T = {
   es: {
     welcome: 'Bienvenido(a)',
     title: 'Elige tu tienda',
-    sub: 'Cada tienda tiene su propio inventario y ofertas. Escoge la más cercana para empezar a comprar.',
+    sub: 'Cada tienda tiene su propio inventario y ofertas. Escoge la mÃ¡s cercana para empezar a comprar.',
     deals: 'Ofertas de hoy',
+    recentSold: 'Vendido recientemente',
+    incoming: 'PrÃ³ximamente',
+    comingSoon: 'PrÃ³ximamente',
     shopAt: 'Comprar en',
     none: 'No hay tiendas disponibles por ahora.',
-    banner: 'Crea tu cuenta y obtén mejores precios en cada compra.',
+    banner: 'Crea tu cuenta y obtÃ©n mejores precios en cada compra.',
     bannerBtn: 'Crear cuenta',
     bannerClose: 'Cerrar aviso',
   },
@@ -29,6 +32,9 @@ const T = {
     title: 'Choose your store',
     sub: 'Each store has its own stock and offers. Pick the nearest one to start shopping.',
     deals: "Today's offers",
+    recentSold: 'Recently sold',
+    incoming: 'Coming soon',
+    comingSoon: 'Coming soon',
     shopAt: 'Shop at',
     none: 'No stores available right now.',
     banner: 'Create an account and get better prices on every order.',
@@ -39,6 +45,102 @@ const T = {
 
 function price(cents: number) {
   return formatDOP(cents, { decimals: 0 })
+}
+
+// Auto-advancing horizontal row. Scrolls one card-width right every
+// `intervalMs`, looping back to the start at the end. Pauses while the
+// pointer/touch is over it so people can browse without it fighting them.
+function AutoScroller({
+  items,
+  renderItem,
+  intervalMs = 3500,
+}: {
+  items: unknown[]
+  renderItem: (item: never, i: number) => React.ReactNode
+  intervalMs?: number
+}) {
+  const ref = useRef<HTMLDivElement>(null)
+  const pausedRef = useRef(false)
+
+  useEffect(() => {
+    const el = ref.current
+    if (!el || items.length <= 1) return
+    const id = window.setInterval(() => {
+      if (pausedRef.current) return
+      const first = el.firstElementChild as HTMLElement | null
+      const step = first ? first.offsetWidth + 12 : 140
+      const atEnd = el.scrollLeft + el.clientWidth >= el.scrollWidth - 4
+      if (atEnd) {
+        el.scrollTo({ left: 0, behavior: 'smooth' })
+      } else {
+        el.scrollBy({ left: step, behavior: 'smooth' })
+      }
+    }, intervalMs)
+    return () => window.clearInterval(id)
+  }, [items.length, intervalMs])
+
+  return (
+    <div
+      ref={ref}
+      className="gl-scroller flex gap-3 overflow-x-auto pb-1"
+      onMouseEnter={() => { pausedRef.current = true }}
+      onMouseLeave={() => { pausedRef.current = false }}
+      onTouchStart={() => { pausedRef.current = true }}
+      onTouchEnd={() => { pausedRef.current = false }}
+    >
+      {items.map((item, i) => renderItem(item as never, i))}
+    </div>
+  )
+}
+
+function RecentSoldCard({ item, storeSlug }: { item: StoreLandingTeaser; storeSlug: string }) {
+  return (
+    <Link
+      href={`/tienda/${storeSlug}/${item.slug}`}
+      className="block shrink-0 overflow-hidden rounded-xl transition active:scale-[.98]"
+      style={{ border: '1px solid #eceef2', width: 110 }}
+    >
+      <div className="relative w-full" style={{ height: 90, background: '#fff' }}>
+        {item.imageUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={item.imageUrl} alt={item.name} className="h-full w-full object-contain" loading="lazy" />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center" style={{ color: '#c2c8d2', fontStyle: 'italic', fontSize: 22 }}>G</div>
+        )}
+      </div>
+      <div className="p-1.5">
+        <p className="truncate text-[10.5px]" style={{ color: INK }}>{item.name}</p>
+      </div>
+    </Link>
+  )
+}
+
+function IncomingCard({ item, comingSoonLabel }: { item: StoreLandingTeaser; comingSoonLabel: string }) {
+  // Not a link — these products aren't published/orderable yet.
+  return (
+    <div
+      className="block shrink-0 overflow-hidden rounded-xl"
+      style={{ border: '1px solid #eceef2', width: 110, opacity: 0.85 }}
+    >
+      <div className="relative w-full" style={{ height: 90, background: '#fff' }}>
+        {item.imageUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={item.imageUrl} alt={item.name} className="h-full w-full object-contain grayscale-[15%]" loading="lazy" />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center" style={{ color: '#c2c8d2', fontStyle: 'italic', fontSize: 22 }}>G</div>
+        )}
+        <span
+          className="absolute left-1.5 top-1.5 rounded-full px-1.5 py-0.5 text-[8.5px] font-semibold uppercase tracking-wide text-white"
+          style={{ background: NAVY }}
+        >
+          {comingSoonLabel}
+        </span>
+      </div>
+      <div className="p-1.5">
+        <p className="truncate text-[10.5px]" style={{ color: MUTED }}>{item.name}</p>
+      </div>
+    </div>
+  )
 }
 
 export function StoreLandingView({
@@ -53,7 +155,7 @@ export function StoreLandingView({
   const t = T[locale]
 
   // The "Crear cuenta" sign-up form lives under a store (/tienda/<store>/cuenta).
-  // The account is global, so any store works — we use the first available one.
+  // The account is global, so any store works â€” we use the first available one.
   // (If you'd rather always send people to the Club page, set this to '/club'.)
   const signupHref = stores[0] ? `/tienda/${stores[0].slug}/cuenta` : '/club'
 
@@ -75,12 +177,14 @@ export function StoreLandingView({
     try {
       localStorage.setItem('gl_signup_banner', 'dismissed')
     } catch {
-      /* ignore — banner just won't be remembered */
+      /* ignore â€” banner just won't be remembered */
     }
   }
 
   return (
     <div style={{ background: '#f7f8fa', color: INK, minHeight: '100vh' }}>
+      <style>{`.gl-scroller{scrollbar-width:none;-ms-overflow-style:none}.gl-scroller::-webkit-scrollbar{display:none}`}</style>
+
       <header className="sticky top-0 z-30" style={{ background: NAVY, color: '#fff' }}>
         <div className="mx-auto flex w-full max-w-[760px] items-center justify-between px-4 py-3">
           <span className="text-[20px] font-semibold tracking-wide">GangaLoo</span>
@@ -102,7 +206,7 @@ export function StoreLandingView({
             className="mb-6 flex items-center gap-3 rounded-2xl px-4 py-3"
             style={{ background: NAVY, color: '#fff' }}
           >
-            <span className="text-[18px] leading-none" aria-hidden="true">💡</span>
+            <span className="text-[18px] leading-none" aria-hidden="true">ðŸ’¡</span>
             <p className="flex-1 text-[13px] leading-snug">{t.banner}</p>
             <Link
               href={signupHref}
@@ -117,7 +221,7 @@ export function StoreLandingView({
               className="shrink-0 px-1 text-[20px] leading-none"
               style={{ color: 'rgba(255,255,255,.7)' }}
             >
-              ×
+              Ã—
             </button>
           </div>
         )}
@@ -171,8 +275,36 @@ export function StoreLandingView({
                       ))}
                     </div>
                     <Link href={`/tienda/${s.slug}`} className="mt-3 inline-block text-[12px] font-semibold" style={{ color: NAVY }}>
-                      {t.shopAt} {s.name} →
+                      {t.shopAt} {s.name} â†’
                     </Link>
+                  </div>
+                )}
+
+                {s.recentSold.length > 0 && (
+                  <div className="border-t px-5 pb-5 pt-4" style={{ borderColor: '#eceef2' }}>
+                    <div className="mb-3 flex items-center gap-2">
+                      <span className="text-[13px] font-semibold" style={{ color: NAVY }}>{t.recentSold}</span>
+                    </div>
+                    <AutoScroller
+                      items={s.recentSold}
+                      renderItem={(item) => (
+                        <RecentSoldCard key={(item as StoreLandingTeaser).productId} item={item as StoreLandingTeaser} storeSlug={s.slug} />
+                      )}
+                    />
+                  </div>
+                )}
+
+                {s.incoming.length > 0 && (
+                  <div className="border-t px-5 pb-5 pt-4" style={{ borderColor: '#eceef2' }}>
+                    <div className="mb-3 flex items-center gap-2">
+                      <span className="text-[13px] font-semibold" style={{ color: NAVY }}>{t.incoming}</span>
+                    </div>
+                    <AutoScroller
+                      items={s.incoming}
+                      renderItem={(item) => (
+                        <IncomingCard key={(item as StoreLandingTeaser).productId} item={item as StoreLandingTeaser} comingSoonLabel={t.comingSoon} />
+                      )}
+                    />
                   </div>
                 )}
               </div>

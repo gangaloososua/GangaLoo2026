@@ -1,4 +1,4 @@
-// Storefront catalog layer for the public online shop.
+﻿// Storefront catalog layer for the public online shop.
 //
 // Reads only the SAFE public views (store_*), never the raw tables, so customer
 // browsers never touch costs, commissions, or inventory value:
@@ -116,8 +116,20 @@ export type StoreLandingDeal = {
   percent: number
 }
 
+// Plain product teaser (no price) used for the "Recently sold" and
+// "On the way" landing-page scrollers. Deliberately minimal — name, slug,
+// image only — never costs, supplier info, or customer data.
+export type StoreLandingTeaser = {
+  productId: string
+  name: string
+  slug: string
+  imageUrl: string | null
+}
+
 export type StoreWithDeals = StoreWarehouse & {
   deals: StoreLandingDeal[]
+  recentSold: StoreLandingTeaser[]
+  incoming: StoreLandingTeaser[]
 }
 
 function cleanName(raw: string): string {
@@ -155,8 +167,37 @@ export async function listStoreWarehouses(): Promise<StoreWarehouse[]> {
     .sort((a, b) => a.rawName.localeCompare(b.rawName))
 }
 
+// Reads one of the safe teaser RPCs (get_store_recent_sold /
+// get_store_incoming_products), both of which share the same
+// { product_id, name, slug, image_url } shape.
+async function fetchStoreTeasers(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  fn: 'get_store_recent_sold' | 'get_store_incoming_products',
+  warehouseId: string,
+  limit: number = 8,
+): Promise<StoreLandingTeaser[]> {
+  const { data, error } = await supabase.rpc(fn, {
+    p_warehouse_id: warehouseId,
+    p_limit: limit,
+  })
+  if (error) throw error
+  return ((data ?? []) as Array<{
+    product_id: string
+    name: string
+    slug: string
+    image_url: string | null
+  }>).map((r) => ({
+    productId: r.product_id,
+    name: r.name,
+    slug: r.slug,
+    imageUrl: r.image_url,
+  }))
+}
+
 // For the /tienda landing page: every active store with its live FEATURED
-// deals (daily/weekly promotions). Reads only safe store_* views. Deal price =
+// deals (daily/weekly promotions), plus two teaser scrollers — recently sold
+// products and products on the way (open, unreceived purchase orders). Reads
+// only safe store_* views / SECURITY DEFINER teaser functions. Deal price =
 // percent off the normal store price, capped at 30% (matches checkout).
 // Round 62: store_promotions now exposes ALL active promotions, so this
 // landing carousel filters to FEATURED ones (deal_slot set) to stay unchanged.
@@ -199,10 +240,18 @@ export async function listStoreWarehousesWithDeals(): Promise<StoreWithDeals[]> 
 
   return Promise.all(
     stores.map(async (store) => {
+      // Recently sold + incoming teasers are independent of the deals logic
+      // below, so fetch them concurrently and merge into whichever branch
+      // this store falls into.
+      const [recentSold, incoming] = await Promise.all([
+        fetchStoreTeasers(supabase, 'get_store_recent_sold', store.id),
+        fetchStoreTeasers(supabase, 'get_store_incoming_products', store.id),
+      ])
+
       const relevant = featured.filter(
         (p) => p.warehouse_id == null || p.warehouse_id === store.id,
       )
-      if (relevant.length === 0) return { ...store, deals: [] }
+      if (relevant.length === 0) return { ...store, deals: [], recentSold, incoming }
 
       // Per-store price overrides for the deal products in this store.
       const ids = [...new Set(relevant.map((r) => r.product_id))]
@@ -248,7 +297,7 @@ export async function listStoreWarehousesWithDeals(): Promise<StoreWithDeals[]> 
           percent: Math.round((1 - dealCents / normal) * 100),
         })
       }
-      return { ...store, deals: deals.slice(0, 4) }
+      return { ...store, deals: deals.slice(0, 4), recentSold, incoming }
     }),
   )
 }
@@ -367,10 +416,7 @@ export async function fetchStoreCatalog(
       ),
     ])
 
-  const settingByProduct = new Map<
-    string,
-    { is_visible: boolean; price_override_cents: number | null }
-  >()
+  const settingByProduct = new Map<string, { is_visible: boolean; price_override_cents: number | null }>()
   for (const s of whSettings ?? []) {
     settingByProduct.set(s.product_id, {
       is_visible: s.is_visible,
@@ -391,10 +437,7 @@ export async function fetchStoreCatalog(
   //    homepage countdown carousel + the grid's deal sections.
   // Both pick the highest-priority row per product.
   const promoPctByProduct = new Map<string, { percent: number; priority: number }>()
-  const dealByProduct = new Map<
-    string,
-    { slot: 'daily' | 'weekly'; percent: number; endsAt: string | null; priority: number }
-  >()
+  const dealByProduct = new Map<string, { slot: 'daily' | 'weekly'; percent: number; endsAt: string | null; priority: number }>()
   for (const d of dealRows ?? []) {
     if (d.delta_percent == null) continue
     const priority = Number(d.priority) || 0
@@ -463,10 +506,7 @@ export async function fetchStoreCatalog(
   // the storefront can sort categories the SAME way they're arranged in admin
   // (instead of alphabetical). Names still drive display; order/parent are
   // used only for sorting below.
-  const catInfoById = new Map<
-    string,
-    { name: string; parentId: string | null; order: number }
-  >()
+  const catInfoById = new Map<string, { name: string; parentId: string | null; order: number }>()
   for (const c of cats ?? [])
     catInfoById.set(c.id, {
       name: c.name,
@@ -481,14 +521,8 @@ export async function fetchStoreCatalog(
     if (name) catByProduct.set(l.product_id, { id: l.category_id, name })
   }
 
-  const valueMeta = new Map<
-    string,
-    { id: string; attribute_id: string; value: string; slug: string; display_order: number }
-  >()
-  const attrMeta = new Map<
-    string,
-    { id: string; name: string; slug: string; display_order: number }
-  >()
+  const valueMeta = new Map<string, { id: string; attribute_id: string; value: string; slug: string; display_order: number }>()
+  const attrMeta = new Map<string, { id: string; name: string; slug: string; display_order: number }>()
   for (const v of avRows ?? []) valueMeta.set(v.id, v)
 
   // WAVE 3 - attribute metadata (needs the attribute ids from wave 2).
@@ -666,16 +700,7 @@ export async function fetchStoreCatalog(
   // Build attribute filter facets from the SHOWN rows only - so the filter only
   // offers attributes/values that actually exist among visible products. Order
   // attributes and values by their display_order (then name/value as tiebreak).
-  const facetMap = new Map<
-    string,
-    {
-      id: string
-      name: string
-      slug: string
-      display_order: number
-      values: Map<string, { id: string; value: string; slug: string; display_order: number }>
-    }
-  >()
+  const facetMap = new Map<string, { id: string; name: string; slug: string; display_order: number; values: Map<string, { id: string; value: string; slug: string; display_order: number }> }>()
   for (const r of rows) {
     for (const vid of r.attributeValueIds) {
       const v = valueMeta.get(vid)
@@ -709,3 +734,4 @@ export async function fetchStoreCatalog(
 
   return { warehouse, products: rows, offers, categories, attributes, dailyDeal, weeklyDeal, isGuest, guestMarkupPct, isClubMember }
 }
+
