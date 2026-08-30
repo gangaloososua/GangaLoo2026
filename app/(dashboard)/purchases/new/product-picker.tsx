@@ -1,8 +1,6 @@
-'use client'
-
+﻿'use client'
 import { useMemo, useState } from 'react'
 import { Plus } from 'lucide-react'
-
 import { Button } from '@/components/ui/button'
 import {
   Popover,
@@ -17,17 +15,14 @@ import {
   CommandItem,
   CommandList,
 } from '@/components/ui/command'
-
 import type {
   ProductPickerItem,
   ProductPickerCategoryGroup,
 } from '@/lib/purchases'
-
 type Props = {
   productGroups: ProductPickerCategoryGroup[]
   onPick: (product: ProductPickerItem) => void
 }
-
 // Self-contained product picker. Renders its own "Add line" trigger button;
 // clicking it opens a Popover with a search input above a grouped, scrollable
 // list of products. Search filters across name + SKU and prunes empty groups.
@@ -35,7 +30,6 @@ type Props = {
 export function ProductPicker({ productGroups, onPick }: Props) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
-
   const filteredGroups = useMemo(() => {
     const q = query.trim().toLowerCase()
     if (!q) return productGroups
@@ -52,13 +46,11 @@ export function ProductPicker({ productGroups, onPick }: Props) {
     }
     return out
   }, [productGroups, query])
-
   function handlePick(p: ProductPickerItem) {
     onPick(p)
     setQuery('')
     setOpen(false)
   }
-
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
@@ -67,7 +59,10 @@ export function ProductPicker({ productGroups, onPick }: Props) {
           Add line
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[420px] p-0" align="start">
+      <PopoverContent
+        className="w-[420px] max-w-[calc(100vw-2rem)] p-0"
+        align="start"
+      >
         <Command shouldFilter={false}>
           <CommandInput
             placeholder="Search by name or SKU..."
@@ -89,9 +84,17 @@ export function ProductPicker({ productGroups, onPick }: Props) {
                     value={(g.category_id ?? 'u') + ':' + p.id + ':' + p.name + ':' + p.sku}
                     onSelect={() => handlePick(p)}
                   >
-                    <div className="flex w-full items-center justify-between gap-2">
-                      <span className="truncate">{p.name}</span>
-                      <span className="ml-2 shrink-0 text-xs text-muted-foreground">
+                    <div className="flex w-full min-w-0 items-center justify-between gap-2">
+                      <span
+                        className="min-w-0 flex-1 truncate"
+                        title={p.name}
+                      >
+                        {p.name}
+                      </span>
+                      <span
+                        className="max-w-[40%] shrink-0 truncate text-xs text-muted-foreground"
+                        title={p.sku}
+                      >
                         {p.sku}
                       </span>
                     </div>
