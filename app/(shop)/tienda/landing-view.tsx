@@ -16,14 +16,14 @@ const T = {
   es: {
     welcome: 'Bienvenido(a)',
     title: 'Elige tu tienda',
-    sub: 'Cada tienda tiene su propio inventario y ofertas. Escoge la mÃ¡s cercana para empezar a comprar.',
+    sub: 'Cada tienda tiene su propio inventario y ofertas. Escoge la más cercana para empezar a comprar.',
     deals: 'Ofertas de hoy',
     recentSold: 'Vendido recientemente',
-    incoming: 'PrÃ³ximamente',
-    comingSoon: 'PrÃ³ximamente',
+    incoming: 'Próximamente',
+    comingSoon: 'Próximamente',
     shopAt: 'Comprar en',
     none: 'No hay tiendas disponibles por ahora.',
-    banner: 'Crea tu cuenta y obtÃ©n mejores precios en cada compra.',
+    banner: 'Crea tu cuenta y obtén mejores precios en cada compra.',
     bannerBtn: 'Crear cuenta',
     bannerClose: 'Cerrar aviso',
   },
@@ -48,7 +48,7 @@ function price(cents: number) {
 }
 
 // Auto-advancing horizontal row. Scrolls one card-width right every
-// `intervalMs`, looping back to the start at the end. Pauses while the
+// intervalMs, looping back to the start at the end. Pauses while the
 // pointer/touch is over it so people can browse without it fighting them.
 function AutoScroller({
   items,
@@ -155,7 +155,7 @@ export function StoreLandingView({
   const t = T[locale]
 
   // The "Crear cuenta" sign-up form lives under a store (/tienda/<store>/cuenta).
-  // The account is global, so any store works â€” we use the first available one.
+  // The account is global, so any store works — we use the first available one.
   // (If you'd rather always send people to the Club page, set this to '/club'.)
   const signupHref = stores[0] ? `/tienda/${stores[0].slug}/cuenta` : '/club'
 
@@ -177,7 +177,7 @@ export function StoreLandingView({
     try {
       localStorage.setItem('gl_signup_banner', 'dismissed')
     } catch {
-      /* ignore â€” banner just won't be remembered */
+      /* ignore — banner just won't be remembered */
     }
   }
 
@@ -206,7 +206,7 @@ export function StoreLandingView({
             className="mb-6 flex items-center gap-3 rounded-2xl px-4 py-3"
             style={{ background: NAVY, color: '#fff' }}
           >
-            <span className="text-[18px] leading-none" aria-hidden="true">ðŸ’¡</span>
+            <span className="text-[18px] leading-none" aria-hidden="true">💡</span>
             <p className="flex-1 text-[13px] leading-snug">{t.banner}</p>
             <Link
               href={signupHref}
@@ -221,7 +221,7 @@ export function StoreLandingView({
               className="shrink-0 px-1 text-[20px] leading-none"
               style={{ color: 'rgba(255,255,255,.7)' }}
             >
-              Ã—
+              ×
             </button>
           </div>
         )}
@@ -275,7 +275,7 @@ export function StoreLandingView({
                       ))}
                     </div>
                     <Link href={`/tienda/${s.slug}`} className="mt-3 inline-block text-[12px] font-semibold" style={{ color: NAVY }}>
-                      {t.shopAt} {s.name} â†’
+                      {t.shopAt} {s.name} →
                     </Link>
                   </div>
                 )}
