@@ -3,6 +3,8 @@
 // app/us/[slug]/us-product-view.tsx
 // US shop — single product page. English, USD.
 // Phase 3: quantity selector + "Buy now" -> /us/checkout?slug=&qty=
+// Now also shows the product video (same YouTube-embed logic as the
+// regular store) and the attribute/specs list, when present.
 
 import { useState } from 'react'
 import Link from 'next/link'
@@ -21,9 +23,32 @@ function usd(n: number) {
   }).format(n)
 }
 
+// Turn a YouTube link into an embeddable URL. Accepts the full watch URL
+// (youtube.com/watch?v=ID), the short youtu.be/ID form, an /embed/ID URL,
+// or a /shorts/ID URL. Returns null if no 11-char video id can be found.
+function toYouTubeEmbed(raw: string): string | null {
+  if (!raw) return null
+  const url = raw.trim()
+  let id = ''
+  const patterns = [
+    /[?&]v=([A-Za-z0-9_-]{11})/,        // watch?v=ID
+    /youtu\.be\/([A-Za-z0-9_-]{11})/,   // youtu.be/ID
+    /\/embed\/([A-Za-z0-9_-]{11})/,     // /embed/ID
+    /\/shorts\/([A-Za-z0-9_-]{11})/,    // /shorts/ID
+  ]
+  for (const re of patterns) {
+    const m = url.match(re)
+    if (m) { id = m[1]; break }
+  }
+  if (!id) return null
+  return `https://www.youtube.com/embed/${id}`
+}
+
 export function UsProductView({ product }: { product: UsStoreProduct }) {
   const router = useRouter()
   const [qty, setQty] = useState(1)
+
+  const videoEmbed = product.videoUrl ? toYouTubeEmbed(product.videoUrl) : null
 
   function buyNow() {
     router.push(`/us/checkout?slug=${encodeURIComponent(product.slug)}&qty=${qty}`)
@@ -57,30 +82,53 @@ export function UsProductView({ product }: { product: UsStoreProduct }) {
         </Link>
 
         <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
-          <div
-            className="overflow-hidden rounded-2xl bg-white"
-            style={{ border: '1px solid #eceef2' }}
-          >
+          <div>
             <div
-              className="relative w-full"
-              style={{ height: 420, background: '#fff' }}
+              className="overflow-hidden rounded-2xl bg-white"
+              style={{ border: '1px solid #eceef2' }}
             >
-              {product.imageUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={product.imageUrl}
-                  alt={product.name}
-                  className="h-full w-full object-contain"
-                />
-              ) : (
-                <div
-                  className="flex h-full w-full items-center justify-center"
-                  style={{ color: '#c2c8d2', fontStyle: 'italic', fontSize: 48 }}
-                >
-                  G
-                </div>
-              )}
+              <div
+                className="relative w-full"
+                style={{ height: 420, background: '#fff' }}
+              >
+                {product.imageUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={product.imageUrl}
+                    alt={product.name}
+                    className="h-full w-full object-contain"
+                  />
+                ) : (
+                  <div
+                    className="flex h-full w-full items-center justify-center"
+                    style={{ color: '#c2c8d2', fontStyle: 'italic', fontSize: 48 }}
+                  >
+                    G
+                  </div>
+                )}
+              </div>
             </div>
+
+            {videoEmbed && (
+              <div className="mt-4">
+                <h2 className="mb-2 text-[15px] font-semibold" style={{ color: NAVY }}>
+                  Product video
+                </h2>
+                <div
+                  className="overflow-hidden rounded-2xl"
+                  style={{ position: 'relative', width: '100%', paddingBottom: '56.25%', background: '#000', border: '1px solid #eceef2' }}
+                >
+                  <iframe
+                    src={videoEmbed}
+                    title={product.name}
+                    loading="lazy"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                    allowFullScreen
+                    style={{ position: 'absolute', inset: 0, height: '100%', width: '100%', border: 0 }}
+                  />
+                </div>
+              </div>
+            )}
           </div>
 
           <div>
@@ -138,6 +186,22 @@ export function UsProductView({ product }: { product: UsStoreProduct }) {
                 Buy now · {usd(product.priceUsd * qty)}
               </button>
             </div>
+
+            {product.attributes.length > 0 && (
+              <div className="mt-7">
+                <h2 className="mb-2 text-[15px] font-semibold" style={{ color: NAVY }}>
+                  Specifications
+                </h2>
+                <dl className="divide-y" style={{ borderColor: '#eef1f5' }}>
+                  {product.attributes.map((a) => (
+                    <div key={a.name} className="flex gap-3 py-1.5 text-[14px]">
+                      <dt className="w-32 shrink-0" style={{ color: MUTED }}>{a.name}</dt>
+                      <dd style={{ color: '#3a4452' }}>{a.values.join(', ')}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </div>
+            )}
           </div>
         </div>
       </main>

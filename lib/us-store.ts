@@ -1,4 +1,4 @@
-// lib/us-store.ts
+﻿// lib/us-store.ts
 //
 // US shop Phase 2 — PUBLIC storefront read layer.
 // Reads US products through the SAFE SECURITY DEFINER functions
@@ -9,8 +9,16 @@
 // Deliberately simple vs the DR store (lib/store/product.ts): no warehouse,
 // no stock, no club/guest/deal pricing. US price is just override-or-markup,
 // already resolved by the DB function.
-
+//
+// video_url + attributes are only ever populated on the single-product read
+// (get_us_store_product); the grid function (get_us_store_products) doesn't
+// select them, so they'll be undefined on grid rows — mapRow handles that.
 import { createClient } from '@/lib/supabase/server'
+
+export type UsStoreAttribute = {
+  name: string
+  values: string[]
+}
 
 export type UsStoreProduct = {
   id: string
@@ -19,6 +27,8 @@ export type UsStoreProduct = {
   description: string | null
   imageUrl: string | null
   priceUsd: number
+  videoUrl: string | null
+  attributes: UsStoreAttribute[]
 }
 
 type RawUsStoreRow = {
@@ -28,6 +38,8 @@ type RawUsStoreRow = {
   description: string | null
   primary_image_url: string | null
   us_price_usd: number | string | null
+  video_url?: string | null
+  attributes?: UsStoreAttribute[] | null
 }
 
 function mapRow(r: RawUsStoreRow): UsStoreProduct {
@@ -43,6 +55,8 @@ function mapRow(r: RawUsStoreRow): UsStoreProduct {
         : typeof r.us_price_usd === 'string'
           ? Number(r.us_price_usd)
           : r.us_price_usd,
+    videoUrl: r.video_url ?? null,
+    attributes: r.attributes ?? [],
   }
 }
 
