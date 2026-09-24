@@ -80,7 +80,7 @@ export function ProductSearch({ warehouseId, categories, onAdd, locale = 'en' }:
     ? categories.find((c) => c.id === categoryId)?.name ?? null
     : null
 
-  // Click-outside closes the results dropdown without clearing the inputs —
+  // Click-outside closes the results dropdown without clearing the inputs â€”
   // operator might want to re-open and pick again.
   useEffect(() => {
     function onClickOutside(e: MouseEvent) {
@@ -264,7 +264,7 @@ export function ProductSearch({ warehouseId, categories, onAdd, locale = 'en' }:
               key={r.id}
               type="button"
               onClick={() => handlePick(r)}
-              className="flex w-full min-h-[52px] items-center gap-3 border-b px-3 py-2 text-left text-sm last:border-b-0 hover:bg-muted/40"
+              className="flex w-full min-h-[52px] items-start gap-3 border-b px-3 py-2 text-left text-sm last:border-b-0 hover:bg-muted/40"
             >
               <div className="size-9 shrink-0 overflow-hidden rounded bg-muted">
                 {r.primary_image_url ? (
@@ -278,7 +278,13 @@ export function ProductSearch({ warehouseId, categories, onAdd, locale = 'en' }:
                 ) : null}
               </div>
               <div className="min-w-0 flex-1">
-                <div className="truncate font-medium">{r.name}</div>
+                {/* Was `truncate` (forced one line + ellipsis) -- on a
+                    narrow phone that left almost nothing readable next to
+                    the price/stock column. line-clamp-2 lets the name wrap
+                    onto a second line instead of getting chopped. */}
+                <div className="line-clamp-2 break-words font-medium">
+                  {r.name}
+                </div>
                 <div className="truncate text-xs text-muted-foreground">
                   {r.sku}
                 </div>

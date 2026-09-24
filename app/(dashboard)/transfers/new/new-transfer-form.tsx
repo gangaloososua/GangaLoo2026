@@ -1,6 +1,6 @@
 'use client'
 
-// Round 26d — new stock transfer form.
+// Round 26d â€” new stock transfer form.
 //
 // Pick source + destination warehouse, then add products via the shared
 // ProductSearch (scoped to the SOURCE warehouse, so it lists that warehouse's
@@ -11,11 +11,16 @@
 // 2026-06-17: + camera scan to add products (one-shot). A scanned code is
 // looked up scoped to the SOURCE warehouse via findProductBySkuAction, so the
 // added line carries the right on-hand and inherits the over-stock guard.
+//
+// 2026-09-23: + mobile-friendly line list. The table (kept for sm+ screens)
+// needed horizontal scrolling on phones and the bare number input was hard
+// to use with one thumb. Added a stacked-card layout for small screens with
+// visible +/- buttons plus a directly-editable qty box.
 
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Trash2 } from 'lucide-react'
+import { Minus, Plus, Trash2 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -132,6 +137,14 @@ export function NewTransferForm({
     )
   }
 
+  function bumpQty(line_id: string, delta: number) {
+    setLines((prev) =>
+      prev.map((l) =>
+        l.line_id === line_id ? { ...l, qty: Math.max(1, l.qty + delta) } : l,
+      ),
+    )
+  }
+
   function removeLine(line_id: string) {
     setLines((prev) => prev.filter((l) => l.line_id !== line_id))
   }
@@ -154,7 +167,7 @@ export function NewTransferForm({
         items: lines.map((l) => ({ productId: l.product_id, qty: l.qty })),
       })
       if (res.ok) {
-        toast.success('Transfer created — stock is now in transit.')
+        toast.success('Transfer created â€” stock is now in transit.')
         router.push(`/transfers/${res.id}`)
       } else {
         toast.error(res.error)
@@ -182,7 +195,7 @@ export function NewTransferForm({
             </Label>
             <Select value={fromId} onValueChange={onFromChange}>
               <SelectTrigger>
-                <SelectValue placeholder="Source…" />
+                <SelectValue placeholder="Sourceâ€¦" />
               </SelectTrigger>
               <SelectContent>
                 {warehouses.map((w) => (
@@ -199,7 +212,7 @@ export function NewTransferForm({
             </Label>
             <Select value={toId} onValueChange={setToId}>
               <SelectTrigger>
-                <SelectValue placeholder="Destination…" />
+                <SelectValue placeholder="Destinationâ€¦" />
               </SelectTrigger>
               <SelectContent>
                 {warehouses
@@ -251,71 +264,186 @@ export function NewTransferForm({
                   No products yet. Search or scan above to add what you&apos;re moving.
                 </p>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b text-left text-xs text-muted-foreground">
-                        <th className="py-2 pr-3 font-medium">Product</th>
-                        <th className="py-2 pr-3 font-medium">Qty to move</th>
-                        <th className="py-2 pr-3 font-medium">In source</th>
-                        <th className="py-2 pl-3"></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {lines.map((l) => {
-                        const over = l.qty > l.qty_on_hand_at_add
-                        return (
-                          <tr key={l.line_id} className="border-b align-top">
-                            <td className="py-2 pr-3">
-                              <div className="font-medium">{l.name}</div>
-                              <div className="text-xs text-muted-foreground">{l.sku}</div>
-                            </td>
-                            <td className="py-2 pr-3">
+                <>
+                  {/* Mobile: stacked cards with a real +/- stepper. Hidden sm+. */}
+                  <div className="space-y-2 sm:hidden">
+                    {lines.map((l) => {
+                      const over = l.qty > l.qty_on_hand_at_add
+                      return (
+                        <div
+                          key={l.line_id}
+                          className="rounded-md border p-3"
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <div className="break-words font-medium leading-snug">
+                                {l.name}
+                              </div>
+                              <div className="text-xs text-muted-foreground">
+                                {l.sku}
+                              </div>
+                            </div>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => removeLine(l.line_id)}
+                              aria-label="Remove line"
+                              className="shrink-0"
+                            >
+                              <Trash2 className="size-4" />
+                            </Button>
+                          </div>
+
+                          <div className="mt-3 flex items-center justify-between gap-3">
+                            <div className="flex items-center gap-1">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="icon"
+                                className="size-9"
+                                onClick={() => bumpQty(l.line_id, -1)}
+                                aria-label="Decrease quantity"
+                              >
+                                <Minus className="size-4" />
+                              </Button>
                               <Input
                                 type="number"
                                 min={1}
                                 step={1}
+                                inputMode="numeric"
                                 value={l.qty}
                                 onChange={(e) =>
                                   updateQty(l.line_id, parseInt(e.target.value, 10) || 1)
                                 }
-                                className="w-24"
+                                className="w-16 text-center"
                               />
-                            </td>
-                            <td className="py-2 pr-3">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="icon"
+                                className="size-9"
+                                onClick={() => bumpQty(l.line_id, 1)}
+                                aria-label="Increase quantity"
+                              >
+                                <Plus className="size-4" />
+                              </Button>
+                            </div>
+
+                            <div className="text-right text-xs">
+                              <div className="text-muted-foreground">In source</div>
                               {over ? (
                                 <span className="text-rose-700">
-                                  {l.qty_on_hand_at_add} (short by {l.qty - l.qty_on_hand_at_add})
+                                  {l.qty_on_hand_at_add} (short by{' '}
+                                  {l.qty - l.qty_on_hand_at_add})
                                 </span>
                               ) : (
                                 <span className="text-muted-foreground">
                                   {l.qty_on_hand_at_add}
                                 </span>
                               )}
-                            </td>
-                            <td className="py-2 pl-3">
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => removeLine(l.line_id)}
-                                aria-label="Remove line"
-                              >
-                                <Trash2 className="size-4" />
-                              </Button>
-                            </td>
-                          </tr>
-                        )
-                      })}
-                    </tbody>
-                  </table>
-                </div>
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+
+                  {/* Desktop / tablet: original table. Hidden below sm. */}
+                  <div className="hidden overflow-x-auto sm:block">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b text-left text-xs text-muted-foreground">
+                          <th className="py-2 pr-3 font-medium">Product</th>
+                          <th className="py-2 pr-3 font-medium">Qty to move</th>
+                          <th className="py-2 pr-3 font-medium">In source</th>
+                          <th className="py-2 pl-3"></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {lines.map((l) => {
+                          const over = l.qty > l.qty_on_hand_at_add
+                          return (
+                            <tr key={l.line_id} className="border-b align-top">
+                              <td className="py-2 pr-3">
+                                <div className="font-medium">{l.name}</div>
+                                <div className="text-xs text-muted-foreground">
+                                  {l.sku}
+                                </div>
+                              </td>
+                              <td className="py-2 pr-3">
+                                <div className="flex items-center gap-1">
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="icon"
+                                    className="size-8"
+                                    onClick={() => bumpQty(l.line_id, -1)}
+                                    aria-label="Decrease quantity"
+                                  >
+                                    <Minus className="size-3.5" />
+                                  </Button>
+                                  <Input
+                                    type="number"
+                                    min={1}
+                                    step={1}
+                                    value={l.qty}
+                                    onChange={(e) =>
+                                      updateQty(
+                                        l.line_id,
+                                        parseInt(e.target.value, 10) || 1,
+                                      )
+                                    }
+                                    className="w-16 text-center"
+                                  />
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="icon"
+                                    className="size-8"
+                                    onClick={() => bumpQty(l.line_id, 1)}
+                                    aria-label="Increase quantity"
+                                  >
+                                    <Plus className="size-3.5" />
+                                  </Button>
+                                </div>
+                              </td>
+                              <td className="py-2 pr-3">
+                                {over ? (
+                                  <span className="text-rose-700">
+                                    {l.qty_on_hand_at_add} (short by{' '}
+                                    {l.qty - l.qty_on_hand_at_add})
+                                  </span>
+                                ) : (
+                                  <span className="text-muted-foreground">
+                                    {l.qty_on_hand_at_add}
+                                  </span>
+                                )}
+                              </td>
+                              <td className="py-2 pl-3">
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => removeLine(l.line_id)}
+                                  aria-label="Remove line"
+                                >
+                                  <Trash2 className="size-4" />
+                                </Button>
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
               )}
 
               {anyOverStock && (
                 <p className="text-sm text-rose-700">
                   One or more lines exceed what&apos;s in the source warehouse. Reduce the
-                  quantity — you can only move stock that&apos;s actually there.
+                  quantity â€” you can only move stock that&apos;s actually there.
                 </p>
               )}
             </>
@@ -341,7 +469,7 @@ export function NewTransferForm({
                   : 'Create transfer'
           }
         >
-          {submitting ? 'Creating…' : 'Create transfer'}
+          {submitting ? 'Creatingâ€¦' : 'Create transfer'}
         </Button>
       </div>
 
