@@ -36,6 +36,7 @@ export type PlaceOrderResult =
       subtotalCents: number
       subtotalBeforeCents: number
       memberDiscountCents: number
+      bundleDiscountCents: number // Round 85
       shippingCents: number
       paymentFeeCents: number
       totalCents: number
@@ -105,6 +106,7 @@ export async function placeOnlineOrder(
       subtotal_cents?: number
       subtotal_before_cents?: number
       member_discount_cents?: number
+      bundle_discount_cents?: number
       shipping_cents?: number
       payment_fee_cents?: number
       total_cents?: number
@@ -157,6 +159,7 @@ export async function placeOnlineOrder(
       subtotalCents: res.subtotal_cents ?? 0,
       subtotalBeforeCents: res.subtotal_before_cents ?? res.subtotal_cents ?? 0,
       memberDiscountCents: res.member_discount_cents ?? 0,
+      bundleDiscountCents: res.bundle_discount_cents ?? 0,
       shippingCents: res.shipping_cents ?? 0,
       paymentFeeCents: res.payment_fee_cents ?? 0,
       totalCents: res.total_cents ?? 0,
@@ -185,6 +188,7 @@ export type OrderQuoteResult =
       ok: true
       subtotalBeforeCents: number
       memberDiscountCents: number
+      bundleDiscountCents: number // Round 85
       tierName: string
       tierDiscountPct: number
       isClubMember: boolean
@@ -218,6 +222,7 @@ export async function getOrderQuote(input: {
       ok?: boolean
       subtotal_before_cents?: number
       member_discount_cents?: number
+      bundle_discount_cents?: number
       tier_name?: string
       tier_discount_pct?: number
       is_club_member?: boolean
@@ -229,6 +234,7 @@ export async function getOrderQuote(input: {
       ok: true,
       subtotalBeforeCents: res.subtotal_before_cents ?? 0,
       memberDiscountCents: res.member_discount_cents ?? 0,
+      bundleDiscountCents: res.bundle_discount_cents ?? 0,
       tierName: res.tier_name ?? '',
       tierDiscountPct: Number(res.tier_discount_pct ?? 0),
       isClubMember: res.is_club_member === true,

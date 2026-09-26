@@ -1,10 +1,11 @@
 ﻿'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { formatDOP } from '@/lib/format'
 import { ts, type Locale } from '@/lib/i18n/shop'
 import { useCart } from '@/lib/store/cart'
+import { getOrderQuote } from '../checkout/actions'
 
 const NAVY = '#0A2A66'
 const RED = '#CE1126'
@@ -47,6 +48,29 @@ export function CartView({
   const [locale, setLocale] = useState<Locale>('es')
   const cart = useCart(warehouseSlug)
   const storeHref = `/tienda/${warehouseSlug}`
+
+  // Round 85: ask the server whether the cart completes any bundle (combo), so
+  // the saving shows here too. Same quote the checkout and the order use.
+  const [quotedSaving, setBundleSaving] = useState(0)
+  const bundleSaving = cart.items.length === 0 ? 0 : quotedSaving
+  const itemsKey = cart.items.map((i) => `${i.id}:${i.qty}`).join(',')
+  useEffect(() => {
+    if (cart.items.length === 0) return
+    let active = true
+    const tid = setTimeout(() => {
+      getOrderQuote({
+        warehouseSlug,
+        items: cart.items.map((i) => ({ product_id: i.id, qty: i.qty })),
+      }).then((q) => {
+        if (active) setBundleSaving(q.ok ? q.bundleDiscountCents : 0)
+      })
+    }, 300)
+    return () => {
+      active = false
+      clearTimeout(tid)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [itemsKey, warehouseSlug])
 
   return (
     <div style={{ background: '#f7f8fa', color: INK, minHeight: '100vh', paddingBottom: 24 }}>
@@ -119,8 +143,20 @@ export function CartView({
             <div className="mt-5 rounded-2xl bg-white p-4" style={{ border: '1px solid #eceef2' }}>
               <div className="flex items-center justify-between">
                 <span className="text-[15px]" style={{ color: MUTED }}>{ts(locale, 'shop.subtotal')}</span>
-                <span className="text-[20px] font-semibold" style={{ color: NAVY }}>{price(cart.subtotalCents)}</span>
+                <span className={bundleSaving > 0 ? 'text-[15px]' : 'text-[20px] font-semibold'} style={{ color: bundleSaving > 0 ? INK : NAVY }}>{price(cart.subtotalCents)}</span>
               </div>
+              {bundleSaving > 0 && (
+                <>
+                  <div className="mt-1 flex items-center justify-between">
+                    <span className="text-[15px]" style={{ color: MUTED }}>{locale === 'es' ? 'Combo' : 'Bundle'}</span>
+                    <span className="text-[15px] font-medium" style={{ color: '#1d9e75' }}>-{price(bundleSaving)}</span>
+                  </div>
+                  <div className="mt-1 flex items-center justify-between">
+                    <span className="text-[15px]" style={{ color: MUTED }}>{locale === 'es' ? 'Total estimado' : 'Estimated total'}</span>
+                    <span className="text-[20px] font-semibold" style={{ color: NAVY }}>{price(cart.subtotalCents - bundleSaving)}</span>
+                  </div>
+                </>
+              )}
               <Link href={`${storeHref}/checkout`} className="mt-4 block w-full rounded-full px-6 py-3 text-center text-[14px] font-semibold text-white transition active:scale-95" style={{ background: RED }}>
                 {ts(locale, 'shop.checkout')}
               </Link>

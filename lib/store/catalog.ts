@@ -93,6 +93,23 @@ export type StoreDeal = {
   products: StoreProduct[]
 }
 
+// Round 85: a BUNDLE (combo) = specific products bought together for one set
+// price. Comes from the public store_bundles view. priceCents is what THIS
+// shopper pays for one complete bundle (guests: + guest markup, rounded up to
+// RD$25, exactly like get_storefront_quote / place_storefront_order);
+// regularCents is what the same products cost at their normal store price.
+export type StoreBundleItem = { product: StoreProduct; qty: number }
+export type StoreBundle = {
+  id: string
+  name: string
+  imageUrl: string | null
+  endsAt: string | null
+  priceCents: number
+  regularCents: number
+  items: StoreBundleItem[]
+  inStock: boolean // every product has enough stock for one bundle
+}
+
 export type StoreCatalog = {
   warehouse: StoreWarehouse
   products: StoreProduct[]
@@ -104,6 +121,7 @@ export type StoreCatalog = {
   isGuest?: boolean
   guestMarkupPct?: number
   isClubMember?: boolean
+  bundles?: StoreBundle[] // Round 85
 }
 
 export type StoreLandingDeal = {
@@ -732,6 +750,56 @@ export async function fetchStoreCatalog(
         .map((v) => ({ id: v.id, value: v.value, slug: v.slug })),
     }))
 
-  return { warehouse, products: rows, offers, categories, attributes, dailyDeal, weeklyDeal, isGuest, guestMarkupPct, isClubMember }
+  // Round 85: live bundles for this store (all stores or this one). Shown only
+  // when every product is visible here and the bundle is really cheaper.
+  const bundles: StoreBundle[] = []
+  try {
+    const { data: bRows } = await supabase
+      .from('store_bundles')
+      .select('id, name, image_url, warehouse_id, price_cents, ends_at, priority, created_at, items')
+      .or(`warehouse_id.is.null,warehouse_id.eq.${warehouse.id}`)
+      .order('priority', { ascending: false })
+      .order('created_at', { ascending: true })
+    const rowById = new Map(rows.map((r) => [r.id, r]))
+    for (const b of (bRows ?? []) as Array<{
+      id: string
+      name: string
+      image_url: string | null
+      price_cents: number
+      ends_at: string | null
+      items: Array<{ product_id: string; qty: number }> | null
+    }>) {
+      const items: StoreBundleItem[] = []
+      let complete = true
+      for (const it of b.items ?? []) {
+        const product = rowById.get(it.product_id)
+        if (!product) {
+          complete = false
+          break
+        }
+        items.push({ product, qty: Number(it.qty) || 1 })
+      }
+      if (!complete || items.length < 2) continue
+      const regularCents = items.reduce((s, i) => s + i.product.priceCents * i.qty, 0)
+      const priceCents = isGuest
+        ? Math.ceil((Number(b.price_cents) * (1 + markupFrac)) / 2500) * 2500
+        : Number(b.price_cents)
+      if (!(priceCents < regularCents)) continue
+      bundles.push({
+        id: b.id,
+        name: b.name,
+        imageUrl: b.image_url ?? items[0].product.imageUrl,
+        endsAt: b.ends_at,
+        priceCents,
+        regularCents,
+        items,
+        inStock: items.every((i) => i.product.stock >= i.qty),
+      })
+    }
+  } catch (e) {
+    console.error('[fetchStoreCatalog] bundles failed:', e)
+  }
+
+  return { warehouse, products: rows, offers, categories, attributes, dailyDeal, weeklyDeal, isGuest, guestMarkupPct, isClubMember, bundles }
 }
 

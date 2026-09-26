@@ -102,6 +102,7 @@ const CT = {
     timeOutOfWindow: 'La hora debe estar entre 2:00 y 5:00 PM.',
     payment: 'Pago',
     memberDiscount: 'Descuento socio',
+    bundleDiscount: 'Combo',
     surcharge: 'Recargo',
     payCard: 'Tarjeta (Stripe)',
     payCardSub: 'Pago con tarjeta en línea',
@@ -148,6 +149,7 @@ const CT = {
     timeOutOfWindow: 'Time must be between 2:00 and 5:00 PM.',
     payment: 'Payment',
     memberDiscount: 'Member discount',
+    bundleDiscount: 'Bundle',
     surcharge: 'Surcharge',
     payCard: 'Card (Stripe)',
     payCardSub: 'Pay by card online',
@@ -342,6 +344,9 @@ export function CheckoutView({
   const [placedShipping, setPlacedShipping] = useState(0)
   const [placedPayment, setPlacedPayment] = useState<Payment>('cash')
   const [memberDiscountCents, setMemberDiscountCents] = useState(0)
+  // Round 85: bundle (combo) saving from the server quote.
+  const [bundleDiscountCents, setBundleDiscountCents] = useState(0)
+  const [placedBundleDiscount, setPlacedBundleDiscount] = useState(0)
   const [tierName, setTierName] = useState('')
   const [isClubMember, setIsClubMember] = useState(false)
   const [placedMemberDiscount, setPlacedMemberDiscount] = useState(0)
@@ -387,7 +392,7 @@ export function CheckoutView({
       : payment === 'paypal'
         ? { pct: paymentConfig.paypalPct, fixed: paymentConfig.paypalFixed }
         : { pct: 0, fixed: 0 }
-  const baseForSurcharge = cart.subtotalCents - memberDiscountCents - couponDiscountCents + fee
+  const baseForSurcharge = cart.subtotalCents - memberDiscountCents - bundleDiscountCents - couponDiscountCents + fee
   const surcharge =
     surchargeRate.pct > 0 || surchargeRate.fixed > 0
       ? Math.round((baseForSurcharge * surchargeRate.pct) / 100) + Math.round(surchargeRate.fixed * 100)
@@ -407,6 +412,7 @@ export function CheckoutView({
       if (!active) return
       if (q.ok) {
         setMemberDiscountCents(q.memberDiscountCents)
+        setBundleDiscountCents(q.bundleDiscountCents)
         setTierName(q.tierName)
         setIsClubMember(q.isClubMember)
       }
@@ -557,6 +563,7 @@ export function CheckoutView({
       setPlacedShipping(res.shippingCents)
       setPlacedPayment(res.paymentMethod)
       setPlacedMemberDiscount(res.memberDiscountCents)
+      setPlacedBundleDiscount(res.bundleDiscountCents)
       setPlacedSubtotalBefore(res.subtotalBeforeCents)
       setPlacedTierName(res.tierName)
       setPlacedSurcharge(res.paymentFeeCents)
@@ -617,6 +624,9 @@ export function CheckoutView({
               )}
               {placedMemberDiscount > 0 && (
                 <p><span style={{ color: MUTED }}>{tx.memberDiscount}{placedTierName ? ` (${placedTierName})` : ''}:</span> <span style={{ color: '#1d9e75' }}>-{price(placedMemberDiscount)}</span></p>
+              )}
+              {placedBundleDiscount > 0 && (
+                <p><span style={{ color: MUTED }}>{tx.bundleDiscount}:</span> <span style={{ color: '#1d9e75' }}>-{price(placedBundleDiscount)}</span></p>
               )}
               {placedCouponApplied && placedCouponDiscount > 0 && (
                 <p><span style={{ color: MUTED }}>{tx.coupon}{placedCouponCode ? ` (${placedCouponCode})` : ''}:</span> <span style={{ color: '#1d9e75' }}>-{price(placedCouponDiscount)}</span></p>
@@ -899,6 +909,12 @@ export function CheckoutView({
                 <div className="mt-1 flex items-center justify-between text-[13px]">
                   <span style={{ color: MUTED }}>{tx.memberDiscount}{tierName ? ` (${tierName})` : ''}</span>
                   <span style={{ color: '#1d9e75' }}>-{price(memberDiscountCents)}</span>
+                </div>
+              )}
+              {bundleDiscountCents > 0 && (
+                <div className="mt-1 flex items-center justify-between text-[13px]">
+                  <span style={{ color: MUTED }}>{tx.bundleDiscount}</span>
+                  <span style={{ color: '#1d9e75' }}>-{price(bundleDiscountCents)}</span>
                 </div>
               )}
               {couponDiscountCents > 0 && (

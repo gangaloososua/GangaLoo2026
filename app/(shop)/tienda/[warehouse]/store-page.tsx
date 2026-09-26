@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { formatDOP } from '@/lib/format'
 import { ts, type Locale } from '@/lib/i18n/shop'
 import { useCart } from '@/lib/store/cart'
-import type { StoreCatalog, StoreProduct, StoreDeal, StoreWarehouse } from '@/lib/store/catalog'
+import type { StoreCatalog, StoreProduct, StoreDeal, StoreWarehouse, StoreBundle } from '@/lib/store/catalog'
 
 const NAVY = '#0A2A66'
 const RED = '#CE1126'
@@ -184,6 +184,77 @@ function Countdown({ endsAt, onExpire, locale, accent }: { endsAt: string; onExp
   )
 }
 
+// Round 85: Combos (bundles) — specific products together for one set price.
+function BundleSection({
+  bundles,
+  locale,
+  onAddBundle,
+}: {
+  bundles: StoreBundle[]
+  locale: Locale
+  onAddBundle: (b: StoreBundle) => void
+}) {
+  const shown = bundles.filter((b) => b.inStock)
+  if (shown.length === 0) return null
+  return (
+    <section className="mx-auto w-full max-w-[1100px] px-4 pb-7">
+      <div className="mb-3 flex items-center gap-2">
+        <h2 className="text-[16px] font-semibold" style={{ color: NAVY }}>{locale === 'es' ? 'Combos' : 'Bundles'}</h2>
+        <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white" style={{ background: RED }}>{locale === 'es' ? 'Ahorra' : 'Save'}</span>
+      </div>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {shown.map((b, i) => {
+          const save = b.regularCents - b.priceCents
+          return (
+            <div key={b.id} className="gl-rise flex overflow-hidden rounded-2xl bg-white" style={{ border: '1px solid #eceef2', animationDelay: `${i * 35}ms` }}>
+              <div className="relative w-[42%] flex-shrink-0" style={{ background: '#ffffff', aspectRatio: '1 / 1' }}>
+                {b.imageUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={b.imageUrl} alt={b.name} className="h-full w-full object-cover" loading="lazy" />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center" style={{ color: '#c2c8d2' }}>
+                    <span style={{ fontFamily: 'var(--font-display)', fontSize: 34, fontStyle: 'italic' }}>G</span>
+                  </div>
+                )}
+                <span className="pointer-events-none absolute left-2 top-2 rounded-full px-2 py-1 text-[11px] font-semibold text-white" style={{ background: RED }}>
+                  -{Math.round((save / b.regularCents) * 100)}%
+                </span>
+              </div>
+              <div className="flex flex-1 flex-col justify-between gap-2 p-3">
+                <div>
+                  <p className="text-[14px] font-semibold leading-snug" style={{ color: INK }}>{b.name}</p>
+                  <ul className="mt-1 flex flex-col gap-0.5">
+                    {b.items.map((it) => (
+                      <li key={it.product.id} className="text-[12px] leading-snug" style={{ color: MUTED }}>
+                        {it.qty}× {it.product.name}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+                <div>
+                  <p className="text-[12px] line-through" style={{ color: MUTED }}>{price(b.regularCents)}</p>
+                  <p className="text-[17px] font-semibold" style={{ color: NAVY }}>{price(b.priceCents)}</p>
+                  <p className="text-[11px] font-medium" style={{ color: '#1d9e75' }}>
+                    {locale === 'es' ? `Ahorras ${price(save)}` : `You save ${price(save)}`}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => onAddBundle(b)}
+                    className="mt-2 w-full rounded-full px-3 py-2 text-[13px] font-semibold text-white transition active:scale-95"
+                    style={{ background: RED }}
+                  >
+                    {locale === 'es' ? 'Agregar combo' : 'Add bundle'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </section>
+  )
+}
+
 function DealSection({ deal, locale, storeSlug, onAdd, onShare }: { deal: StoreDeal; locale: Locale; storeSlug: string; onAdd: (p: StoreProduct) => void; onShare: (p: StoreProduct) => void }) {
   const [hidden, setHidden] = useState(false)
   const onExpire = useCallback(() => setHidden(true), [])
@@ -220,6 +291,7 @@ export function StorePage({ catalog, stores = [] }: { catalog: StoreCatalog; sto
   const [shareCopied, setShareCopied] = useState(false)
 
   const { warehouse, products, offers, categories, attributes, dailyDeal, weeklyDeal, isGuest, guestMarkupPct } = catalog
+  const bundles = catalog.bundles ?? []
   const cart = useCart(warehouse.slug)
 
   const waHref = whatsappHref(warehouse.whatsapp, warehouse.name, locale)
@@ -313,6 +385,20 @@ export function StorePage({ catalog, stores = [] }: { catalog: StoreCatalog; sto
   }
   const handleAdd = (p: StoreProduct) => {
     cart.add(warehouse.slug, { id: p.id, slug: p.slug, name: p.name, imageUrl: p.imageUrl, priceCents: p.priceCents, maxQty: p.stock })
+    setBump(true)
+    window.setTimeout(() => setBump(false), 350)
+  }
+  // Round 85: add every product of a bundle (in its bundle quantity). The
+  // bundle price itself is applied by the checkout quote/order server-side.
+  const handleAddBundle = (b: StoreBundle) => {
+    for (const it of b.items) {
+      const p = it.product
+      cart.add(
+        warehouse.slug,
+        { id: p.id, slug: p.slug, name: p.name, imageUrl: p.imageUrl, priceCents: p.priceCents, maxQty: p.stock },
+        it.qty,
+      )
+    }
     setBump(true)
     window.setTimeout(() => setBump(false), 350)
   }
@@ -581,6 +667,9 @@ export function StorePage({ catalog, stores = [] }: { catalog: StoreCatalog; sto
         </a>
       </section>
 
+      {!searching && activeCat === 'all' && bundles.length > 0 && (
+        <BundleSection bundles={bundles} locale={locale} onAddBundle={handleAddBundle} />
+      )}
       {!searching && activeCat === 'all' && dailyDeal && (
         <DealSection deal={dailyDeal} locale={locale} storeSlug={warehouse.slug} onAdd={handleAdd} onShare={handleShare} />
       )}
