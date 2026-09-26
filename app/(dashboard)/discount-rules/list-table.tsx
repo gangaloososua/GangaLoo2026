@@ -2,6 +2,7 @@
 
 // Round 16.3 — Discount rules list table
 // Round 42  — coupon kind: label + code/channel summary
+// Round 85  — bundle kind: label + item list summary
 // Edit      — promotion rows get an Edit (pencil) link to /[id]/edit
 
 import * as React from 'react'
@@ -56,6 +57,8 @@ function formatKindLabel(kind: string): string {
       return 'Logistics surcharge'
     case 'coupon':
       return 'Coupon'
+    case 'bundle':
+      return 'Bundle'
     default:
       return kind
   }
@@ -81,6 +84,17 @@ function scopeSummary(r: DiscountRuleRow): string {
     return parts.join(' • ')
   }
 
+  // Round 85: bundles list their products, e.g. "1× Wig + 1× Shampoo".
+  if (r.kind === 'bundle') {
+    const items = r.bundleItems
+      .map((i) => `${i.qty}× ${i.productName ?? 'Unknown product'}`)
+      .join(' + ')
+    const store = r.scopeWarehouseName
+      ? `Store: ${r.scopeWarehouseName}`
+      : 'All stores'
+    return [items || 'No products', store].join(' • ')
+  }
+
   const parts: string[] = []
   if (r.scopeCustomerName) parts.push(`Customer: ${r.scopeCustomerName}`)
   if (r.scopeClubTier && r.scopeClubTier !== 'none')
@@ -104,6 +118,16 @@ function windowSummary(r: DiscountRuleRow): string {
 }
 
 function amountSummary(r: DiscountRuleRow): string {
+  // Round 85: a bundle's deltaCents is its set TOTAL price, not a discount.
+  if (r.kind === 'bundle' && r.deltaCents != null)
+    return (
+      'Price ' +
+      new Intl.NumberFormat('en-GB', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      }).format(r.deltaCents / 100) +
+      ' DOP'
+    )
   if (r.deltaPercent != null) return formatPercent(r.deltaPercent)
   if (r.deltaCents != null)
     return (

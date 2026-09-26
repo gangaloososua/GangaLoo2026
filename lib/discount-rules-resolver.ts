@@ -4,6 +4,9 @@
 // Round 20  — promotion support added; stale walk-in early return removed
 // Round 61  — bulk rules can be scoped to a SOURCE WAREHOUSE
 //             (scopeSourceWarehouseId). Blank = all warehouses.
+// Round 85  — 'bundle' kind exists but is CART-level (set price for a
+//             group of products), so it is never a per-line candidate
+//             here. Bundles are applied by lib/bundle-resolver.ts.
 // Round 61b — promotion rules can be scoped to a WAREHOUSE
 //             (scopeWarehouseId, the same column the online deal uses).
 //             Blank = all warehouses.
@@ -37,6 +40,7 @@ const KIND_SORT_KEY: Record<DiscountRuleKind, number> = {
   promotion: 3,           // Round 20
   logistics_surcharge: 4, // reserved for Round 21
   coupon: 5,              // Round 42 — order-level; never a per-line candidate
+  bundle: 6,              // Round 85 — cart-level; never a per-line candidate
 }
 
 export type AppliedDiscount = {
@@ -98,6 +102,8 @@ export function resolveLineDiscount(
       // by validate_coupon at checkout. They must NEVER be auto-applied as a
       // per-line discount, so skip them here regardless of their fields.
       if (r.kind === 'coupon') return false
+      // Round 85: bundles are CART-level (see lib/bundle-resolver.ts).
+      if (r.kind === 'bundle') return false
       if (r.deltaPercent == null) return false
       if (r.startsAt && new Date(r.startsAt).getTime() > atMs) return false
       if (r.endsAt && new Date(r.endsAt).getTime() < atMs) return false

@@ -19,6 +19,7 @@ export type DiscountRuleKind =
   | 'customer_override'
   | 'logistics_surcharge'
   | 'coupon'
+  | 'bundle' // Round 85: set price for products bought together
 
 export type ClubTier =
   | 'none'
@@ -26,6 +27,13 @@ export type ClubTier =
   | 'silver'
   | 'gold'
   | 'platinum'
+
+// Round 85: one product (and how many of it) inside a bundle rule.
+export type BundleItem = {
+  productId: string
+  productName: string | null
+  qty: number
+}
 
 export type DiscountRuleRow = {
   id: string
@@ -58,6 +66,10 @@ export type DiscountRuleRow = {
   scopeChannel: 'pos' | 'online' | null
   // Promotion online-deal slot (null for non-promotion / non-featured)
   dealSlot: 'daily' | 'weekly' | null
+  // Round 85: the products that make up a bundle (kind='bundle' only;
+  // empty array for every other kind). The bundle's set total price
+  // lives in deltaCents.
+  bundleItems: BundleItem[]
   createdAt: string
   updatedAt: string
 }
@@ -147,6 +159,30 @@ export async function listDiscountRules(
     if (r.scope_customer_id) customerIds.add(r.scope_customer_id)
   }
 
+  // Round 85: load bundle items for any bundle rules in this batch.
+  const bundleItemsByRule = new Map<
+    string,
+    Array<{ product_id: string; qty: number }>
+  >()
+  const bundleRuleIds = raw.filter((r) => r.kind === 'bundle').map((r) => r.id)
+  if (bundleRuleIds.length > 0) {
+    const { data: bis, error: biErr } = await supabase
+      .from('discount_rule_bundle_items')
+      .select('rule_id, product_id, qty')
+      .in('rule_id', bundleRuleIds)
+    if (biErr) throw biErr
+    for (const bi of (bis ?? []) as Array<{
+      rule_id: string
+      product_id: string
+      qty: number
+    }>) {
+      productIds.add(bi.product_id)
+      const list = bundleItemsByRule.get(bi.rule_id) ?? []
+      list.push({ product_id: bi.product_id, qty: bi.qty })
+      bundleItemsByRule.set(bi.rule_id, list)
+    }
+  }
+
   const productNameById = new Map<string, string>()
   if (productIds.size > 0) {
     const { data: ps, error: pErr } = await supabase
@@ -234,6 +270,11 @@ export async function listDiscountRules(
     code: r.code,
     scopeChannel: r.scope_channel,
     dealSlot: r.deal_slot,
+    bundleItems: (bundleItemsByRule.get(r.id) ?? []).map((bi) => ({
+      productId: bi.product_id,
+      productName: productNameById.get(bi.product_id) ?? null,
+      qty: bi.qty,
+    })),
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   }))
