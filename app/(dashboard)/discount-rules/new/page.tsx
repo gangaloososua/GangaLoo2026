@@ -1,6 +1,7 @@
 // Round 16.3 — Discount rules > New (server)
 // Round 17    — converted to a rule-kind picker
 // Round 20    — promotion entry added
+// Round 85    — bundle entry added
 import Link from 'next/link'
 import { ChevronLeft, Receipt } from 'lucide-react'
 import { requireRole } from '@/lib/auth/guard'
@@ -42,6 +43,12 @@ const RULE_KINDS: Array<{
     title: 'Coupon code',
     blurb:
       'A code customers type at checkout for a % or fixed amount off the whole order. Optionally limit it to one store or channel (online / in-person).',
+  },
+  {
+    href: '/discount-rules/new/bundle',
+    title: 'Bundle (set price)',
+    blurb:
+      'Specific products bought together for one set total price, e.g. wig + shampoo = RD$6,000. Repeats for every complete set in the cart.',
   },
 ]
 export default async function NewDiscountRulePage() {

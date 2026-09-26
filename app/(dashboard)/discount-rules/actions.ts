@@ -627,3 +627,88 @@ export async function updatePromotionRule(
   revalidatePath('/discount-rules')
   return { ok: true, ruleId: (data as { id: string }).id }
 }
+
+// ----------------------------------------------------------------------
+// createBundleRule  (Round 85)
+//
+// A bundle is a SET TOTAL PRICE for specific products bought together
+// (e.g. 1 wig + 1 shampoo = RD$6,000). The price is stored in
+// delta_cents; the products + quantities go in
+// discount_rule_bundle_items. Owner decisions: the bundle price is
+// final (no other discounts on bundled units), repeats per complete
+// set, and is NOT limited by the 30% cap.
+// ----------------------------------------------------------------------
+export type CreateBundleRuleInput = {
+  name: string
+  items: Array<{ productId: string; qty: number }>
+  priceCents: number // set total price for ONE complete bundle
+  scopeWarehouseId: string | null // null = all stores
+  startsAt: string | null // ISO datetime
+  endsAt: string | null // ISO datetime
+}
+export type CreateBundleRuleResult = Ok<{ ruleId: string }> | Err
+
+export async function createBundleRule(
+  input: CreateBundleRuleInput,
+): Promise<CreateBundleRuleResult> {
+  const caller = await requireRole(['owner', 'admin'] as const)
+  const name = input.name.trim()
+  if (!name) return { ok: false, error: 'Rule name is required' }
+
+  const items = input.items.filter((i) => i.productId)
+  if (items.length < 2) {
+    return { ok: false, error: 'A bundle needs at least 2 different products' }
+  }
+  const ids = new Set(items.map((i) => i.productId))
+  if (ids.size !== items.length) {
+    return { ok: false, error: 'Each product can only be in the bundle once' }
+  }
+  for (const i of items) {
+    if (!Number.isInteger(i.qty) || i.qty < 1) {
+      return { ok: false, error: 'Each quantity must be a whole number of 1 or more' }
+    }
+  }
+  if (!Number.isInteger(input.priceCents) || input.priceCents <= 0) {
+    return { ok: false, error: 'Bundle price must be more than 0' }
+  }
+  if (
+    input.startsAt &&
+    input.endsAt &&
+    new Date(input.startsAt) > new Date(input.endsAt)
+  ) {
+    return { ok: false, error: 'Start date must be on or before end date' }
+  }
+
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('discount_rules')
+    .insert({
+      kind: 'bundle',
+      name,
+      is_active: true,
+      starts_at: input.startsAt,
+      ends_at: input.endsAt,
+      scope_warehouse_id: input.scopeWarehouseId ?? null,
+      delta_cents: input.priceCents,
+      priority: 0,
+      created_by: caller.id,
+    })
+    .select('id')
+    .single()
+  if (error) return { ok: false, error: error.message }
+  const ruleId = (data as { id: string }).id
+
+  const { error: itemsErr } = await supabase
+    .from('discount_rule_bundle_items')
+    .insert(
+      items.map((i) => ({ rule_id: ruleId, product_id: i.productId, qty: i.qty })),
+    )
+  if (itemsErr) {
+    // Don't leave a bundle with no products behind.
+    await supabase.from('discount_rules').delete().eq('id', ruleId)
+    return { ok: false, error: itemsErr.message }
+  }
+
+  revalidatePath('/discount-rules')
+  return { ok: true, ruleId }
+}
