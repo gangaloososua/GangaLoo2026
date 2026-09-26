@@ -249,8 +249,8 @@ export function DiscountRulesListTable({ rules }: Props) {
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center justify-end gap-1">
-                        {/* Edit is only wired for promotion rules for now. */}
-                        {r.kind === 'promotion' ? (
+                        {/* Edit is wired for promotion and bundle rules. */}
+                        {r.kind === 'promotion' || r.kind === 'bundle' ? (
                           <Button
                             asChild
                             variant="ghost"

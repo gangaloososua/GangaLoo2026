@@ -712,3 +712,95 @@ export async function createBundleRule(
   revalidatePath('/discount-rules')
   return { ok: true, ruleId }
 }
+
+// ----------------------------------------------------------------------
+// updateBundleRule  (Round 85)
+//
+// Edit an existing bundle in place: name, products + quantities, set
+// price, store, dates. Mirrors createBundleRule's validation. Bundle-only:
+// refuses to touch a row of any other kind. The product list is replaced
+// (old items removed, new ones inserted); if inserting the new list fails,
+// the old list is put back so the bundle is never left empty.
+// ----------------------------------------------------------------------
+export type UpdateBundleRuleInput = CreateBundleRuleInput & { ruleId: string }
+export type UpdateBundleRuleResult = Ok<{ ruleId: string }> | Err
+
+export async function updateBundleRule(
+  input: UpdateBundleRuleInput,
+): Promise<UpdateBundleRuleResult> {
+  await requireRole(['owner', 'admin'] as const)
+  if (!input.ruleId) return { ok: false, error: 'Rule id is required' }
+  const name = input.name.trim()
+  if (!name) return { ok: false, error: 'Rule name is required' }
+
+  const items = input.items.filter((i) => i.productId)
+  if (items.length < 2) {
+    return { ok: false, error: 'A bundle needs at least 2 different products' }
+  }
+  if (new Set(items.map((i) => i.productId)).size !== items.length) {
+    return { ok: false, error: 'Each product can only be in the bundle once' }
+  }
+  for (const i of items) {
+    if (!Number.isInteger(i.qty) || i.qty < 1) {
+      return { ok: false, error: 'Each quantity must be a whole number of 1 or more' }
+    }
+  }
+  if (!Number.isInteger(input.priceCents) || input.priceCents <= 0) {
+    return { ok: false, error: 'Bundle price must be more than 0' }
+  }
+  if (
+    input.startsAt &&
+    input.endsAt &&
+    new Date(input.startsAt) > new Date(input.endsAt)
+  ) {
+    return { ok: false, error: 'Start date must be on or before end date' }
+  }
+
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('discount_rules')
+    .update({
+      name,
+      starts_at: input.startsAt,
+      ends_at: input.endsAt,
+      scope_warehouse_id: input.scopeWarehouseId ?? null,
+      delta_cents: input.priceCents,
+    })
+    .eq('id', input.ruleId)
+    .eq('kind', 'bundle') // safety: never edit a non-bundle row here
+    .select('id')
+    .single()
+  if (error) return { ok: false, error: error.message }
+  if (!data) return { ok: false, error: 'Bundle not found.' }
+
+  // Replace the product list, keeping a copy of the old one to restore.
+  const { data: oldItems, error: oldErr } = await supabase
+    .from('discount_rule_bundle_items')
+    .select('product_id, qty')
+    .eq('rule_id', input.ruleId)
+  if (oldErr) return { ok: false, error: oldErr.message }
+
+  const { error: delErr } = await supabase
+    .from('discount_rule_bundle_items')
+    .delete()
+    .eq('rule_id', input.ruleId)
+  if (delErr) return { ok: false, error: delErr.message }
+
+  const { error: insErr } = await supabase
+    .from('discount_rule_bundle_items')
+    .insert(
+      items.map((i) => ({ rule_id: input.ruleId, product_id: i.productId, qty: i.qty })),
+    )
+  if (insErr) {
+    const old = (oldItems ?? []) as Array<{ product_id: string; qty: number }>
+    if (old.length > 0) {
+      await supabase.from('discount_rule_bundle_items').insert(
+        old.map((o) => ({ rule_id: input.ruleId, product_id: o.product_id, qty: o.qty })),
+      )
+    }
+    return { ok: false, error: insErr.message }
+  }
+
+  revalidatePath('/discount-rules')
+  return { ok: true, ruleId: input.ruleId }
+}

@@ -3,6 +3,7 @@
 // Loads one promotion rule plus the same product/category/warehouse data the
 // New > Promotion page loads, then renders the pre-filled edit form.
 // Only promotion rules are editable here; anything else 404s.
+// Round 85: bundle rules are editable here too (EditBundleRuleForm).
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { ChevronLeft } from 'lucide-react'
@@ -13,6 +14,10 @@ import {
   EditPromotionRuleForm,
   type EditPromotionInitial,
 } from '../../edit/edit-promotion-form'
+import {
+  EditBundleRuleForm,
+  type EditBundleInitial,
+} from '../../edit/edit-bundle-form'
 
 export const dynamic = 'force-dynamic'
 
@@ -25,14 +30,14 @@ export default async function EditDiscountRulePage({
   const { id } = await params
 
   const rule = await getDiscountRuleById(id)
-  if (!rule || rule.kind !== 'promotion') notFound()
+  if (!rule || (rule.kind !== 'promotion' && rule.kind !== 'bundle')) notFound()
 
   const supabase = await createClient()
   const [productsRes, categoriesRes, primaryRes, warehousesRes] =
     await Promise.all([
       supabase
         .from('products')
-        .select('id, name, sku')
+        .select('id, name, sku, price_cents')
         .eq('is_active', true)
         .order('name', { ascending: true }),
       supabase
@@ -73,6 +78,49 @@ export default async function EditDiscountRulePage({
     id: w.id as string,
     name: (w.name as string).replace(/^\s*\d+\s*[-–—]\s*/, '').trim(),
   }))
+
+  if (rule.kind === 'bundle') {
+    const priceById: Record<string, number> = {}
+    for (const p of productsRes.data ?? []) {
+      priceById[p.id as string] = Number(p.price_cents ?? 0)
+    }
+    const bundleInitial: EditBundleInitial = {
+      ruleId: rule.id,
+      name: rule.name,
+      items: rule.bundleItems.map((i) => ({ productId: i.productId, qty: i.qty })),
+      priceCents: rule.deltaCents ?? 0,
+      warehouseId: rule.scopeWarehouseId,
+      startsAt: rule.startsAt,
+      endsAt: rule.endsAt,
+    }
+    return (
+      <div className="space-y-4">
+        <div>
+          <Link
+            href="/discount-rules"
+            className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground"
+          >
+            <ChevronLeft className="h-4 w-4" />
+            Back to discount rules
+          </Link>
+        </div>
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Edit bundle</h1>
+          <p className="text-sm text-muted-foreground">
+            Change the products, price, store, or dates and save. This updates
+            the same bundle instead of creating a new one.
+          </p>
+        </div>
+        <EditBundleRuleForm
+          initial={bundleInitial}
+          products={products}
+          categories={categories}
+          warehouses={warehouses}
+          priceById={priceById}
+        />
+      </div>
+    )
+  }
 
   const initial: EditPromotionInitial = {
     ruleId: rule.id,
