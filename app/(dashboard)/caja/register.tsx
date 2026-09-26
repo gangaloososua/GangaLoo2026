@@ -22,6 +22,12 @@
 // than the regular/override price, the register uses it for the grid card, the
 // cart line, and the charged amount. Discount RULES still apply on top via the
 // resolver, exactly as before.
+//
+// Round 85 (2026-09-26): BUNDLES. Every cart change now runs recomputeAll(),
+// which calls lib/bundle-resolver.ts over the WHOLE cart: complete bundle sets
+// are charged the bundle's set price (final: no other discounts on those
+// units), and any leftover units get the normal per-line discounts. Removing
+// an item re-checks bundles too, so a broken bundle goes back to normal price.
 
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
@@ -45,6 +51,7 @@ import {
   resolveLineDiscount,
   type AppliedDiscount,
 } from '@/lib/discount-rules-resolver'
+import { resolveCartDiscounts } from '@/lib/bundle-resolver'
 import type { Locale } from '@/lib/i18n/dictionary'
 import { tc } from '@/lib/i18n/register-i18n'
 import { QrScanButton } from '@/components/qr-scanner'
@@ -170,12 +177,7 @@ export function Register({
   // Recompute line discounts when the attached member changes — club-tier and
   // customer-override pricing depend on who is on the sale.
   useEffect(() => {
-    setLines((prev) =>
-      prev.map((l) => {
-        const d = lineDiscountFor(l.product_id, l.primary_category_id, l.qty, l.unit_price_cents)
-        return { ...l, line_discount_cents: d.totalDiscountCents, discount_breakdown: d.applied }
-      }),
-    )
+    setLines((prev) => recomputeAll(prev))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [member])
 
@@ -207,8 +209,43 @@ export function Register({
     })
   }
 
+  // Round 85: recompute EVERY line's discount from the whole cart, so bundles
+  // (which need several products together) are applied or removed correctly.
+  function recomputeAll(ls: CartLine[]): CartLine[] {
+    const res = resolveCartDiscounts({
+      lines: ls.map((l) => ({
+        key: l.line_id,
+        productId: l.product_id,
+        categoryId: l.primary_category_id,
+        qty: l.qty,
+        unitPriceCents: l.unit_price_cents,
+      })),
+      customerId: member?.customerId ?? null,
+      customerClubTier: member?.tier ?? null,
+      sourceWarehouseId: warehouseId || null,
+      rules: activeDiscountRules,
+      at: new Date(),
+    })
+    return ls.map((l) => {
+      const r = res.get(l.line_id)
+      return r
+        ? { ...l, line_discount_cents: r.totalDiscountCents, discount_breakdown: r.applied }
+        : l
+    })
+  }
+
+  function bundleNamesFor(l: CartLine): string {
+    const ids = new Set(
+      l.discount_breakdown.filter((b) => b.ruleKind === 'bundle').map((b) => b.ruleId),
+    )
+    return activeDiscountRules
+      .filter((r) => ids.has(r.id))
+      .map((r) => r.name)
+      .join(', ')
+  }
+
   function addProduct(p: ProductSearchResult) {
-    setLines((prev) => {
+    setLines((prev) => recomputeAll(((): CartLine[] => {
       const existing = prev.find((l) => l.product_id === p.id)
       if (existing) {
         return prev.map((l) => {
@@ -236,7 +273,7 @@ export function Register({
           discount_breakdown: d.applied,
         },
       ]
-    })
+    })()))
   }
 
   async function handleScan(code: string) {
@@ -259,15 +296,17 @@ export function Register({
       return
     }
     setLines((prev) =>
-      prev.map((l) => {
-        if (l.line_id !== line_id) return l
-        const d = lineDiscountFor(l.product_id, l.primary_category_id, qty, l.unit_price_cents)
-        return { ...l, qty, line_discount_cents: d.totalDiscountCents, discount_breakdown: d.applied }
-      }),
+      recomputeAll(
+        prev.map((l) => {
+          if (l.line_id !== line_id) return l
+          const d = lineDiscountFor(l.product_id, l.primary_category_id, qty, l.unit_price_cents)
+          return { ...l, qty, line_discount_cents: d.totalDiscountCents, discount_breakdown: d.applied }
+        }),
+      ),
     )
   }
   function removeLine(line_id: string) {
-    setLines((prev) => prev.filter((l) => l.line_id !== line_id))
+    setLines((prev) => recomputeAll(prev.filter((l) => l.line_id !== line_id)))
   }
   function clearCart() {
     setLines([])
@@ -424,6 +463,11 @@ export function Register({
                       {formatDOP(l.unit_price_cents)}
                       {l.line_discount_cents > 0 ? ` − ${formatDOP(l.line_discount_cents)}` : ''}
                     </div>
+                    {l.discount_breakdown.some((b) => b.ruleKind === 'bundle') ? (
+                      <div className="text-xs font-medium text-emerald-700">
+                        {(locale === 'es' ? 'Combo: ' : 'Bundle: ') + bundleNamesFor(l)}
+                      </div>
+                    ) : null}
                     <div className="mt-1 flex items-center gap-1">
                       <Button
                         type="button"
