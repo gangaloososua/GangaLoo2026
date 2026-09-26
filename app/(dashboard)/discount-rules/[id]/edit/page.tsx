@@ -92,6 +92,7 @@ export default async function EditDiscountRulePage({
       warehouseId: rule.scopeWarehouseId,
       startsAt: rule.startsAt,
       endsAt: rule.endsAt,
+      imageUrl: rule.imageUrl,
     }
     return (
       <div className="space-y-4">

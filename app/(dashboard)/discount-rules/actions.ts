@@ -804,3 +804,113 @@ export async function updateBundleRule(
   revalidatePath('/discount-rules')
   return { ok: true, ruleId: input.ruleId }
 }
+
+// ----------------------------------------------------------------------
+// Bundle image  (Round 85d)
+//
+// One optional picture per bundle, shown on the online store. Stored in the
+// public 'product-images' bucket under bundles/<ruleId>/ (existing bucket
+// policies already allow staff upload/delete). The public URL is saved in
+// discount_rules.image_url. Replacing or removing a picture also deletes the
+// old file so the bucket doesn't fill with leftovers.
+// ----------------------------------------------------------------------
+const IMAGE_BUCKET = 'product-images'
+const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
+
+function bundleImagePathFromUrl(url: string | null): string | null {
+  if (!url) return null
+  const marker = `/storage/v1/object/public/${IMAGE_BUCKET}/`
+  const i = url.indexOf(marker)
+  if (i === -1) return null
+  const path = decodeURIComponent(url.slice(i + marker.length))
+  // Only ever delete files in our own bundles/ folder.
+  return path.startsWith('bundles/') ? path : null
+}
+
+export type BundleImageResult = Ok<{ imageUrl: string | null }> | Err
+
+export async function uploadBundleImage(
+  formData: FormData,
+): Promise<BundleImageResult> {
+  await requireRole(['owner', 'admin'] as const)
+  const ruleId = String(formData.get('rule_id') ?? '')
+  const file = formData.get('file') as File | null
+  if (!ruleId || !file) return { ok: false, error: 'Missing bundle or file.' }
+  if (!IMAGE_TYPES.includes(file.type)) {
+    return { ok: false, error: `Unsupported file type: ${file.type}` }
+  }
+  if (file.size > 4.5 * 1024 * 1024) {
+    return { ok: false, error: 'Picture must be smaller than 4.5 MB.' }
+  }
+
+  const supabase = await createClient()
+  const { data: rule, error: ruleErr } = await supabase
+    .from('discount_rules')
+    .select('id, image_url')
+    .eq('id', ruleId)
+    .eq('kind', 'bundle')
+    .maybeSingle()
+  if (ruleErr) return { ok: false, error: ruleErr.message }
+  if (!rule) return { ok: false, error: 'Bundle not found.' }
+
+  const dot = file.name.lastIndexOf('.')
+  const ext = dot === -1 ? '.jpg' : file.name.slice(dot).toLowerCase()
+  const path = `bundles/${ruleId}/${crypto.randomUUID()}${ext}`
+
+  const { error: upErr } = await supabase.storage
+    .from(IMAGE_BUCKET)
+    .upload(path, file, { contentType: file.type, upsert: false })
+  if (upErr) return { ok: false, error: upErr.message }
+
+  const { data: pub } = supabase.storage.from(IMAGE_BUCKET).getPublicUrl(path)
+  const imageUrl = pub.publicUrl
+
+  const { error: updErr } = await supabase
+    .from('discount_rules')
+    .update({ image_url: imageUrl })
+    .eq('id', ruleId)
+    .eq('kind', 'bundle')
+  if (updErr) {
+    await supabase.storage.from(IMAGE_BUCKET).remove([path])
+    return { ok: false, error: updErr.message }
+  }
+
+  const oldPath = bundleImagePathFromUrl(
+    (rule as { image_url: string | null }).image_url,
+  )
+  if (oldPath) await supabase.storage.from(IMAGE_BUCKET).remove([oldPath])
+
+  revalidatePath('/discount-rules')
+  return { ok: true, imageUrl }
+}
+
+export async function removeBundleImage(
+  ruleId: string,
+): Promise<BundleImageResult> {
+  await requireRole(['owner', 'admin'] as const)
+  if (!ruleId) return { ok: false, error: 'Rule id is required' }
+  const supabase = await createClient()
+  const { data: rule, error: ruleErr } = await supabase
+    .from('discount_rules')
+    .select('id, image_url')
+    .eq('id', ruleId)
+    .eq('kind', 'bundle')
+    .maybeSingle()
+  if (ruleErr) return { ok: false, error: ruleErr.message }
+  if (!rule) return { ok: false, error: 'Bundle not found.' }
+
+  const { error: updErr } = await supabase
+    .from('discount_rules')
+    .update({ image_url: null })
+    .eq('id', ruleId)
+    .eq('kind', 'bundle')
+  if (updErr) return { ok: false, error: updErr.message }
+
+  const oldPath = bundleImagePathFromUrl(
+    (rule as { image_url: string | null }).image_url,
+  )
+  if (oldPath) await supabase.storage.from(IMAGE_BUCKET).remove([oldPath])
+
+  revalidatePath('/discount-rules')
+  return { ok: true, imageUrl: null }
+}

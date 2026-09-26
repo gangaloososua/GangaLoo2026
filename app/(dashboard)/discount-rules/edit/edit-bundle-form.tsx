@@ -26,6 +26,7 @@ import {
   type PickerCategory,
 } from '../new/product-picker'
 import { updateBundleRule } from '../actions'
+import { BundleImageField } from './bundle-image-field'
 
 export type EditBundleInitial = {
   ruleId: string
@@ -35,6 +36,7 @@ export type EditBundleInitial = {
   warehouseId: string | null
   startsAt: string | null
   endsAt: string | null
+  imageUrl: string | null
 }
 
 type Props = {
@@ -285,6 +287,10 @@ export function EditBundleRuleForm({
                 )
               ) : null}
             </div>
+          </div>
+
+          <div className="sm:col-span-2">
+            <BundleImageField ruleId={initial.ruleId} initialUrl={initial.imageUrl} />
           </div>
 
           <div className="space-y-1 sm:col-span-2">

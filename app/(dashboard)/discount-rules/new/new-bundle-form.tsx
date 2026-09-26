@@ -21,7 +21,8 @@ import {
   type PickerProduct,
   type PickerCategory,
 } from './product-picker'
-import { createBundleRule } from '../actions'
+import { createBundleRule, uploadBundleImage } from '../actions'
+import { BundleImageField } from '../edit/bundle-image-field'
 
 type Props = {
   products: PickerProduct[]
@@ -72,6 +73,7 @@ export function NewBundleRuleForm({
   const [startsAtStr, setStartsAtStr] = useState('')
   const [endsAtStr, setEndsAtStr] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [pendingImage, setPendingImage] = useState<File | null>(null)
 
   const priceCents = Math.round(Number(priceStr) * 100)
 
@@ -123,6 +125,17 @@ export function NewBundleRuleForm({
         endsAt: toIsoOrNull(endsAtStr, true),
       })
       if (result.ok) {
+        if (pendingImage) {
+          const fd = new FormData()
+          fd.append('rule_id', result.ruleId)
+          fd.append('file', pendingImage)
+          const img = await uploadBundleImage(fd)
+          if (!img.ok) {
+            toast.error(
+              `Bundle created, but the picture failed: ${img.error}. Add it again with Edit.`,
+            )
+          }
+        }
         toast.success(`Bundle "${name.trim()}" created.`)
         router.push('/discount-rules')
       } else {
@@ -257,6 +270,14 @@ export function NewBundleRuleForm({
                 )
               ) : null}
             </div>
+          </div>
+
+          <div className="sm:col-span-2">
+            <BundleImageField
+              ruleId={null}
+              initialUrl={null}
+              onPendingFile={setPendingImage}
+            />
           </div>
 
           <div className="space-y-1 sm:col-span-2">

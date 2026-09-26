@@ -70,6 +70,8 @@ export type DiscountRuleRow = {
   // empty array for every other kind). The bundle's set total price
   // lives in deltaCents.
   bundleItems: BundleItem[]
+  // Round 85d: optional picture (bundles on the online store). Public URL.
+  imageUrl: string | null
   createdAt: string
   updatedAt: string
 }
@@ -104,6 +106,7 @@ type RawRule = {
   code: string | null
   scope_channel: 'pos' | 'online' | null
   deal_slot: 'daily' | 'weekly' | null
+  image_url: string | null
   created_at: string
   updated_at: string
 }
@@ -129,7 +132,7 @@ export async function listDiscountRules(
         'scope_club_tier, scope_customer_id, ' +
         'scope_source_warehouse_id, scope_fulfillment_warehouse_id, ' +
         'threshold_qty, delta_percent, delta_cents, ' +
-        'code, scope_channel, deal_slot, ' +
+        'code, scope_channel, deal_slot, image_url, ' +
         'priority, created_at, updated_at',
     )
     .order('is_active', { ascending: false })
@@ -275,6 +278,7 @@ export async function listDiscountRules(
       productName: productNameById.get(bi.product_id) ?? null,
       qty: bi.qty,
     })),
+    imageUrl: r.image_url,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   }))
