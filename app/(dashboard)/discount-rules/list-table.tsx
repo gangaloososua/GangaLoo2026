@@ -231,11 +231,11 @@ export function DiscountRulesListTable({ rules }: Props) {
                         {r.isActive ? 'On' : 'Off'}
                       </Button>
                     </TableCell>
-                    <TableCell className="font-medium">{r.name}</TableCell>
+                    <TableCell className="min-w-[140px] whitespace-normal font-medium">{r.name}</TableCell>
                     <TableCell className="text-muted-foreground">
                       {formatKindLabel(r.kind)}
                     </TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
+                    <TableCell className="min-w-[220px] whitespace-normal text-xs text-muted-foreground">
                       {scopeSummary(r)}
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
