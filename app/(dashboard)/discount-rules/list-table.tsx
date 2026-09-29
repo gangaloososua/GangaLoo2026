@@ -4,6 +4,7 @@
 // Round 42  — coupon kind: label + code/channel summary
 // Round 85  — bundle kind: label + item list summary
 // Edit      — promotion rows get an Edit (pencil) link to /[id]/edit
+// 2026-09-26 — grouped boxes (deal slot / kind / store) + closed 'Off / expired' box
 
 import * as React from 'react'
 import { useTransition } from 'react'
@@ -174,11 +175,94 @@ export function DiscountRulesListTable({ rules }: Props) {
     })
   }
 
+  // Grouped view (2026-09-26): boxes per kind / deal slot / store, with
+  // switched-off and expired rules in a closed box at the bottom.
+  const [nowMs] = React.useState(() => Date.now())
+  const isExpired = (r: DiscountRuleRow) =>
+    r.endsAt != null && new Date(r.endsAt).getTime() < nowMs
+  const current = rules.filter((r) => r.isActive && !isExpired(r))
+  const retired = rules.filter((r) => !r.isActive || isExpired(r))
+  const groups = groupRules(current)
+
+  function renderTable(list: DiscountRuleRow[], showKind: boolean) {
+    const sorted = [...list].sort((a, b) => b.priority - a.priority)
+    return (
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead className="w-[70px]">Active</TableHead>
+            <TableHead>Name</TableHead>
+            {showKind ? <TableHead>Kind</TableHead> : null}
+            <TableHead>Scope</TableHead>
+            <TableHead className="text-right">Amount</TableHead>
+            <TableHead>Window</TableHead>
+            <TableHead className="text-right">Priority</TableHead>
+            <TableHead className="w-[90px]"></TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {sorted.map((r) => (
+            <TableRow key={r.id} className={r.isActive ? '' : 'opacity-60'}>
+              <TableCell>
+                <Button
+                  variant={r.isActive ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => handleToggleActive(r)}
+                  disabled={isPending}
+                  className="h-7 px-2 text-xs"
+                >
+                  {r.isActive ? 'On' : 'Off'}
+                </Button>
+              </TableCell>
+              <TableCell className="min-w-[140px] whitespace-normal font-medium">{r.name}</TableCell>
+              {showKind ? (
+                <TableCell className="text-muted-foreground">{formatKindLabel(r.kind)}</TableCell>
+              ) : null}
+              <TableCell className="min-w-[220px] whitespace-normal text-xs text-muted-foreground">
+                {scopeSummary(r)}
+              </TableCell>
+              <TableCell className="text-right tabular-nums">{amountSummary(r)}</TableCell>
+              <TableCell className="whitespace-normal text-xs text-muted-foreground">
+                {windowSummary(r)}
+                {statusTag(r, nowMs)}
+              </TableCell>
+              <TableCell className="text-right tabular-nums">{r.priority}</TableCell>
+              <TableCell>
+                <div className="flex items-center justify-end gap-1">
+                  {/* Edit is wired for promotion and bundle rules. */}
+                  {r.kind === 'promotion' || r.kind === 'bundle' ? (
+                    <Button asChild variant="ghost" size="icon" aria-label="Edit rule">
+                      <Link href={`/discount-rules/${r.id}/edit`}>
+                        <Pencil className="h-4 w-4" />
+                      </Link>
+                    </Button>
+                  ) : null}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => handleDelete(r)}
+                    disabled={isPending}
+                    aria-label="Delete rule"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    )
+  }
+
   return (
     <div className="space-y-4">
       {/* Header bar */}
       <Card>
-        <CardContent className="flex items-center justify-end py-4">
+        <CardContent className="flex flex-wrap items-center justify-between gap-3 py-4">
+          <p className="text-sm text-muted-foreground">
+            {current.length} running now · {retired.length} off or expired
+          </p>
           <Button asChild>
             <Link href="/discount-rules/new">
               <Plus className="mr-1 h-4 w-4" />
@@ -188,98 +272,115 @@ export function DiscountRulesListTable({ rules }: Props) {
         </CardContent>
       </Card>
 
-      {/* Table */}
-      <Card>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-[80px]">Active</TableHead>
-                <TableHead>Name</TableHead>
-                <TableHead>Kind</TableHead>
-                <TableHead>Scope</TableHead>
-                <TableHead className="text-right">Amount</TableHead>
-                <TableHead>Window</TableHead>
-                <TableHead className="text-right">Priority</TableHead>
-                <TableHead className="w-[110px]"></TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {rules.length === 0 ? (
-                <TableRow>
-                  <TableCell
-                    colSpan={8}
-                    className="py-10 text-center text-sm text-muted-foreground"
-                  >
-                    No discount rules yet. Create one to get started.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                rules.map((r) => (
-                  <TableRow
-                    key={r.id}
-                    className={r.isActive ? '' : 'opacity-60'}
-                  >
-                    <TableCell>
-                      <Button
-                        variant={r.isActive ? 'default' : 'outline'}
-                        size="sm"
-                        onClick={() => handleToggleActive(r)}
-                        disabled={isPending}
-                        className="h-7 px-2 text-xs"
-                      >
-                        {r.isActive ? 'On' : 'Off'}
-                      </Button>
-                    </TableCell>
-                    <TableCell className="min-w-[140px] whitespace-normal font-medium">{r.name}</TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {formatKindLabel(r.kind)}
-                    </TableCell>
-                    <TableCell className="min-w-[220px] whitespace-normal text-xs text-muted-foreground">
-                      {scopeSummary(r)}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {amountSummary(r)}
-                    </TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
-                      {windowSummary(r)}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {r.priority}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center justify-end gap-1">
-                        {/* Edit is wired for promotion and bundle rules. */}
-                        {r.kind === 'promotion' || r.kind === 'bundle' ? (
-                          <Button
-                            asChild
-                            variant="ghost"
-                            size="icon"
-                            aria-label="Edit rule"
-                          >
-                            <Link href={`/discount-rules/${r.id}/edit`}>
-                              <Pencil className="h-4 w-4" />
-                            </Link>
-                          </Button>
-                        ) : null}
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleDelete(r)}
-                          disabled={isPending}
-                          aria-label="Delete rule"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+      {rules.length === 0 ? (
+        <Card>
+          <CardContent className="py-10 text-center text-sm text-muted-foreground">
+            No discount rules yet. Create one to get started.
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {groups.map((g) => (
+        <Card key={g.key}>
+          <CardContent className="p-0">
+            <div className="flex items-baseline justify-between gap-2 border-b px-4 py-3">
+              <h2 className="text-base font-semibold">
+                {g.title}
+                {g.store ? (
+                  <span className="font-normal text-muted-foreground"> · {g.store}</span>
+                ) : null}
+              </h2>
+              <span className="text-xs text-muted-foreground">
+                {g.rules.length} {g.rules.length === 1 ? 'rule' : 'rules'}
+              </span>
+            </div>
+            {renderTable(g.rules, false)}
+          </CardContent>
+        </Card>
+      ))}
+
+      {retired.length > 0 ? (
+        <Card>
+          <CardContent className="p-0">
+            <details>
+              <summary className="cursor-pointer select-none px-4 py-3 text-base font-semibold">
+                Off / expired
+                <span className="ml-2 text-xs font-normal text-muted-foreground">
+                  {retired.length} {retired.length === 1 ? 'rule' : 'rules'} · click to show
+                </span>
+              </summary>
+              <div className="border-t">{renderTable(retired, true)}</div>
+            </details>
+          </CardContent>
+        </Card>
+      ) : null}
     </div>
   )
+}
+
+// ----------------------------------------------------------------------
+// Grouping for the boxed view.
+// Order: daily deals, weekly deals, other promotions (each split by store),
+// bundles, coupons, club tiers, customer overrides, bulk, surcharges.
+// ----------------------------------------------------------------------
+type RuleGroup = {
+  key: string
+  title: string
+  store: string | null
+  rules: DiscountRuleRow[]
+}
+
+const GROUP_ORDER: Array<{ id: string; title: string; byStore: boolean }> = [
+  { id: 'daily', title: 'Ofertas del día', byStore: true },
+  { id: 'weekly', title: 'Ofertas de la semana', byStore: true },
+  { id: 'promotion', title: 'Other promotions', byStore: true },
+  { id: 'bundle', title: 'Combos (bundles)', byStore: false },
+  { id: 'coupon', title: 'Coupons', byStore: false },
+  { id: 'club_tier', title: 'Club tiers', byStore: false },
+  { id: 'customer_override', title: 'Customer overrides', byStore: false },
+  { id: 'bulk', title: 'Bulk quantity', byStore: false },
+  { id: 'logistics_surcharge', title: 'Surcharges', byStore: false },
+]
+
+function groupId(r: DiscountRuleRow): string {
+  if (r.kind === 'promotion') return r.dealSlot ?? 'promotion'
+  return r.kind
+}
+
+function groupRules(list: DiscountRuleRow[]): RuleGroup[] {
+  const out: RuleGroup[] = []
+  const known = new Set(GROUP_ORDER.map((g) => g.id))
+  for (const g of GROUP_ORDER) {
+    const inGroup = list.filter((r) => groupId(r) === g.id)
+    if (inGroup.length === 0) continue
+    if (!g.byStore) {
+      out.push({ key: g.id, title: g.title, store: null, rules: inGroup })
+      continue
+    }
+    const stores = new Map<string, DiscountRuleRow[]>()
+    for (const r of inGroup) {
+      const store = r.scopeWarehouseName ?? 'All stores'
+      stores.set(store, [...(stores.get(store) ?? []), r])
+    }
+    const names = [...stores.keys()].sort((a, b) =>
+      a === 'All stores' ? 1 : b === 'All stores' ? -1 : a.localeCompare(b),
+    )
+    for (const name of names) {
+      out.push({ key: `${g.id}:${name}`, title: g.title, store: name, rules: stores.get(name)! })
+    }
+  }
+  const other = list.filter((r) => !known.has(groupId(r)))
+  if (other.length > 0) out.push({ key: 'other', title: 'Other', store: null, rules: other })
+  return out
+}
+
+function statusTag(r: DiscountRuleRow, nowMs: number): React.ReactNode {
+  if (!r.isActive) return null
+  if (r.endsAt && new Date(r.endsAt).getTime() < nowMs) {
+    return <span className="ml-2 rounded bg-muted px-1.5 py-0.5 text-[10px]">Expired</span>
+  }
+  if (r.startsAt && new Date(r.startsAt).getTime() > nowMs) {
+    return <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] text-amber-800">Upcoming</span>
+  }
+  return <span className="ml-2 rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] text-emerald-800">Live</span>
 }
