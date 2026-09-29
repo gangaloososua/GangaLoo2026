@@ -62,6 +62,8 @@ export function NewPromotionRuleForm({ products, categories, warehouses }: Props
   const [onlineDeal, setOnlineDeal] = useState(false)
   const [dealSlot, setDealSlot] = useState<'daily' | 'weekly'>('daily')
   const [endsAtLocal, setEndsAtLocal] = useState('') // datetime-local
+  // Pre-planned deal: optional start (datetime-local); empty = start now.
+  const [startsAtLocal, setStartsAtLocal] = useState('')
 
   const percentValue = Number(percentStr)
   const priorityValue = parseInt(priorityStr, 10)
@@ -81,6 +83,11 @@ export function NewPromotionRuleForm({ products, categories, warehouses }: Props
       if (!endsAtLocal) return 'Pick when the online deal ends'
       if (new Date(endsAtLocal).getTime() <= Date.now())
         return 'The end time must be in the future'
+      if (
+        startsAtLocal &&
+        new Date(startsAtLocal).getTime() >= new Date(endsAtLocal).getTime()
+      )
+        return 'The start time must be before the end time'
     } else if (
       startsAtStr &&
       endsAtStr &&
@@ -98,7 +105,9 @@ export function NewPromotionRuleForm({ products, categories, warehouses }: Props
     setSubmitting(true)
     try {
       const startsAt = onlineDeal
-        ? new Date().toISOString()
+        ? startsAtLocal
+          ? new Date(startsAtLocal).toISOString()
+          : new Date().toISOString()
         : toIsoOrNull(startsAtStr, false)
       const endsAt = onlineDeal
         ? new Date(endsAtLocal).toISOString()
@@ -257,6 +266,22 @@ export function NewPromotionRuleForm({ products, categories, warehouses }: Props
                 </select>
               </div>
 
+              <div className="space-y-1">
+                <Label htmlFor="dr-starts-at" className="text-xs">
+                  Starts at (optional)
+                </Label>
+                <Input
+                  id="dr-starts-at"
+                  type="datetime-local"
+                  value={startsAtLocal}
+                  onChange={(e) => setStartsAtLocal(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Leave empty to start right away. Pick a future time to
+                  pre-plan the deal: it stays hidden until then.
+                </p>
+              </div>
+
               <div className="space-y-1 sm:col-span-2">
                 <Label htmlFor="dr-ends-at" className="text-xs">
                   Ends at <span className="text-rose-600">*</span>
@@ -269,8 +294,8 @@ export function NewPromotionRuleForm({ products, categories, warehouses }: Props
                 />
                 <p className="text-xs text-muted-foreground">
                   The store shows a live countdown to this time, then the deal
-                  disappears and the price returns to normal. Starts immediately.
-                  Uses the Store chosen above (or all stores).
+                  disappears and the price returns to normal. Uses the Store
+                  chosen above (or all stores).
                 </p>
               </div>
             </div>
