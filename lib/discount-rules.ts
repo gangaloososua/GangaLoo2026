@@ -72,6 +72,8 @@ export type DiscountRuleRow = {
   bundleItems: BundleItem[]
   // Round 85d: optional picture (bundles on the online store). Public URL.
   imageUrl: string | null
+  // Round 86: seller commission % while this promotion (deal) is live.
+  commissionPercent: number | null
   createdAt: string
   updatedAt: string
 }
@@ -107,6 +109,7 @@ type RawRule = {
   scope_channel: 'pos' | 'online' | null
   deal_slot: 'daily' | 'weekly' | null
   image_url: string | null
+  commission_percent: number | string | null
   created_at: string
   updated_at: string
 }
@@ -132,7 +135,7 @@ export async function listDiscountRules(
         'scope_club_tier, scope_customer_id, ' +
         'scope_source_warehouse_id, scope_fulfillment_warehouse_id, ' +
         'threshold_qty, delta_percent, delta_cents, ' +
-        'code, scope_channel, deal_slot, image_url, ' +
+        'code, scope_channel, deal_slot, image_url, commission_percent, ' +
         'priority, created_at, updated_at',
     )
     .order('is_active', { ascending: false })
@@ -279,6 +282,8 @@ export async function listDiscountRules(
       qty: bi.qty,
     })),
     imageUrl: r.image_url,
+    commissionPercent:
+      r.commission_percent == null ? null : Number(r.commission_percent),
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   }))

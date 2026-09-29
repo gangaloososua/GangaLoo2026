@@ -133,6 +133,7 @@ export default async function EditDiscountRulePage({
     startsAt: rule.startsAt,
     endsAt: rule.endsAt,
     priority: rule.priority,
+    commissionPercent: rule.commissionPercent,
   }
 
   return (

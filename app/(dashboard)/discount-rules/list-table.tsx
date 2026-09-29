@@ -221,7 +221,14 @@ export function DiscountRulesListTable({ rules }: Props) {
               <TableCell className="min-w-[220px] whitespace-normal text-xs text-muted-foreground">
                 {scopeSummary(r)}
               </TableCell>
-              <TableCell className="text-right tabular-nums">{amountSummary(r)}</TableCell>
+              <TableCell className="text-right tabular-nums">
+                {amountSummary(r)}
+                {r.commissionPercent != null ? (
+                  <div className="text-[11px] text-muted-foreground">
+                    Comm. {r.commissionPercent}%
+                  </div>
+                ) : null}
+              </TableCell>
               <TableCell className="whitespace-normal text-xs text-muted-foreground">
                 {windowSummary(r)}
                 {statusTag(r, nowMs)}

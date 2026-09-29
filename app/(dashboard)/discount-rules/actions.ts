@@ -356,6 +356,8 @@ export type CreatePromotionRuleInput = {
   // on the online store as a Daily/Weekly deal with a countdown.
   scopeWarehouseId?: string | null // null = all stores
   dealSlot?: 'daily' | 'weekly' | null
+  // Round 86: seller commission % while this promotion is live (null = normal).
+  commissionPercent?: number | null
 }
 export type CreatePromotionRuleResult = Ok<{ ruleId: string }> | Err
 
@@ -399,6 +401,14 @@ export async function createPromotionRule(
   if (input.dealSlot != null && !input.endsAt) {
     return { ok: false, error: 'An online deal needs an end date and time' }
   }
+  if (
+    input.commissionPercent != null &&
+    (!Number.isFinite(input.commissionPercent) ||
+      input.commissionPercent < 0 ||
+      input.commissionPercent > 100)
+  ) {
+    return { ok: false, error: 'Deal commission must be between 0 and 100' }
+  }
 
   const supabase = await createClient()
   const { data, error } = await supabase
@@ -414,6 +424,7 @@ export async function createPromotionRule(
       deal_slot: input.dealSlot ?? null,
       delta_percent: input.deltaPercent,
       priority: input.priority,
+      commission_percent: input.commissionPercent ?? null,
       created_by: caller.id,
     })
     .select('id')
@@ -558,6 +569,8 @@ export type UpdatePromotionRuleInput = {
   priority: number
   scopeWarehouseId?: string | null // null = all stores
   dealSlot?: 'daily' | 'weekly' | null
+  // Round 86: seller commission % while this promotion is live (null = normal).
+  commissionPercent?: number | null
 }
 export type UpdatePromotionRuleResult = Ok<{ ruleId: string }> | Err
 
@@ -600,6 +613,14 @@ export async function updatePromotionRule(
   if (input.dealSlot != null && !input.endsAt) {
     return { ok: false, error: 'An online deal needs an end date and time' }
   }
+  if (
+    input.commissionPercent != null &&
+    (!Number.isFinite(input.commissionPercent) ||
+      input.commissionPercent < 0 ||
+      input.commissionPercent > 100)
+  ) {
+    return { ok: false, error: 'Deal commission must be between 0 and 100' }
+  }
 
   const supabase = await createClient()
   const { data, error } = await supabase
@@ -613,6 +634,7 @@ export async function updatePromotionRule(
       deal_slot: input.dealSlot ?? null,
       delta_percent: input.deltaPercent,
       priority: input.priority,
+      commission_percent: input.commissionPercent ?? null,
     })
     .eq('id', input.ruleId)
     .eq('kind', 'promotion') // safety: never edit a non-promotion row here

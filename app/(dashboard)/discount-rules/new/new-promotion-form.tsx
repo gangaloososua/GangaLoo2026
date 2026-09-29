@@ -53,6 +53,9 @@ export function NewPromotionRuleForm({ products, categories, warehouses }: Props
   const [startsAtStr, setStartsAtStr] = useState('')
   const [endsAtStr, setEndsAtStr] = useState('')
   const [priorityStr, setPriorityStr] = useState('0')
+  // Round 86: optional seller commission % while the deal runs.
+  const [commissionStr, setCommissionStr] = useState('')
+  const commissionValue = Number(commissionStr)
   const [submitting, setSubmitting] = useState(false)
 
   // Round 61: store now applies to ALL promotions (not just online deals).
@@ -79,6 +82,11 @@ export function NewPromotionRuleForm({ products, categories, warehouses }: Props
       !Number.isInteger(priorityValue)
     )
       return 'Priority must be a non-negative integer'
+    if (
+      commissionStr.trim() !== '' &&
+      (!Number.isFinite(commissionValue) || commissionValue < 0 || commissionValue > 100)
+    )
+      return 'Deal commission must be between 0 and 100'
     if (onlineDeal) {
       if (!endsAtLocal) return 'Pick when the online deal ends'
       if (new Date(endsAtLocal).getTime() <= Date.now())
@@ -120,6 +128,7 @@ export function NewPromotionRuleForm({ products, categories, warehouses }: Props
         startsAt,
         endsAt,
         priority: priorityValue,
+        commissionPercent: commissionStr.trim() === '' ? null : commissionValue,
         // Round 61: store applies to every promotion now (blank = all stores).
         scopeWarehouseId: warehouseId || null,
         dealSlot: onlineDeal ? dealSlot : null,
@@ -232,6 +241,27 @@ export function NewPromotionRuleForm({ products, categories, warehouses }: Props
             />
             <p className="text-xs text-muted-foreground">
               Higher priority applies first within the same rule kind.
+            </p>
+          </div>
+
+          <div className="space-y-1">
+            <Label htmlFor="dr-commission" className="text-xs">
+              Seller commission % during this deal (optional)
+            </Label>
+            <Input
+              id="dr-commission"
+              type="number"
+              min={0}
+              max={100}
+              step={0.5}
+              value={commissionStr}
+              onChange={(e) => setCommissionStr(e.target.value)}
+              placeholder="Leave empty = normal commission"
+            />
+            <p className="text-xs text-muted-foreground">
+              While this deal is running, sellers earn this % on this product
+              instead of the product&apos;s (or their personal) commission.
+              Online orders use the time the customer placed the order.
             </p>
           </div>
         </div>

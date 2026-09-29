@@ -34,6 +34,7 @@ export type EditPromotionInitial = {
   startsAt: string | null // ISO datetime
   endsAt: string | null // ISO datetime
   priority: number
+  commissionPercent: number | null // Round 86
 }
 
 type Props = {
@@ -84,6 +85,9 @@ export function EditPromotionRuleForm({
   const [productId, setProductId] = useState(initial.productId)
   const [percentStr, setPercentStr] = useState(String(initial.percent))
   const [priorityStr, setPriorityStr] = useState(String(initial.priority))
+  // Round 86: optional seller commission % while the deal runs.
+  const [commissionStr, setCommissionStr] = useState(initial.commissionPercent == null ? '' : String(initial.commissionPercent))
+  const commissionValue = Number(commissionStr)
   const [submitting, setSubmitting] = useState(false)
 
   const [warehouseId, setWarehouseId] = useState(initial.warehouseId ?? '')
@@ -124,6 +128,11 @@ export function EditPromotionRuleForm({
       !Number.isInteger(priorityValue)
     )
       return 'Priority must be a non-negative integer'
+    if (
+      commissionStr.trim() !== '' &&
+      (!Number.isFinite(commissionValue) || commissionValue < 0 || commissionValue > 100)
+    )
+      return 'Deal commission must be between 0 and 100'
     if (onlineDeal) {
       if (!endsAtLocal) return 'Pick when the online deal ends'
       if (new Date(endsAtLocal).getTime() <= Date.now())
@@ -166,6 +175,7 @@ export function EditPromotionRuleForm({
         startsAt,
         endsAt,
         priority: priorityValue,
+        commissionPercent: commissionStr.trim() === '' ? null : commissionValue,
         scopeWarehouseId: warehouseId || null,
         dealSlot: onlineDeal ? dealSlot : null,
       })
@@ -277,6 +287,27 @@ export function EditPromotionRuleForm({
             />
             <p className="text-xs text-muted-foreground">
               Higher priority applies first within the same rule kind.
+            </p>
+          </div>
+
+          <div className="space-y-1">
+            <Label htmlFor="dr-commission" className="text-xs">
+              Seller commission % during this deal (optional)
+            </Label>
+            <Input
+              id="dr-commission"
+              type="number"
+              min={0}
+              max={100}
+              step={0.5}
+              value={commissionStr}
+              onChange={(e) => setCommissionStr(e.target.value)}
+              placeholder="Leave empty = normal commission"
+            />
+            <p className="text-xs text-muted-foreground">
+              While this deal is running, sellers earn this % on this product
+              instead of the product&apos;s (or their personal) commission.
+              Online orders use the time the customer placed the order.
             </p>
           </div>
         </div>
