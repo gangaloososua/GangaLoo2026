@@ -48,7 +48,7 @@ const RULE_KINDS: Array<{
     href: '/discount-rules/new/bundle',
     title: 'Bundle (set price)',
     blurb:
-      'Specific products bought together for one set total price, e.g. wig + shampoo = RD$6,000. Repeats for every complete set in the cart.',
+      'Products bought together for one set total price, e.g. wig + shampoo = RD$6,000, or 3× the same wig = RD$20,000. Repeats for every complete set in the cart.',
   },
 ]
 export default async function NewDiscountRulePage() {

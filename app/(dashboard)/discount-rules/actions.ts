@@ -678,8 +678,12 @@ export async function createBundleRule(
   if (!name) return { ok: false, error: 'Rule name is required' }
 
   const items = input.items.filter((i) => i.productId)
-  if (items.length < 2) {
-    return { ok: false, error: 'A bundle needs at least 2 different products' }
+  // Round 87: 2+ items in TOTAL (2 different products, or e.g. 3x one).
+  if (items.length < 1) {
+    return { ok: false, error: 'Pick at least one product' }
+  }
+  if (items.reduce((n, i) => n + (Number(i.qty) || 0), 0) < 2) {
+    return { ok: false, error: 'A bundle needs at least 2 items in total' }
   }
   const ids = new Set(items.map((i) => i.productId))
   if (ids.size !== items.length) {
@@ -756,8 +760,12 @@ export async function updateBundleRule(
   if (!name) return { ok: false, error: 'Rule name is required' }
 
   const items = input.items.filter((i) => i.productId)
-  if (items.length < 2) {
-    return { ok: false, error: 'A bundle needs at least 2 different products' }
+  // Round 87: 2+ items in TOTAL (2 different products, or e.g. 3x one).
+  if (items.length < 1) {
+    return { ok: false, error: 'Pick at least one product' }
+  }
+  if (items.reduce((n, i) => n + (Number(i.qty) || 0), 0) < 2) {
+    return { ok: false, error: 'A bundle needs at least 2 items in total' }
   }
   if (new Set(items.map((i) => i.productId)).size !== items.length) {
     return { ok: false, error: 'Each product can only be in the bundle once' }

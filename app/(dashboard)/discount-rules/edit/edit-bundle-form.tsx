@@ -93,7 +93,7 @@ export function EditBundleRuleForm({
   const [name, setName] = useState(initial.name)
   const [rows, setRows] = useState<ItemRow[]>(() => {
     const r = initial.items.map((i) => newRow(i.productId, i.qty))
-    while (r.length < 2) r.push(newRow())
+    while (r.length < 1) r.push(newRow())
     return r
   })
   const [priceStr, setPriceStr] = useState(String(initial.priceCents / 100))
@@ -112,7 +112,9 @@ export function EditBundleRuleForm({
 
   const validationError: string | null = (() => {
     if (!name.trim()) return 'Rule name is required'
-    if (filled.length < 2) return 'Pick at least 2 different products'
+    if (filled.length < 1) return 'Pick at least one product'
+    if (filled.reduce((n, r) => n + (parseInt(r.qtyStr, 10) || 0), 0) < 2)
+      return 'A bundle needs at least 2 items in total (e.g. 3× one product)'
     if (new Set(filled.map((r) => r.productId)).size !== filled.length)
       return 'Each product can only be in the bundle once'
     for (const r of filled) {
@@ -133,7 +135,7 @@ export function EditBundleRuleForm({
     setRows((prev) => prev.map((r) => (r.key === key ? { ...r, ...patch } : r)))
   }
   function removeRow(key: string) {
-    setRows((prev) => (prev.length <= 2 ? prev : prev.filter((r) => r.key !== key)))
+    setRows((prev) => (prev.length <= 1 ? prev : prev.filter((r) => r.key !== key)))
   }
 
   async function handleSubmit() {
@@ -195,7 +197,7 @@ export function EditBundleRuleForm({
                   <span className="text-xs font-medium text-muted-foreground">
                     Product {idx + 1}
                   </span>
-                  {rows.length > 2 ? (
+                  {rows.length > 1 ? (
                     <Button
                       type="button"
                       variant="ghost"

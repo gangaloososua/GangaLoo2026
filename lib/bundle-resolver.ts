@@ -57,7 +57,8 @@ function bundleIsLive(
 ): boolean {
   if (r.kind !== 'bundle' || !r.isActive) return false
   if (r.deltaCents == null || r.deltaCents <= 0) return false
-  if (r.bundleItems.length < 2) return false
+  // Round 87: 2+ items in TOTAL (e.g. 3x one product is a valid bundle).
+  if (r.bundleItems.reduce((n, i) => n + i.qty, 0) < 2) return false
   if (r.startsAt && new Date(r.startsAt).getTime() > atMs) return false
   if (r.endsAt && new Date(r.endsAt).getTime() < atMs) return false
   // Store scope: blank = every store (same column promotions use).

@@ -779,7 +779,8 @@ export async function fetchStoreCatalog(
         }
         items.push({ product, qty: Number(it.qty) || 1 })
       }
-      if (!complete || items.length < 2) continue
+      // Round 87: 2+ items in total (single-product bundles like 3x allowed).
+      if (!complete || items.reduce((n, i) => n + i.qty, 0) < 2) continue
       const regularCents = items.reduce((s, i) => s + i.product.priceCents * i.qty, 0)
       const priceCents = isGuest
         ? Math.ceil((Number(b.price_cents) * (1 + markupFrac)) / 2500) * 2500
