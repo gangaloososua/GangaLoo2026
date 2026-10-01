@@ -7,8 +7,20 @@
 //
 // computePeriods() turns a simple period mode into the four date bounds the
 // RPC needs (current window + the comparison window before it). Bounds are
-// half-open [start, end). Dates are emitted as YYYY-MM-DD; the database reads
-// them at midnight in its session timezone, which is fine for a dashboard.
+// half-open [start, end).
+//
+// 2026-09-30: fixed a timezone bug. "Today"/"this month" were computed from
+// new Date() read with the SERVER's local getters (getFullYear/getMonth/
+// getDate), which on Netlify run in UTC -- so any sale made roughly 8pm-
+// midnight Dominican time (UTC-4) was already "tomorrow" by the server's
+// clock and fell into the wrong month. Separately, the boundaries were sent
+// as bare "YYYY-MM-DD" strings, which Postgres casts to timestamptz using
+// its OWN session timezone (UTC on Supabase) -- a second, independent source
+// of the same kind of drift. Fix: compute "today" from the Dominican
+// Republic's actual calendar date (via Intl, not the server's getters), and
+// send full ISO timestamps with an explicit "-04:00" offset (DR has no DST,
+// so this offset is constant year-round) so the cast is unambiguous
+// regardless of any session timezone setting.
 
 import { createClient } from '@/lib/supabase/server'
 
@@ -27,9 +39,39 @@ export type DashboardPeriods = {
 
 // --- period math -----------------------------------------------------------
 
-function ymd(d: Date): string {
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+const DR_TIME_ZONE = 'America/Santo_Domingo'
+// DR is UTC-4 year-round (no DST). Fixed offset, safe to hard-code.
+const DR_OFFSET = '-04:00'
+
+const pad = (n: number) => String(n).padStart(2, '0')
+
+/** The Dominican Republic's current calendar date, regardless of the
+ *  server's own local timezone. Using Intl here (rather than reading a
+ *  Date's local getters) is robust no matter what TZ the host runs in. */
+function drToday(now: Date): { y: number; m: number; d: number } {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: DR_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(now)
+  const get = (type: string) => Number(parts.find((p) => p.type === type)?.value)
+  return { y: get('year'), m: get('month'), d: get('day') }
+}
+
+/** Midnight on the given Dominican-Republic calendar date, as an explicit
+ *  -04:00-offset ISO timestamp. Postgres (or any tz-aware consumer) reads
+ *  this unambiguously -- no dependence on session/server timezone. */
+function drMidnightISO(y: number, m: number, d: number): string {
+  return `${y}-${pad(m)}-${pad(d)}T00:00:00${DR_OFFSET}`
+}
+
+/** Add days to a plain (y, m, d) calendar date, returning a new (y, m, d).
+ *  Done via a UTC-anchored Date purely as a calendar calculator -- no
+ *  timezone reading happens here, so this is safe regardless of server TZ. */
+function addDays(y: number, m: number, d: number, delta: number): { y: number; m: number; d: number } {
+  const dt = new Date(Date.UTC(y, m - 1, d + delta))
+  return { y: dt.getUTCFullYear(), m: dt.getUTCMonth() + 1, d: dt.getUTCDate() }
 }
 
 const MONTHS = [
@@ -41,47 +83,48 @@ export function computePeriods(
   mode: DashboardPeriodMode,
   now: Date = new Date(),
 ): DashboardPeriods {
+  const { y, m, d } = drToday(now)
+
   if (mode === 'this-year') {
-    const y = now.getFullYear()
     return {
-      curStart: `${y}-01-01`,
-      curEnd: `${y + 1}-01-01`,
-      prevStart: `${y - 1}-01-01`,
-      prevEnd: `${y}-01-01`,
+      curStart: drMidnightISO(y, 1, 1),
+      curEnd: drMidnightISO(y + 1, 1, 1),
+      prevStart: drMidnightISO(y - 1, 1, 1),
+      prevEnd: drMidnightISO(y, 1, 1),
       label: String(y),
       prevLabel: String(y - 1),
     }
   }
 
   if (mode === 'last-30') {
-    const end = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1)
-    const start = new Date(end.getFullYear(), end.getMonth(), end.getDate() - 30)
+    // End is the start of "tomorrow" (DR), so today is fully included.
+    const end = addDays(y, m, d, 1)
+    const start = addDays(end.y, end.m, end.d, -30)
     const prevEnd = start
-    const prevStart = new Date(start.getFullYear(), start.getMonth(), start.getDate() - 30)
+    const prevStart = addDays(start.y, start.m, start.d, -30)
     return {
-      curStart: ymd(start),
-      curEnd: ymd(end),
-      prevStart: ymd(prevStart),
-      prevEnd: ymd(prevEnd),
+      curStart: drMidnightISO(start.y, start.m, start.d),
+      curEnd: drMidnightISO(end.y, end.m, end.d),
+      prevStart: drMidnightISO(prevStart.y, prevStart.m, prevStart.d),
+      prevEnd: drMidnightISO(prevEnd.y, prevEnd.m, prevEnd.d),
       label: 'Last 30 days',
       prevLabel: 'Prior 30 days',
     }
   }
 
   // this-month (default)
-  const y = now.getFullYear()
-  const m = now.getMonth()
-  const curStart = new Date(y, m, 1)
-  const curEnd = new Date(y, m + 1, 1)
-  const prevStart = new Date(y, m - 1, 1)
-  const prevEnd = curStart
+  const curStartY = y, curStartM = m
+  const nextM = m === 12 ? 1 : m + 1
+  const nextY = m === 12 ? y + 1 : y
+  const prevM = m === 1 ? 12 : m - 1
+  const prevY = m === 1 ? y - 1 : y
   return {
-    curStart: ymd(curStart),
-    curEnd: ymd(curEnd),
-    prevStart: ymd(prevStart),
-    prevEnd: ymd(prevEnd),
-    label: `${MONTHS[curStart.getMonth()]} ${curStart.getFullYear()}`,
-    prevLabel: `${MONTHS[prevStart.getMonth()]} ${prevStart.getFullYear()}`,
+    curStart: drMidnightISO(curStartY, curStartM, 1),
+    curEnd: drMidnightISO(nextY, nextM, 1),
+    prevStart: drMidnightISO(prevY, prevM, 1),
+    prevEnd: drMidnightISO(curStartY, curStartM, 1),
+    label: `${MONTHS[curStartM - 1]} ${curStartY}`,
+    prevLabel: `${MONTHS[prevM - 1]} ${prevY}`,
   }
 }
 
