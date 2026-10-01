@@ -20,6 +20,16 @@
 // append a short tail of out-of-stock active products so they stay visible
 // below. Search and category browsing are unchanged - they still scan the
 // full catalog with the prior 50-row cap.
+//
+// 2026-09-30: fixed the same word-split search bug already fixed in
+// lib/sales.ts and lib/inventory.ts, which had NOT actually been applied
+// here despite an earlier note claiming it was. The query was matched as one
+// continuous phrase (`sku.ilike.%${q}%,name.ilike.%${q}%`), so a real product
+// name like `Lacio 11A Bob 13x4 180% 12" Negro FaLoo` never matched a search
+// for `11a faloo` -- the words are both present but not adjacent. Now each
+// word of the (sanitized) query is required to match independently (AND
+// across words, OR across sku/name), so word order and extra words no
+// longer matter.
 import { createClient } from '@/lib/supabase/server'
 import type { ProductSearchResult } from '@/lib/sales'
 
@@ -91,7 +101,14 @@ export async function listProductsForRegister(opts: {
       .from('products')
       .select(PRODUCT_SELECT)
       .eq('is_active', true)
-    if (q) pq = pq.or(`sku.ilike.%${q}%,name.ilike.%${q}%`)
+    if (q) {
+      // Match each word of the query independently (AND across words, OR
+      // across sku/name) instead of the whole query as one unbroken phrase --
+      // see the 2026-09-30 note above for why that matters.
+      for (const term of q.split(' ')) {
+        if (term) pq = pq.or(`sku.ilike.%${term}%,name.ilike.%${term}%`)
+      }
+    }
     if (categoryProductIds) pq = pq.in('id', categoryProductIds)
     const { data, error: pErr } = await pq
       .order('name', { ascending: true })
