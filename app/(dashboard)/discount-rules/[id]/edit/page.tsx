@@ -93,6 +93,7 @@ export default async function EditDiscountRulePage({
       startsAt: rule.startsAt,
       endsAt: rule.endsAt,
       imageUrl: rule.imageUrl,
+      commissionPercent: rule.commissionPercent,
     }
     return (
       <div className="space-y-4">

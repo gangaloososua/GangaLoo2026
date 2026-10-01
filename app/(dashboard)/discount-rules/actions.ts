@@ -664,6 +664,9 @@ export type CreateBundleRuleInput = {
   name: string
   items: Array<{ productId: string; qty: number }>
   priceCents: number // set total price for ONE complete bundle
+  // Round 87b: flat seller commission % for every product sold in this
+  // bundle (null = normal commission).
+  commissionPercent?: number | null
   scopeWarehouseId: string | null // null = all stores
   startsAt: string | null // ISO datetime
   endsAt: string | null // ISO datetime
@@ -698,6 +701,14 @@ export async function createBundleRule(
     return { ok: false, error: 'Bundle price must be more than 0' }
   }
   if (
+    input.commissionPercent != null &&
+    (!Number.isFinite(input.commissionPercent) ||
+      input.commissionPercent < 0 ||
+      input.commissionPercent > 100)
+  ) {
+    return { ok: false, error: 'Bundle commission must be between 0 and 100' }
+  }
+  if (
     input.startsAt &&
     input.endsAt &&
     new Date(input.startsAt) > new Date(input.endsAt)
@@ -716,6 +727,7 @@ export async function createBundleRule(
       ends_at: input.endsAt,
       scope_warehouse_id: input.scopeWarehouseId ?? null,
       delta_cents: input.priceCents,
+      commission_percent: input.commissionPercent ?? null,
       priority: 0,
       created_by: caller.id,
     })
@@ -779,6 +791,14 @@ export async function updateBundleRule(
     return { ok: false, error: 'Bundle price must be more than 0' }
   }
   if (
+    input.commissionPercent != null &&
+    (!Number.isFinite(input.commissionPercent) ||
+      input.commissionPercent < 0 ||
+      input.commissionPercent > 100)
+  ) {
+    return { ok: false, error: 'Bundle commission must be between 0 and 100' }
+  }
+  if (
     input.startsAt &&
     input.endsAt &&
     new Date(input.startsAt) > new Date(input.endsAt)
@@ -795,6 +815,7 @@ export async function updateBundleRule(
       ends_at: input.endsAt,
       scope_warehouse_id: input.scopeWarehouseId ?? null,
       delta_cents: input.priceCents,
+      commission_percent: input.commissionPercent ?? null,
     })
     .eq('id', input.ruleId)
     .eq('kind', 'bundle') // safety: never edit a non-bundle row here

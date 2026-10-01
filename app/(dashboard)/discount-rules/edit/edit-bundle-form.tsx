@@ -37,6 +37,7 @@ export type EditBundleInitial = {
   startsAt: string | null
   endsAt: string | null
   imageUrl: string | null
+  commissionPercent: number | null // Round 87b
 }
 
 type Props = {
@@ -97,6 +98,9 @@ export function EditBundleRuleForm({
     return r
   })
   const [priceStr, setPriceStr] = useState(String(initial.priceCents / 100))
+  // Round 87b: optional flat seller commission % for this bundle.
+  const [commissionStr, setCommissionStr] = useState(initial.commissionPercent == null ? '' : String(initial.commissionPercent))
+  const commissionValue = Number(commissionStr)
   const [warehouseId, setWarehouseId] = useState(initial.warehouseId ?? '') // '' = all stores
   const [startsAtStr, setStartsAtStr] = useState(isoToDateInput(initial.startsAt))
   const [endsAtStr, setEndsAtStr] = useState(isoToDateInput(initial.endsAt))
@@ -124,6 +128,11 @@ export function EditBundleRuleForm({
     }
     if (!Number.isFinite(priceCents) || priceCents <= 0)
       return 'Enter the bundle price'
+    if (
+      commissionStr.trim() !== '' &&
+      (!Number.isFinite(commissionValue) || commissionValue < 0 || commissionValue > 100)
+    )
+      return 'Bundle commission must be between 0 and 100'
     if (startsAtStr && endsAtStr && new Date(startsAtStr) > new Date(endsAtStr))
       return 'Start date must be on or before end date'
     return null
@@ -151,6 +160,7 @@ export function EditBundleRuleForm({
         })),
         priceCents,
         scopeWarehouseId: warehouseId || null,
+        commissionPercent: commissionStr.trim() === '' ? null : commissionValue,
         startsAt: toIsoOrNull(startsAtStr, false),
         endsAt: toIsoOrNull(endsAtStr, true),
       })
@@ -289,6 +299,27 @@ export function EditBundleRuleForm({
                 )
               ) : null}
             </div>
+          </div>
+
+          <div className="space-y-1 sm:col-span-2">
+            <Label htmlFor="br-commission" className="text-xs">
+              Seller commission % for this bundle (optional)
+            </Label>
+            <Input
+              id="br-commission"
+              type="number"
+              min={0}
+              max={100}
+              step={0.5}
+              className="sm:max-w-[240px]"
+              value={commissionStr}
+              onChange={(e) => setCommissionStr(e.target.value)}
+              placeholder="Empty = normal commission"
+            />
+            <p className="text-xs text-muted-foreground">
+              One flat % for every product sold as part of this bundle, instead
+              of the products&apos; (or the seller&apos;s personal) commission.
+            </p>
           </div>
 
           <div className="sm:col-span-2">

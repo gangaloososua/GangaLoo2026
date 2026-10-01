@@ -69,6 +69,9 @@ export function NewBundleRuleForm({
   const [name, setName] = useState('')
   const [rows, setRows] = useState<ItemRow[]>(() => [newRow(), newRow()])
   const [priceStr, setPriceStr] = useState('')
+  // Round 87b: optional flat seller commission % for this bundle.
+  const [commissionStr, setCommissionStr] = useState('')
+  const commissionValue = Number(commissionStr)
   const [warehouseId, setWarehouseId] = useState('') // '' = all stores
   const [startsAtStr, setStartsAtStr] = useState('')
   const [endsAtStr, setEndsAtStr] = useState('')
@@ -97,6 +100,11 @@ export function NewBundleRuleForm({
     }
     if (!Number.isFinite(priceCents) || priceCents <= 0)
       return 'Enter the bundle price'
+    if (
+      commissionStr.trim() !== '' &&
+      (!Number.isFinite(commissionValue) || commissionValue < 0 || commissionValue > 100)
+    )
+      return 'Bundle commission must be between 0 and 100'
     if (startsAtStr && endsAtStr && new Date(startsAtStr) > new Date(endsAtStr))
       return 'Start date must be on or before end date'
     return null
@@ -123,6 +131,7 @@ export function NewBundleRuleForm({
         })),
         priceCents,
         scopeWarehouseId: warehouseId || null,
+        commissionPercent: commissionStr.trim() === '' ? null : commissionValue,
         startsAt: toIsoOrNull(startsAtStr, false),
         endsAt: toIsoOrNull(endsAtStr, true),
       })
@@ -272,6 +281,27 @@ export function NewBundleRuleForm({
                 )
               ) : null}
             </div>
+          </div>
+
+          <div className="space-y-1 sm:col-span-2">
+            <Label htmlFor="br-commission" className="text-xs">
+              Seller commission % for this bundle (optional)
+            </Label>
+            <Input
+              id="br-commission"
+              type="number"
+              min={0}
+              max={100}
+              step={0.5}
+              className="sm:max-w-[240px]"
+              value={commissionStr}
+              onChange={(e) => setCommissionStr(e.target.value)}
+              placeholder="Empty = normal commission"
+            />
+            <p className="text-xs text-muted-foreground">
+              One flat % for every product sold as part of this bundle, instead
+              of the products&apos; (or the seller&apos;s personal) commission.
+            </p>
           </div>
 
           <div className="sm:col-span-2">
