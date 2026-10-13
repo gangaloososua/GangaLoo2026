@@ -1,5 +1,5 @@
 'use server'
-// Round 26d — stock transfer server actions.
+// Round 26d - stock transfer server actions.
 //
 // initiateTransfer: owner/admin only (RPC re-checks). Creates an in_transit
 // transfer, consuming the source FIFO.
@@ -7,22 +7,27 @@
 // app-layer gate; the RPC then enforces "owner/admin OR the destination
 // warehouse's distributor". Creates destination lots + completes the transfer.
 //
-// Round 36a — distributor transfer requests.
+// Round 36a - distributor transfer requests.
 // requestTransfer: a distributor (or owner/admin) parks a request; no stock
 // moves. The RPC enforces that a non-owner caller owns one of the warehouses.
-// approveTransfer: owner/admin only — your double-check; ships approved items.
+// approveTransfer: owner/admin only - your double-check; ships approved items.
 // declineTransfer: owner/admin declines, or the requester withdraws.
 //
-// Round 77a — cancel an in-transit transfer.
-// cancelTransfer: owner/admin only (same gate as approve/initiate — the RPC
+// Round 77a - cancel an in-transit transfer.
+// cancelTransfer: owner/admin only (same gate as approve/initiate - the RPC
 // re-checks too). Reverses a transfer that shipped but never actually left,
 // putting the exact quantities back into the exact source lots and flipping
 // status -> cancelled. Only works while status is still in_transit (once
 // received, the destination already has the stock and this is no longer the
 // right tool).
+//
+// 2026-10-13 - requestTransfer now sends the owner a WhatsApp alert
+// ("📦 Solicitud de traslado") after the request is saved. Non-blocking:
+// maybeNotifyTransferRequest never throws, so it can't fail a request.
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { requireOwner, requireAdminCaller } from '@/lib/auth/guard'
+import { maybeNotifyTransferRequest } from '@/lib/transfer-request-notify'
 export type InitiateTransferResult =
   | { ok: true; id: string }
   | { ok: false; error: string }
@@ -67,7 +72,7 @@ export async function initiateTransfer(
 }
 export type ReceiveTransferResult = { ok: true } | { ok: false; error: string }
 export async function receiveTransfer(transferId: string): Promise<ReceiveTransferResult> {
-  // Distributors must pass — the RPC enforces that the caller is owner/admin
+  // Distributors must pass - the RPC enforces that the caller is owner/admin
   // OR the distributor who runs the destination warehouse.
   await requireAdminCaller()
   if (!transferId) return { ok: false, error: 'Transfer id is required.' }
@@ -90,7 +95,7 @@ export async function cancelTransfer(
   transferId: string,
   reason?: string | null,
 ): Promise<CancelTransferResult> {
-  // Owner/admin only — same gate as approve/initiate. The RPC re-checks and
+  // Owner/admin only - same gate as approve/initiate. The RPC re-checks and
   // puts the stock back into the exact source lots it left from.
   await requireOwner()
   if (!transferId) return { ok: false, error: 'Transfer id is required.' }
@@ -149,6 +154,8 @@ export async function requestTransfer(
   if (error) return { ok: false, error: error.message }
   const row = data as { id?: string } | null
   if (!row?.id) return { ok: false, error: 'Unexpected response creating request.' }
+  // Owner WhatsApp alert - after the request is saved, never blocks it.
+  await maybeNotifyTransferRequest(row.id)
   revalidatePath('/transfers')
   return { ok: true, id: row.id }
 }
@@ -162,7 +169,7 @@ export type ApproveTransferInput = {
 export async function approveTransfer(
   input: ApproveTransferInput,
 ): Promise<ApproveTransferResult> {
-  // Owner/admin only — your double-check. The RPC re-checks and ships the
+  // Owner/admin only - your double-check. The RPC re-checks and ships the
   // approved items (stock leaves the source, status -> in_transit).
   await requireOwner()
   if (!input.transferId) return { ok: false, error: 'Transfer id is required.' }
