@@ -56,6 +56,9 @@ export function NewCampaignForm({ products, categories, warehouses }: Props) {
   const [startsLocal, setStartsLocal] = useState(() => localInputValue(new Date()))
   const [endsLocal, setEndsLocal] = useState(() => defaultEnd())
   const [priorityStr, setPriorityStr] = useState('10')
+  // Optional seller commission % while the campaign runs ('' = normal).
+  const [commissionStr, setCommissionStr] = useState('')
+  const commissionValue = Number(commissionStr)
   const [selected, setSelected] = useState<string[]>([])
   const [pickerValue, setPickerValue] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -91,6 +94,11 @@ export function NewCampaignForm({ products, categories, warehouses }: Props) {
       return 'The end must be in the future'
     if (!Number.isFinite(priorityValue) || priorityValue < 0 || !Number.isInteger(priorityValue))
       return 'Priority must be a non-negative integer'
+    if (
+      commissionStr.trim() !== '' &&
+      (!Number.isFinite(commissionValue) || commissionValue < 0 || commissionValue > 100)
+    )
+      return 'Campaign commission must be between 0 and 100'
     return null
   })()
 
@@ -108,6 +116,7 @@ export function NewCampaignForm({ products, categories, warehouses }: Props) {
         startsAt: new Date(startsLocal).toISOString(),
         endsAt: new Date(endsLocal).toISOString(),
         priority: priorityValue,
+        commissionPercent: commissionStr.trim() === '' ? null : commissionValue,
       })
       if (res.ok) {
         toast.success(`${res.created} campaign promotions created.`)
@@ -198,6 +207,26 @@ export function NewCampaignForm({ products, categories, warehouses }: Props) {
             />
             <p className="text-xs text-muted-foreground">
               10 = wins over a normal promotion (priority 0) on the same product.
+            </p>
+          </div>
+
+          <div className="space-y-1 sm:col-span-2">
+            <Label htmlFor="cp-commission" className="text-xs">
+              Seller commission % during this campaign (optional)
+            </Label>
+            <Input
+              id="cp-commission"
+              type="number"
+              min={0}
+              max={100}
+              step={0.5}
+              value={commissionStr}
+              onChange={(e) => setCommissionStr(e.target.value)}
+              placeholder="Leave empty = normal commission"
+            />
+            <p className="text-xs text-muted-foreground">
+              While the campaign runs, sellers earn this % on these products
+              instead of the product&apos;s (or their personal) commission.
             </p>
           </div>
 

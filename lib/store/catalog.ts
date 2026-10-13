@@ -1,4 +1,4 @@
-﻿// Storefront catalog layer for the public online shop.
+// Storefront catalog layer for the public online shop.
 //
 // Reads only the SAFE public views (store_*), never the raw tables, so customer
 // browsers never touch costs, commissions, or inventory value:
@@ -73,6 +73,10 @@ export type StoreProduct = {
   stock: number // qty on hand in THIS warehouse
   dealSlot?: 'daily' | 'weekly' | null // featured deal slot, if any
   dealEndsAt?: string | null // when this product's deal ends (ISO), if any
+  // Round 80c: seasonal campaign label (e.g. 'halloween') of the promotion
+  // that sets this product's price, if that promotion belongs to a campaign.
+  campaign?: string | null
+  campaignEndsAt?: string | null
 }
 
 export type StoreCategory = { id: string; name: string }
@@ -110,6 +114,15 @@ export type StoreBundle = {
   inStock: boolean // every product has enough stock for one bundle
 }
 
+// Round 80c: a SEASONAL CAMPAIGN box (e.g. Halloween) on the storefront. Built
+// from ordinary promotions tagged with discount_rules.campaign; the products'
+// prices already include the discount (same path as any promotion).
+export type StoreCampaign = {
+  id: string // e.g. 'halloween'
+  endsAt: string | null // countdown target (soonest end among its products)
+  products: StoreProduct[]
+}
+
 export type StoreCatalog = {
   warehouse: StoreWarehouse
   products: StoreProduct[]
@@ -122,6 +135,7 @@ export type StoreCatalog = {
   guestMarkupPct?: number
   isClubMember?: boolean
   bundles?: StoreBundle[] // Round 85
+  campaigns?: StoreCampaign[] // Round 80c
 }
 
 export type StoreLandingDeal = {
@@ -411,10 +425,11 @@ export async function fetchStoreCatalog(
         delta_percent: number | null
         ends_at: string | null
         priority: number | null
+        campaign: string | null
       }>(ids, (batch) =>
         supabase
           .from('store_promotions')
-          .select('product_id, warehouse_id, deal_slot, delta_percent, ends_at, priority')
+          .select('product_id, warehouse_id, deal_slot, delta_percent, ends_at, priority, campaign')
           .or(`warehouse_id.is.null,warehouse_id.eq.${warehouse.id}`)
           .in('product_id', batch),
       ),
@@ -454,7 +469,10 @@ export async function fetchStoreCatalog(
   //  - dealByProduct: ONLY featured (daily/weekly) promotions -> drives the
   //    homepage countdown carousel + the grid's deal sections.
   // Both pick the highest-priority row per product.
-  const promoPctByProduct = new Map<string, { percent: number; priority: number }>()
+  // Round 80c: the winning promotion also carries its campaign label + end, so
+  // a product is shown in a seasonal box only when the campaign promotion is
+  // the one actually setting its price.
+  const promoPctByProduct = new Map<string, { percent: number; priority: number; campaign: string | null; endsAt: string | null }>()
   const dealByProduct = new Map<string, { slot: 'daily' | 'weekly'; percent: number; endsAt: string | null; priority: number }>()
   for (const d of dealRows ?? []) {
     if (d.delta_percent == null) continue
@@ -463,7 +481,12 @@ export async function fetchStoreCatalog(
 
     const prevAny = promoPctByProduct.get(d.product_id)
     if (!prevAny || priority > prevAny.priority) {
-      promoPctByProduct.set(d.product_id, { percent, priority })
+      promoPctByProduct.set(d.product_id, {
+        percent,
+        priority,
+        campaign: d.campaign ?? null,
+        endsAt: d.ends_at,
+      })
     }
 
     if (d.deal_slot === 'daily' || d.deal_slot === 'weekly') {
@@ -666,6 +689,9 @@ export async function fetchStoreCatalog(
       // promotion has lowered the price above but is not a featured deal.
       dealSlot: deal?.slot ?? null,
       dealEndsAt: deal?.endsAt ?? null,
+      // Round 80c: only when the campaign promotion really lowers the price.
+      campaign: isOffer && promo?.campaign ? promo.campaign : null,
+      campaignEndsAt: isOffer && promo?.campaign ? promo.endsAt : null,
     })
   }
 
@@ -677,7 +703,24 @@ export async function fetchStoreCatalog(
 
   // Generic offers (price-override or plain promotion) -- NOT featured deals,
   // which get their own carousel sections so they don't appear twice.
-  const offers = rows.filter((r) => r.isOffer && !r.dealSlot)
+  // Round 80c: campaign products get their own themed box, so they are left
+  // out of the generic offers strip too.
+  const offers = rows.filter((r) => r.isOffer && !r.dealSlot && !r.campaign)
+
+  // Round 80c: seasonal campaign boxes, one per campaign label. Countdown =
+  // soonest end among its products.
+  const campaignMap = new Map<string, StoreProduct[]>()
+  for (const r of rows) {
+    if (!r.campaign) continue
+    campaignMap.set(r.campaign, [...(campaignMap.get(r.campaign) ?? []), r])
+  }
+  const campaigns: StoreCampaign[] = [...campaignMap.entries()].map(([id, items]) => {
+    const ends = items
+      .map((r) => r.campaignEndsAt)
+      .filter((e): e is string => !!e)
+      .sort()
+    return { id, endsAt: ends[0] ?? null, products: items }
+  })
 
   // Featured daily / weekly deals. Section countdown = soonest end among its
   // products. Higher-priority (and in-stock) products first.
@@ -801,6 +844,5 @@ export async function fetchStoreCatalog(
     console.error('[fetchStoreCatalog] bundles failed:', e)
   }
 
-  return { warehouse, products: rows, offers, categories, attributes, dailyDeal, weeklyDeal, isGuest, guestMarkupPct, isClubMember, bundles }
+  return { warehouse, products: rows, offers, categories, attributes, dailyDeal, weeklyDeal, isGuest, guestMarkupPct, isClubMember, bundles, campaigns }
 }
-

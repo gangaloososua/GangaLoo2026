@@ -23,6 +23,9 @@ export type CreateCampaignInput = {
   startsAt: string // ISO datetime
   endsAt: string // ISO datetime
   priority: number
+  // Seller commission % while the campaign runs (null = normal commission).
+  // Same column/behaviour as a promotion's "Seller commission % during this deal".
+  commissionPercent?: number | null
 }
 
 export type CreateCampaignResult =
@@ -63,6 +66,14 @@ export async function createCampaignPromotions(
   ) {
     return { ok: false, error: 'Priority must be a non-negative integer' }
   }
+  if (
+    input.commissionPercent != null &&
+    (!Number.isFinite(input.commissionPercent) ||
+      input.commissionPercent < 0 ||
+      input.commissionPercent > 100)
+  ) {
+    return { ok: false, error: 'Campaign commission must be between 0 and 100' }
+  }
 
   const camp = CAMPAIGNS.find((c) => c.id === input.campaign)!
   const supabase = await createClient()
@@ -90,6 +101,7 @@ export async function createCampaignPromotions(
     delta_percent: input.deltaPercent,
     priority: input.priority,
     campaign: camp.id,
+    commission_percent: input.commissionPercent ?? null,
     created_by: caller.id,
   }))
 

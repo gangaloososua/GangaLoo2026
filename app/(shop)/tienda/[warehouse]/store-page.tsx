@@ -1,11 +1,11 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import Link from 'next/link'
 import { formatDOP } from '@/lib/format'
 import { ts, type Locale } from '@/lib/i18n/shop'
 import { useCart } from '@/lib/store/cart'
-import type { StoreCatalog, StoreProduct, StoreDeal, StoreWarehouse, StoreBundle } from '@/lib/store/catalog'
+import type { StoreCatalog, StoreProduct, StoreDeal, StoreWarehouse, StoreBundle, StoreCampaign } from '@/lib/store/catalog'
 
 const NAVY = '#0A2A66'
 const RED = '#CE1126'
@@ -255,6 +255,202 @@ function BundleSection({
   )
 }
 
+// Round 80c: SEASONAL CAMPAIGN box (e.g. Halloween). The products already carry
+// the campaign discount in their price (it is an ordinary promotion), so this
+// is display only. Unknown campaign ids fall back to a plain section, so a new
+// season added in lib/campaigns.ts still shows before it gets its own theme.
+const CAMPAIGN_T = {
+  es: {
+    halloween: { title: 'Especial de Halloween', sub: 'Descuentos de miedo en productos seleccionados', upTo: 'Hasta', more: 'Ver más ofertas', less: 'Ver menos' },
+    generic: { title: 'Especial de temporada', sub: 'Productos seleccionados con descuento', upTo: 'Hasta', more: 'Ver más', less: 'Ver menos' },
+  },
+  en: {
+    halloween: { title: 'Halloween Special', sub: 'Spooky savings on selected products', upTo: 'Up to', more: 'See more deals', less: 'See less' },
+    generic: { title: 'Seasonal Special', sub: 'Selected products on sale', upTo: 'Up to', more: 'See more', less: 'See less' },
+  },
+} as const
+
+const HW = {
+  bgA: '#14081f',
+  bgB: '#2a0e3d',
+  bgC: '#3d1250',
+  orange: '#ff7a1a',
+  glow: 'rgba(255,122,26,.55)',
+  lime: '#a3e635',
+  moon: '#fde68a',
+}
+
+function Bat({ style, className }: { style?: CSSProperties; className?: string }) {
+  return (
+    <svg viewBox="0 0 64 32" className={className} style={style} aria-hidden="true">
+      <path
+        fill="#0b0412"
+        d="M32 12c-2-4-4-6-4-6s-1 3-1 5c-4-4-11-6-17-5 4 2 6 6 6 9-3-1-7 0-10 2 6 0 11 2 14 6 2-2 5-3 8-3h8c3 0 6 1 8 3 3-4 8-6 14-6-3-2-7-3-10-2 0-3 2-7 6-9-6-1-13 1-17 5 0-2-1-5-1-5s-2 2-4 6z"
+      />
+    </svg>
+  )
+}
+
+function SpiderWeb({ style }: { style?: CSSProperties }) {
+  return (
+    <svg viewBox="0 0 120 120" style={style} aria-hidden="true" fill="none" stroke="rgba(255,255,255,.22)" strokeWidth="1">
+      <path d="M0 0L120 120M0 0L120 40M0 0L40 120M0 0L120 0M0 0L0 120" />
+      <path d="M30 0Q26 14 0 30M60 0Q52 30 0 60M90 0Q78 46 0 90M120 0Q104 62 0 120" />
+      <path d="M0 30Q22 22 30 0" />
+    </svg>
+  )
+}
+
+function Pumpkin({ size = 34, style }: { size?: number; style?: CSSProperties }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 48 48" style={style} aria-hidden="true">
+      <path d="M24 9c0-3 2-5 5-6" stroke="#3f6212" strokeWidth="3" fill="none" strokeLinecap="round" />
+      <ellipse cx="15" cy="28" rx="10" ry="14" fill="#ea580c" />
+      <ellipse cx="33" cy="28" rx="10" ry="14" fill="#ea580c" />
+      <ellipse cx="24" cy="28" rx="11" ry="15" fill="#f97316" />
+      <path d="M16 24l4 4h-6zM32 24l-4 4h6z" fill="#1c0a00" />
+      <path d="M15 34q9 7 18 0l-3 1-2-2-2 2-2-2-2 2-2-2-2 2z" fill="#1c0a00" />
+    </svg>
+  )
+}
+
+function CampaignSection({
+  campaign,
+  locale,
+  storeSlug,
+  onAdd,
+  onShare,
+}: {
+  campaign: StoreCampaign
+  locale: Locale
+  storeSlug: string
+  onAdd: (p: StoreProduct) => void
+  onShare: (p: StoreProduct) => void
+}) {
+  const [hidden, setHidden] = useState(false)
+  const [showAll, setShowAll] = useState(false)
+  const onExpire = useCallback(() => setHidden(true), [])
+  const inStock = campaign.products.filter((p) => p.stock > 0)
+  if (hidden || inStock.length === 0) return null
+
+  const isHalloween = campaign.id === 'halloween'
+  const t = isHalloween ? CAMPAIGN_T[locale].halloween : CAMPAIGN_T[locale].generic
+  const maxPct = Math.max(...inStock.map((p) => p.offerPercent))
+  const shownItems = showAll ? inStock : inStock.slice(0, 8)
+
+  if (!isHalloween) {
+    return (
+      <section className="mx-auto w-full max-w-[1100px] px-4 pb-7">
+        <div className="mb-3 flex flex-wrap items-center gap-3">
+          <h2 className="text-[16px] font-semibold" style={{ color: NAVY }}>{t.title}</h2>
+          {campaign.endsAt && <Countdown endsAt={campaign.endsAt} onExpire={onExpire} locale={locale} accent={RED} />}
+        </div>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+          {shownItems.map((p, i) => (
+            <ProductCard key={p.id} p={p} locale={locale} delay={i * 35} storeSlug={storeSlug} onAdd={onAdd} onShare={onShare} />
+          ))}
+        </div>
+      </section>
+    )
+  }
+
+  return (
+    <section className="mx-auto w-full max-w-[1100px] px-4 pb-8">
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Creepster&display=swap');
+        @keyframes hwfly1 { 0% { transform: translate(0,0) rotate(-6deg) } 50% { transform: translate(-22px,-10px) rotate(6deg) } 100% { transform: translate(0,0) rotate(-6deg) } }
+        @keyframes hwfly2 { 0% { transform: translate(0,0) rotate(8deg) } 50% { transform: translate(18px,-14px) rotate(-4deg) } 100% { transform: translate(0,0) rotate(8deg) } }
+        @keyframes hwflick { 0%,100% { opacity: 1 } 45% { opacity: .85 } 50% { opacity: .55 } 55% { opacity: .9 } }
+        @keyframes hwbob { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-5px) } }
+        .hw-bat1 { animation: hwfly1 5s ease-in-out infinite }
+        .hw-bat2 { animation: hwfly2 6.5s ease-in-out infinite }
+        .hw-bat3 { animation: hwfly1 7.5s ease-in-out infinite reverse }
+        .hw-title { font-family: 'Creepster', var(--font-display), cursive; animation: hwflick 4s linear infinite }
+        .hw-bob { animation: hwbob 3s ease-in-out infinite }
+        .hw-card { border-radius: 18px; box-shadow: 0 0 0 1.5px rgba(255,122,26,.55), 0 8px 24px -10px rgba(255,122,26,.55) }
+        @media (prefers-reduced-motion: reduce) {
+          .hw-bat1, .hw-bat2, .hw-bat3, .hw-title, .hw-bob { animation: none }
+        }
+      `}</style>
+      <div
+        className="relative overflow-hidden rounded-3xl px-4 pb-5 pt-6 sm:px-6 sm:pt-8"
+        style={{ background: `linear-gradient(160deg, ${HW.bgA} 0%, ${HW.bgB} 55%, ${HW.bgC} 100%)` }}
+      >
+        {/* Moon + decorations (purely visual) */}
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute rounded-full"
+          style={{ right: -30, top: -30, width: 150, height: 150, background: `radial-gradient(circle at 40% 40%, ${HW.moon} 0%, #f59e0b 55%, rgba(245,158,11,0) 72%)`, opacity: 0.55 }}
+        />
+        <SpiderWeb style={{ position: 'absolute', left: 0, top: 0, width: 110, height: 110, pointerEvents: 'none' }} />
+        <Bat className="hw-bat1" style={{ position: 'absolute', right: 70, top: 18, width: 52, opacity: 0.9, pointerEvents: 'none' }} />
+        <Bat className="hw-bat2" style={{ position: 'absolute', right: 150, top: 46, width: 34, opacity: 0.75, pointerEvents: 'none' }} />
+        <Bat className="hw-bat3" style={{ position: 'absolute', left: '42%', top: 10, width: 26, opacity: 0.6, pointerEvents: 'none' }} />
+
+        <div className="relative flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <div className="flex items-center gap-3">
+            <span className="hw-bob flex-shrink-0"><Pumpkin size={46} /></span>
+            <div>
+              <h2
+                className="hw-title text-[30px] leading-none sm:text-[40px]"
+                style={{ color: HW.orange, textShadow: `0 0 14px ${HW.glow}, 0 2px 0 #000` }}
+              >
+                {t.title}
+              </h2>
+              <p className="mt-1 text-[13px]" style={{ color: '#e9d5ff' }}>
+                {t.sub}
+                {maxPct > 0 && (
+                  <span className="ml-2 rounded-full px-2 py-0.5 text-[11px] font-bold" style={{ background: HW.lime, color: '#1a2e05' }}>
+                    {t.upTo} -{maxPct}%
+                  </span>
+                )}
+              </p>
+            </div>
+          </div>
+          {campaign.endsAt && (
+            <div className="relative">
+              <Countdown endsAt={campaign.endsAt} onExpire={onExpire} locale={locale} accent={HW.orange} />
+            </div>
+          )}
+        </div>
+
+        <div className="relative mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+          {shownItems.map((p, i) => (
+            <div key={p.id} className="hw-card">
+              <ProductCard p={p} locale={locale} delay={i * 35} storeSlug={storeSlug} onAdd={onAdd} onShare={onShare} />
+            </div>
+          ))}
+        </div>
+
+        {inStock.length > 8 && (
+          <div className="relative mt-5 flex justify-center">
+            <button
+              type="button"
+              onClick={() => setShowAll((v) => !v)}
+              className="rounded-full px-6 py-2.5 text-[13px] font-semibold transition active:scale-95"
+              style={{ background: HW.orange, color: '#1c0a00', boxShadow: `0 0 16px ${HW.glow}` }}
+            >
+              {showAll ? t.less : `${t.more} · ${inStock.length - 8}`}
+            </button>
+          </div>
+        )}
+
+        <div className="relative mt-5 flex items-center justify-center gap-4 opacity-90" aria-hidden="true">
+          <Pumpkin size={22} />
+          <Pumpkin size={28} />
+          <Pumpkin size={22} />
+        </div>
+      </div>
+      {/* Candy-corn stripe under the box */}
+      <div
+        aria-hidden="true"
+        className="mx-6 h-1.5 rounded-b-full"
+        style={{ background: 'linear-gradient(90deg, #fff7ed 0 33%, #f97316 33% 66%, #facc15 66% 100%)' }}
+      />
+    </section>
+  )
+}
+
 function DealSection({ deal, locale, storeSlug, onAdd, onShare }: { deal: StoreDeal; locale: Locale; storeSlug: string; onAdd: (p: StoreProduct) => void; onShare: (p: StoreProduct) => void }) {
   const [hidden, setHidden] = useState(false)
   const onExpire = useCallback(() => setHidden(true), [])
@@ -292,6 +488,7 @@ export function StorePage({ catalog, stores = [] }: { catalog: StoreCatalog; sto
 
   const { warehouse, products, offers, categories, attributes, dailyDeal, weeklyDeal, isGuest, guestMarkupPct } = catalog
   const bundles = catalog.bundles ?? []
+  const campaigns = catalog.campaigns ?? []
   const cart = useCart(warehouse.slug)
 
   const waHref = whatsappHref(warehouse.whatsapp, warehouse.name, locale)
@@ -667,6 +864,9 @@ export function StorePage({ catalog, stores = [] }: { catalog: StoreCatalog; sto
         </a>
       </section>
 
+      {!searching && activeCat === 'all' && campaigns.map((c) => (
+        <CampaignSection key={c.id} campaign={c} locale={locale} storeSlug={warehouse.slug} onAdd={handleAdd} onShare={handleShare} />
+      ))}
       {!searching && activeCat === 'all' && bundles.length > 0 && (
         <BundleSection bundles={bundles} locale={locale} onAddBundle={handleAddBundle} />
       )}
