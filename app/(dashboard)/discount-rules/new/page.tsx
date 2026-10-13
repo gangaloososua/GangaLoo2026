@@ -2,6 +2,7 @@
 // Round 17    — converted to a rule-kind picker
 // Round 20    — promotion entry added
 // Round 85    — bundle entry added
+// Round 80b   — seasonal campaign entry added
 import Link from 'next/link'
 import { ChevronLeft, Receipt } from 'lucide-react'
 import { requireRole } from '@/lib/auth/guard'
@@ -37,6 +38,12 @@ const RULE_KINDS: Array<{
     title: 'Promotion (daily / weekly deal)',
     blurb:
       'A limited-time % off a single product, for everyone including walk-ins, with no minimum quantity.',
+  },
+  {
+    href: '/discount-rules/new/campaign',
+    title: '🎃 Seasonal campaign (e.g. Halloween)',
+    blurb:
+      'One % off several products at once for a season. Shown online in a themed box until the end date, and charged at the register too.',
   },
   {
     href: '/discount-rules/new/coupon',
