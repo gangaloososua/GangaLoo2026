@@ -8,6 +8,25 @@
 //   - fetchStockMovements(): the owner/admin history ledger (added next).
 import { createClient } from '@/lib/supabase/server'
 
+// 2026-10-15 — Supabase returns at most 1,000 rows per request. inventory_lots
+// passed 1,000 rows, so whole-table reads silently dropped the newest lots
+// (e.g. a fresh purchase vanished from the stock list). fetchAllRows reads in
+// pages of 1,000 (stable order) until a short page comes back.
+const PAGE_SIZE = 1000
+async function fetchAllRows<T>(
+  page: (from: number, to: number) => PromiseLike<{ data: unknown[] | null; error: unknown }>,
+): Promise<T[]> {
+  const out: T[] = []
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data, error } = await page(from, from + PAGE_SIZE - 1)
+    if (error) throw error
+    const rows = (data ?? []) as T[]
+    out.push(...rows)
+    if (rows.length < PAGE_SIZE) break
+  }
+  return out
+}
+
 export type StockOnHandRow = {
   productId: string
   productName: string
@@ -41,22 +60,27 @@ export async function fetchStockOnHand(
   const topLevel = (id: string): string => parentOf.get(id) ?? id
 
   // Each product's primary category.
-  const { data: pcs, error: pcErr } = await supabase
-    .from('product_categories')
-    .select('product_id, category_id')
-    .eq('is_primary', true)
-  if (pcErr) throw pcErr
+  const pcs = await fetchAllRows<{ product_id: string; category_id: string }>((from, to) =>
+    supabase
+      .from('product_categories')
+      .select('product_id, category_id')
+      .eq('is_primary', true)
+      .order('product_id')
+      .order('category_id')
+      .range(from, to),
+  )
   const primaryCatOf = new Map<string, string>()
-  for (const pc of (pcs ?? []) as Array<{ product_id: string; category_id: string }>) {
+  for (const pc of pcs) {
     primaryCatOf.set(pc.product_id, pc.category_id)
   }
 
-  let lotQuery = supabase
-    .from('inventory_lots')
-    .select('product_id, warehouse_id, qty_remaining, products(name, sku), warehouses(name)')
-  if (warehouseId) lotQuery = lotQuery.eq('warehouse_id', warehouseId)
-  const { data, error } = await lotQuery
-  if (error) throw error
+  const data = await fetchAllRows<unknown>((from, to) => {
+    let lotQuery = supabase
+      .from('inventory_lots')
+      .select('id, product_id, warehouse_id, qty_remaining, products(name, sku), warehouses(name)')
+    if (warehouseId) lotQuery = lotQuery.eq('warehouse_id', warehouseId)
+    return lotQuery.order('id').range(from, to)
+  })
 
   type Acc = StockOnHandRow
   const byKey = new Map<string, Acc>()
@@ -92,20 +116,21 @@ export async function fetchStockOnHand(
   // stock-in. Only products with zero lots ANYWHERE are added; products that
   // already have any lot keep their existing rows (no double-counting).
   {
-    const { data: lotPids, error: lotPidErr } = await supabase
-      .from('inventory_lots')
-      .select('product_id')
-    if (lotPidErr) throw lotPidErr
-    const productsWithLots = new Set<string>(
-      (lotPids ?? []).map((r: { product_id: string }) => r.product_id),
+    const lotPids = await fetchAllRows<{ product_id: string }>((from, to) =>
+      supabase.from('inventory_lots').select('id, product_id').order('id').range(from, to),
     )
+    const productsWithLots = new Set<string>(lotPids.map((r) => r.product_id))
 
-    const { data: activeProducts, error: apErr } = await supabase
-      .from('products')
-      .select('id, name, sku')
-      .eq('is_active', true)
-      .eq('is_inventory', true)
-    if (apErr) throw apErr
+    const activeProducts = await fetchAllRows<{ id: string; name: string; sku: string | null }>(
+      (from, to) =>
+        supabase
+          .from('products')
+          .select('id, name, sku')
+          .eq('is_active', true)
+          .eq('is_inventory', true)
+          .order('id')
+          .range(from, to),
+    )
 
     let whQuery = supabase.from('warehouses').select('id, name')
     if (warehouseId) whQuery = whQuery.eq('id', warehouseId)
@@ -113,11 +138,7 @@ export async function fetchStockOnHand(
     if (whErr) throw whErr
     const whList = (whRows ?? []) as Array<{ id: string; name: string }>
 
-    for (const p of (activeProducts ?? []) as Array<{
-      id: string
-      name: string
-      sku: string | null
-    }>) {
+    for (const p of activeProducts) {
       if (productsWithLots.has(p.id)) continue
       const primary = primaryCatOf.get(p.id)
       const topId = primary ? topLevel(primary) : null
@@ -365,11 +386,14 @@ export async function fetchInventoryDashboardStats(): Promise<InventoryDashboard
   const supabase = await createClient()
 
   // On-hand: sum qty_remaining and qty_remaining * unit_cost_dop.
-  const { data: lots, error: lotsErr } = await supabase
-    .from('inventory_lots')
-    .select('product_id, qty_remaining, unit_cost_dop')
-    .gt('qty_remaining', 0)
-  if (lotsErr) throw lotsErr
+  const lots = await fetchAllRows<unknown>((from, to) =>
+    supabase
+      .from('inventory_lots')
+      .select('id, product_id, qty_remaining, unit_cost_dop')
+      .gt('qty_remaining', 0)
+      .order('id')
+      .range(from, to),
+  )
 
   let totalUnitsOnHand = 0
   let totalValueDop = 0
@@ -466,11 +490,14 @@ export type StockByGroupRow = {
 
 export async function fetchStockByWarehouse(): Promise<StockByGroupRow[]> {
   const supabase = await createClient()
-  const { data, error } = await supabase
-    .from('inventory_lots')
-    .select('warehouse_id, qty_remaining, unit_cost_dop, warehouses(name)')
-    .gt('qty_remaining', 0)
-  if (error) throw error
+  const data = await fetchAllRows<unknown>((from, to) =>
+    supabase
+      .from('inventory_lots')
+      .select('id, warehouse_id, qty_remaining, unit_cost_dop, warehouses(name)')
+      .gt('qty_remaining', 0)
+      .order('id')
+      .range(from, to),
+  )
 
   const byId = new Map<string, StockByGroupRow>()
   for (const lot of (data ?? []) as unknown as Array<{
@@ -517,22 +544,29 @@ export async function fetchStockByCategory(): Promise<StockByGroupRow[]> {
   }
 
   // 2) Each product's PRIMARY category.
-  const { data: pcs, error: pcErr } = await supabase
-    .from('product_categories')
-    .select('product_id, category_id')
-    .eq('is_primary', true)
-  if (pcErr) throw pcErr
+  const pcs = await fetchAllRows<{ product_id: string; category_id: string }>((from, to) =>
+    supabase
+      .from('product_categories')
+      .select('product_id, category_id')
+      .eq('is_primary', true)
+      .order('product_id')
+      .order('category_id')
+      .range(from, to),
+  )
   const primaryCatOf = new Map<string, string>()
-  for (const pc of (pcs ?? []) as Array<{ product_id: string; category_id: string }>) {
+  for (const pc of pcs) {
     primaryCatOf.set(pc.product_id, pc.category_id)
   }
 
   // 3) Lots -> roll each product's stock up to its top-level category.
-  const { data: lots, error: lotsErr } = await supabase
-    .from('inventory_lots')
-    .select('product_id, qty_remaining, unit_cost_dop')
-    .gt('qty_remaining', 0)
-  if (lotsErr) throw lotsErr
+  const lots = await fetchAllRows<unknown>((from, to) =>
+    supabase
+      .from('inventory_lots')
+      .select('id, product_id, qty_remaining, unit_cost_dop')
+      .gt('qty_remaining', 0)
+      .order('id')
+      .range(from, to),
+  )
 
   const byTop = new Map<string, StockByGroupRow>()
   const UNCAT = '__uncategorized__'
@@ -595,13 +629,17 @@ export async function fetchStockCountSheet(opts: {
   }
 
   // Product -> primary category (the subcategory it lives in).
-  const { data: pcs, error: pcErr } = await supabase
-    .from('product_categories')
-    .select('product_id, category_id')
-    .eq('is_primary', true)
-  if (pcErr) throw pcErr
+  const pcs = await fetchAllRows<{ product_id: string; category_id: string }>((from, to) =>
+    supabase
+      .from('product_categories')
+      .select('product_id, category_id')
+      .eq('is_primary', true)
+      .order('product_id')
+      .order('category_id')
+      .range(from, to),
+  )
   const primaryCatOf = new Map<string, string>()
-  for (const pc of (pcs ?? []) as Array<{ product_id: string; category_id: string }>) {
+  for (const pc of pcs) {
     primaryCatOf.set(pc.product_id, pc.category_id)
   }
 
@@ -618,23 +656,27 @@ export async function fetchStockCountSheet(opts: {
       opts.categoryId,
       ...(childRows ?? []).map((c) => (c as { id: string }).id),
     ]
-    const { data: pcRows, error: pcErr2 } = await supabase
-      .from('product_categories')
-      .select('product_id')
-      .in('category_id', catIds)
-      .eq('is_primary', true)
-    if (pcErr2) throw pcErr2
-    categoryProductIds = (pcRows ?? []).map((r) => (r as { product_id: string }).product_id)
+    const pcRows = await fetchAllRows<{ product_id: string }>((from, to) =>
+      supabase
+        .from('product_categories')
+        .select('product_id')
+        .in('category_id', catIds)
+        .eq('is_primary', true)
+        .order('product_id')
+        .range(from, to),
+    )
+    categoryProductIds = pcRows.map((r) => r.product_id)
     if (categoryProductIds.length === 0) return []
   }
 
-  let lotQuery = supabase
-    .from('inventory_lots')
-    .select('product_id, warehouse_id, qty_remaining, products(name), warehouses(name)')
-  if (opts.warehouseId) lotQuery = lotQuery.eq('warehouse_id', opts.warehouseId)
-  if (categoryProductIds) lotQuery = lotQuery.in('product_id', categoryProductIds)
-  const { data, error } = await lotQuery
-  if (error) throw error
+  const data = await fetchAllRows<unknown>((from, to) => {
+    let lotQuery = supabase
+      .from('inventory_lots')
+      .select('id, product_id, warehouse_id, qty_remaining, products(name), warehouses(name)')
+    if (opts.warehouseId) lotQuery = lotQuery.eq('warehouse_id', opts.warehouseId)
+    if (categoryProductIds) lotQuery = lotQuery.in('product_id', categoryProductIds)
+    return lotQuery.order('id').range(from, to)
+  })
 
   const byKey = new Map<string, CountSheetRow>()
   for (const lot of (data ?? []) as unknown as Array<{
@@ -679,3 +721,4 @@ export async function fetchStockCountSheet(opts: {
       a.warehouseName.localeCompare(b.warehouseName),
   )
 }
+
