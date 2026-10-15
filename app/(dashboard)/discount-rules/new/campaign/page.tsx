@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { ChevronLeft } from 'lucide-react'
 import { requireRole } from '@/lib/auth/guard'
 import { createClient } from '@/lib/supabase/server'
+import { selectAll } from '@/lib/fetch-all'
 import { NewCampaignForm } from '../new-campaign-form'
 
 export const dynamic = 'force-dynamic'
@@ -14,16 +15,25 @@ export default async function NewCampaignPage() {
   await requireRole(['owner', 'admin'] as const)
   const supabase = await createClient()
   const [productsRes, categoriesRes, primaryRes, warehousesRes] = await Promise.all([
-    supabase
-      .from('products')
-      .select('id, name, sku')
-      .eq('is_active', true)
-      .order('name', { ascending: true }),
+    selectAll((from, to) =>
+      supabase
+        .from('products')
+        .select('id, name, sku')
+        .eq('is_active', true)
+        .order('name', { ascending: true })
+        .order('id', { ascending: true })
+        .range(from, to),
+    ),
     supabase.from('categories').select('id, name').order('name', { ascending: true }),
-    supabase
-      .from('product_categories')
-      .select('product_id, category_id')
-      .eq('is_primary', true),
+    selectAll((from, to) =>
+      supabase
+        .from('product_categories')
+        .select('product_id, category_id')
+        .eq('is_primary', true)
+        .order('product_id', { ascending: true })
+        .order('category_id', { ascending: true })
+        .range(from, to),
+    ),
     supabase
       .from('warehouses')
       .select('id, name')

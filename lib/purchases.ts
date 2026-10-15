@@ -19,6 +19,7 @@
 // ============================================================
 
 import { createClient } from '@/lib/supabase/server'
+import { selectAll } from '@/lib/fetch-all'
 
 import type {
   PurchaseStatus,
@@ -685,17 +686,27 @@ function pickerBaseCostUsd(costCalc: unknown): number | null {
 export async function listProductsGroupedByCategory(): Promise<ProductPickerCategoryGroup[]> {
   const supabase = await createClient()
 
-  const { data: products, error: prodErr } = await supabase
-    .from('products')
-    .select('id, sku, name, cost_calc')
-    .eq('is_active', true)
-    .order('name')
+  // Paged (2026-10-15): both tables are at/over Supabase's 1,000-row limit.
+  const { data: products, error: prodErr } = await selectAll((from, to) =>
+    supabase
+      .from('products')
+      .select('id, sku, name, cost_calc')
+      .eq('is_active', true)
+      .order('name')
+      .order('id')
+      .range(from, to),
+  )
   if (prodErr) throw new Error(prodErr.message)
 
-  const { data: memberships, error: memErr } = await supabase
-    .from('product_categories')
-    .select('product_id, category_id, is_visible')
-    .eq('is_visible', true)
+  const { data: memberships, error: memErr } = await selectAll((from, to) =>
+    supabase
+      .from('product_categories')
+      .select('product_id, category_id, is_visible')
+      .eq('is_visible', true)
+      .order('product_id')
+      .order('category_id')
+      .range(from, to),
+  )
   if (memErr) throw new Error(memErr.message)
 
   const { data: categories, error: catErr } = await supabase
@@ -840,4 +851,3 @@ export async function getSupplierPaymentsForOrder(
     created_at: r.created_at,
   }))
 }
-

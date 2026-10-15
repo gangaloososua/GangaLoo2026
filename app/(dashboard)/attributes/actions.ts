@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
+import { selectAll } from '@/lib/fetch-all'
 import { requireOwner, requireAdminCaller } from '@/lib/auth/guard'
 
 // An attribute type (e.g. "Color", "Length") plus a count of its values.
@@ -99,9 +100,16 @@ export async function listAttributeValues(): Promise<AttributeValue[]> {
   if (!rows) return []
 
   // How many products carry each value (powers the delete guard + a count badge).
-  const { data: pavRows, error: pavErr } = await supabase
-    .from('product_attribute_values')
-    .select('attribute_value_id')
+  // Paged: this table is far past Supabase's 1,000-rows-per-request limit.
+  const { data: pavRows, error: pavErr } = await selectAll<{ attribute_value_id: string }>(
+    (from, to) =>
+      supabase
+        .from('product_attribute_values')
+        .select('product_id, attribute_value_id')
+        .order('product_id', { ascending: true })
+        .order('attribute_value_id', { ascending: true })
+        .range(from, to),
+  )
 
   if (pavErr) throw new Error(pavErr.message)
 

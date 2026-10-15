@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
+import { selectAll } from '@/lib/fetch-all'
 import { requireOwner, requireAdminCaller } from '@/lib/auth/guard'
 
 export type Category = {
@@ -41,9 +42,16 @@ export async function listCategories(): Promise<Category[]> {
 
   const nameById = new Map(rows.map((r) => [r.id, r.name]))
 
-  const { data: pcRows, error: pcErr } = await supabase
-    .from('product_categories')
-    .select('category_id')
+  // Paged: this table is past Supabase's 1,000-rows-per-request limit.
+  const { data: pcRows, error: pcErr } = await selectAll<{ category_id: string }>(
+    (from, to) =>
+      supabase
+        .from('product_categories')
+        .select('product_id, category_id')
+        .order('product_id', { ascending: true })
+        .order('category_id', { ascending: true })
+        .range(from, to),
+  )
 
   if (pcErr) throw new Error(pcErr.message)
 
@@ -237,4 +245,3 @@ export async function listProductsInCategory(
     sku: (p.sku as string | null) ?? null,
   }))
 }
-
