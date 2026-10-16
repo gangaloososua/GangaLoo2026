@@ -19,6 +19,8 @@ const T = {
     title: 'Elige tu tienda',
     sub: 'Cada tienda tiene su propio inventario y ofertas. Escoge la más cercana para empezar a comprar.',
     deals: 'Ofertas de hoy',
+    sold: '¡VENDIDO!',
+    soldNote: 'Esta oferta ya se vendió',
     shopAt: 'Comprar en',
     none: 'No hay tiendas disponibles por ahora.',
     banner: 'Crea tu cuenta y obtén mejores precios en cada compra.',
@@ -30,6 +32,8 @@ const T = {
     title: 'Choose your store',
     sub: 'Each store has its own stock and offers. Pick the nearest one to start shopping.',
     deals: "Today's offers",
+    sold: 'SOLD!',
+    soldNote: 'This deal is sold out',
     shopAt: 'Shop at',
     none: 'No stores available right now.',
     banner: 'Create an account and get better prices on every order.',
@@ -159,16 +163,47 @@ export function StoreLandingView({
                           <div className="relative w-full" style={{ height: 120, background: '#fff' }}>
                             {d.imageUrl ? (
                               // eslint-disable-next-line @next/next/no-img-element
-                              <img src={d.imageUrl} alt={d.name} className="h-full w-full object-contain" loading="lazy" />
+                              <img
+                                src={d.imageUrl}
+                                alt={d.name}
+                                className={`h-full w-full object-contain ${d.soldOut ? 'opacity-50 grayscale' : ''}`}
+                                loading="lazy"
+                              />
                             ) : (
                               <div className="flex h-full w-full items-center justify-center" style={{ color: '#c2c8d2', fontStyle: 'italic', fontSize: 26 }}>G</div>
                             )}
                             <span className="absolute left-1.5 top-1.5 rounded-full px-1.5 py-0.5 text-[10px] font-semibold text-white" style={{ background: RED }}>-{d.percent}%</span>
+                            {d.soldOut && (
+                              // Big diagonal "SOLD" ribbon across the photo.
+                              <div className="pointer-events-none absolute inset-0 flex items-center justify-center overflow-hidden">
+                                <span
+                                  className="whitespace-nowrap text-center text-[17px] font-extrabold uppercase tracking-[2px] text-white"
+                                  style={{
+                                    background: RED,
+                                    width: '160%',
+                                    padding: '6px 0',
+                                    transform: 'rotate(-18deg)',
+                                    boxShadow: '0 4px 14px rgba(0,0,0,.28)',
+                                    borderTop: '2px solid #fff',
+                                    borderBottom: '2px solid #fff',
+                                  }}
+                                >
+                                  {t.sold}
+                                </span>
+                              </div>
+                            )}
                           </div>
                           <div className="p-2">
                             <p className="mb-1 truncate text-[11px]" style={{ color: INK }}>{d.name}</p>
                             <span className="block text-[10px] line-through" style={{ color: '#9aa3b2' }}>{price(d.normalCents)}</span>
-                            <span className="text-[12px] font-semibold" style={{ color: RED }}>{price(d.dealCents)}</span>
+                            {d.soldOut ? (
+                              <>
+                                <span className="text-[12px] font-semibold line-through" style={{ color: '#9aa3b2' }}>{price(d.dealCents)}</span>
+                                <span className="block text-[10px] font-semibold" style={{ color: RED }}>{t.soldNote}</span>
+                              </>
+                            ) : (
+                              <span className="text-[12px] font-semibold" style={{ color: RED }}>{price(d.dealCents)}</span>
+                            )}
                           </div>
                         </Link>
                       ))}

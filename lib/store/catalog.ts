@@ -146,6 +146,9 @@ export type StoreLandingDeal = {
   normalCents: number
   dealCents: number
   percent: number
+  // 2026-10-15: true when the deal product has no stock left in this store.
+  // The landing page still shows the card, with a big "¡VENDIDO!" banner.
+  soldOut: boolean
 }
 
 // Plain product teaser (no price) used for the "Recently sold" and
@@ -301,6 +304,21 @@ export async function listStoreWarehousesWithDeals(): Promise<StoreWithDeals[]> 
       const settingByProduct = new Map(
         settings.map((s) => [s.product_id, s]),
       )
+      // Stock in THIS store for the deal products (same view the store grid
+      // uses), so a sold deal can be flagged instead of looking available.
+      const stockRows = await fetchByIds<{ product_id: string; qty_on_hand: number }>(
+        ids,
+        (batch) =>
+          supabase
+            .from('store_inventory')
+            .select('product_id, qty_on_hand')
+            .eq('warehouse_id', store.id)
+            .in('product_id', batch),
+      )
+      const stockByProduct = new Map<string, number>()
+      for (const r of stockRows) {
+        stockByProduct.set(r.product_id, Number(r.qty_on_hand) || 0)
+      }
 
       const seen = new Set<string>()
       const deals: StoreLandingDeal[] = []
@@ -327,8 +345,11 @@ export async function listStoreWarehousesWithDeals(): Promise<StoreWithDeals[]> 
           normalCents: normal,
           dealCents,
           percent: Math.round((1 - dealCents / normal) * 100),
+          soldOut: (stockByProduct.get(r.product_id) ?? 0) <= 0,
         })
       }
+      // Available deals first; sold-out ones stay visible after them.
+      deals.sort((a, b) => Number(a.soldOut) - Number(b.soldOut))
       return { ...store, deals: deals.slice(0, 4), recentSold, incoming }
     }),
   )
