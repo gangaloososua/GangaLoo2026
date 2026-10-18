@@ -206,11 +206,12 @@ function BundleSection({
         {shown.map((b, i) => {
           const save = b.regularCents - b.priceCents
           return (
-            <div key={b.id} className="gl-rise flex overflow-hidden rounded-2xl bg-white" style={{ border: '1px solid #eceef2', animationDelay: `${i * 35}ms` }}>
-              <div className="relative w-[42%] flex-shrink-0" style={{ background: '#ffffff', aspectRatio: '1 / 1' }}>
+            <div key={b.id} className="gl-rise flex flex-col overflow-hidden rounded-2xl bg-white" style={{ border: '1px solid #eceef2', animationDelay: `${i * 35}ms` }}>
+              {/* Picture on top, full width, whole image visible (no cropping). */}
+              <div className="relative w-full" style={{ background: '#ffffff', aspectRatio: '1 / 1' }}>
                 {b.imageUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={b.imageUrl} alt={b.name} className="h-full w-full object-cover" loading="lazy" />
+                  <img src={b.imageUrl} alt={b.name} className="h-full w-full object-contain" loading="lazy" />
                 ) : (
                   <div className="flex h-full w-full items-center justify-center" style={{ color: '#c2c8d2' }}>
                     <span style={{ fontFamily: 'var(--font-display)', fontSize: 34, fontStyle: 'italic' }}>G</span>
