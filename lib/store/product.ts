@@ -148,10 +148,17 @@ export async function fetchStoreProduct(
     dealPct = 0
   }
 
-  const eff =
-    dealPct > 0
-      ? Math.round(memberNormal * Math.max(0.7, 1 - dealPct / 100))
-      : memberNormal
+  // round-88a (owner 2026-10-20): with a live deal, the % comes off the NORMAL
+  // store price (Sale price ignored); club members pay the lower of the deal
+  // price and their club price. Same as the grid and the checkout.
+  let eff = memberNormal
+  if (dealPct > 0) {
+    const dealPrice = Math.round(listNormal * Math.max(0.7, 1 - dealPct / 100))
+    eff =
+      isClubMember && clubPrice != null && clubPrice > 0 && clubPrice < dealPrice
+        ? clubPrice
+        : dealPrice
+  }
 
   // "Was" price to strike through: the list normal when the customer is
   // getting any kind of break (club / sale / deal), else the base.

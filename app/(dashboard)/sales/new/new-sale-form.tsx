@@ -42,6 +42,7 @@ import type {
 import type { DiscountRuleRow } from '@/lib/discount-rules'
 import {
   resolveLineDiscount,
+  hasLivePromotion,
   type AppliedDiscount,
 } from '@/lib/discount-rules-resolver'
 import { type Locale, t, plural } from '@/lib/i18n/dictionary'
@@ -125,8 +126,15 @@ type CartPayment = {
 
 function resolveDefaultPrice(
   product: ProductSearchResult,
-  customerHasClubTier: boolean
+  customerHasClubTier: boolean,
+  hasDeal = false,
 ): number {
+  // round-88a (owner 2026-10-20): while the product has a LIVE deal, the deal
+  // % (applied by the resolver) comes off the normal price: no Sale price,
+  // no club starting price. Same rule as the online checkout.
+  if (hasDeal) {
+    return product.warehouse_price_override_cents ?? product.base_price_cents
+  }
   // The normal starting price: warehouse override, else club price (if the
   // customer has a tier), else base price.
   let price: number
@@ -253,7 +261,11 @@ export function NewSaleForm({
   // === cart ops ===
 
   function addProduct(p: ProductSearchResult) {
-    const unit_price_cents = resolveDefaultPrice(p, customerHasClubTier)
+    const unit_price_cents = resolveDefaultPrice(
+      p,
+      customerHasClubTier,
+      hasLivePromotion(activeDiscountRules, p.id, sourceWarehouseId || null),
+    )
     // Round 16.4: resolve auto-discounts at add time
     const result = resolveLineDiscount({
       productId: p.id,

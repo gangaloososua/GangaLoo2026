@@ -252,26 +252,46 @@ export async function listStoreWarehousesWithDeals(): Promise<StoreWithDeals[]> 
 
   // Resolve the product details + per-store normal prices we need.
   const productIds = [...new Set(featured.map((p) => p.product_id))]
-  const nameById = new Map<string, { name: string; slug: string; base: number; img: string | null }>()
+  const nameById = new Map<string, {
+    name: string
+    slug: string
+    base: number
+    club: number | null
+    sale: number | null
+    img: string | null
+  }>()
   if (productIds.length > 0) {
     const prods = await fetchByIds<{
       id: string
       name: string
       slug: string
       price_cents: number
+      club_price_cents: number | null
+      sale_price_cents: number | null
       primary_image_url: string | null
     }>(productIds, (batch) =>
       supabase
         .from('store_products')
-        .select('id, name, slug, price_cents, primary_image_url')
+        .select('id, name, slug, price_cents, club_price_cents, sale_price_cents, primary_image_url')
         .in('id', batch)
         .eq('is_active', true)
         .eq('visible_in_store', true),
     )
     for (const p of prods) {
-      nameById.set(p.id, { name: p.name, slug: p.slug, base: p.price_cents, img: p.primary_image_url })
+      nameById.set(p.id, {
+        name: p.name,
+        slug: p.slug,
+        base: p.price_cents,
+        club: p.club_price_cents ?? null,
+        sale: p.sale_price_cents ?? null,
+        img: p.primary_image_url,
+      })
     }
   }
+
+  // 2026-10-20: price the deal cards for THIS shopper exactly like the store
+  // page and the checkout (guest markup, sale price, club price).
+  const shopper = await getShopperPricing(supabase)
 
   return Promise.all(
     stores.map(async (store) => {
@@ -332,19 +352,37 @@ export async function listStoreWarehousesWithDeals(): Promise<StoreWithDeals[]> 
         if (!prod) continue
         const setting = settingByProduct.get(r.product_id)
         if (setting && setting.is_visible === false) continue
-        const normal = setting?.price_override_cents ?? prod.base
-        const pct = Number(r.delta_percent) || 0
-        const dealCents = Math.round(normal * Math.max(0.7, 1 - pct / 100))
-        if (dealCents >= normal) continue
+        // Same promotion the store page/checkout use for the PRICE: the
+        // highest-priority live promotion for this product in this store
+        // (plain or featured), not necessarily this featured row.
+        const topPromo = (promos ?? [])
+          .filter(
+            (x) =>
+              x.product_id === r.product_id &&
+              x.delta_percent != null &&
+              (x.warehouse_id == null || x.warehouse_id === store.id),
+          )
+          .sort((a, b) => (Number(b.priority) || 0) - (Number(a.priority) || 0))[0]
+        const { compareAt, eff } = priceForShopper(
+          {
+            base: prod.base,
+            override: setting?.price_override_cents ?? null,
+            clubPrice: prod.club,
+            salePrice: prod.sale,
+            promoPercent: topPromo ? Number(topPromo.delta_percent) || 0 : null,
+          },
+          shopper,
+        )
+        if (eff >= compareAt) continue
         seen.add(r.product_id)
         deals.push({
           productId: r.product_id,
           name: prod.name,
           slug: prod.slug,
           imageUrl: prod.img,
-          normalCents: normal,
-          dealCents,
-          percent: Math.round((1 - dealCents / normal) * 100),
+          normalCents: shopper.mk(compareAt),
+          dealCents: shopper.mk(eff),
+          percent: Math.round((1 - eff / compareAt) * 100),
           soldOut: (stockByProduct.get(r.product_id) ?? 0) <= 0,
         })
       }
@@ -383,6 +421,106 @@ export async function resolveStoreWarehouse(
     city: match.city ?? null,
     mapsUrl: match.maps_url ?? null,
   }
+}
+
+// ---------------------------------------------------------------------------
+// 2026-10-20: ONE shopper-price calculation shared by the store grid
+// (fetchStoreCatalog) and the /tienda landing deal cards
+// (listStoreWarehousesWithDeals). Before, the landing used the plain normal
+// price for everyone and ignored the Sale price (logged-in), Club price
+// (members) and the guest markup, so its deal prices disagreed with the store
+// page and the checkout. Mirrors get_storefront_quote / place_storefront_order.
+// ---------------------------------------------------------------------------
+type ShopperPricing = {
+  isGuest: boolean
+  guestMarkupPct: number
+  isClubMember: boolean
+  // Guests: marked-up price rounded UP to the next RD$25; others: exact.
+  mk: (cents: number) => number
+}
+
+async function getShopperPricing(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+): Promise<ShopperPricing> {
+  // Guest markup: visitors who are NOT logged in see prices marked up by the
+  // store's guest_markup % (logged-in clients see normal prices), matching the
+  // checkout quote and the charge (both apply the same markup server-side).
+  const {
+    data: { user: authedUser },
+  } = await supabase.auth.getUser()
+  const isGuest = !authedUser
+  let guestMarkupPct = 0
+  if (isGuest) {
+    try {
+      const { data: cfg } = await supabase.rpc('get_store_public_config')
+      const raw = (cfg as { guest_markup?: unknown } | null)?.guest_markup
+      guestMarkupPct = Math.max(0, Number(raw ?? 0)) || 0
+    } catch {
+      guestMarkupPct = 0
+    }
+  }
+  const markupFrac = guestMarkupPct / 100
+  const mk = (c: number) => {
+    const v = c * (1 + markupFrac)
+    return isGuest ? Math.ceil(v / 2500) * 2500 : Math.round(v)
+  }
+  // Club member: a logged-in customer with the Club toggle on pays the
+  // product's club price (when one is set). Safe RPC, no direct profile read.
+  let isClubMember = false
+  if (!isGuest) {
+    try {
+      const { data: m } = await supabase.rpc('get_my_is_club_member')
+      isClubMember = m === true
+    } catch {
+      isClubMember = false
+    }
+  }
+  return { isGuest, guestMarkupPct, isClubMember, mk }
+}
+
+// Raw (un-marked-up) prices for one product in one store for this shopper.
+// compareAt = the struck-through "was" price, eff = what they pay.
+function priceForShopper(
+  input: {
+    base: number
+    override: number | null
+    clubPrice: number | null
+    salePrice: number | null
+    promoPercent: number | null // highest-priority live promotion %, or null
+  },
+  shopper: { isGuest: boolean; isClubMember: boolean },
+): { compareAt: number; eff: number } {
+  const { base, override, clubPrice, salePrice, promoPercent } = input
+  // Non-member NORMAL price in this store: per-store override if set, else base.
+  const listNormal = override != null ? override : base
+  // Club members pay the club price when one is set and lower.
+  const hasClub =
+    shopper.isClubMember && clubPrice != null && clubPrice > 0 && clubPrice < listNormal
+  // round-88a (owner 2026-10-20): with a LIVE deal, the % comes off the NORMAL
+  // store price and the Sale price is ignored. Club members pay the lower of
+  // the deal price and their club price. Mirrors get_storefront_quote /
+  // place_storefront_order.
+  if (promoPercent != null && promoPercent > 0) {
+    const dealPrice = Math.round(listNormal * Math.max(0.7, 1 - promoPercent / 100))
+    const eff = hasClub ? Math.min(dealPrice, clubPrice as number) : dealPrice
+    return { compareAt: listNormal, eff }
+  }
+  let memberNormal = hasClub ? (clubPrice as number) : listNormal
+  // Direct sale price (round-58c): logged-in shoppers start from the lower of
+  // {current member/normal price, sale price}. Guests never get it.
+  if (!shopper.isGuest && salePrice != null && salePrice > 0 && salePrice < memberNormal) {
+    memberNormal = salePrice
+  }
+  // Promotion % with the same 30% max-discount cap as the register/checkout.
+  const promoPrice =
+    promoPercent != null
+      ? Math.round(memberNormal * Math.max(0.7, 1 - promoPercent / 100))
+      : null
+  // "Was" price: club saving shows vs list normal; a promotion shows vs the
+  // member normal (so % off is honest); a plain override offer vs base.
+  const compareAt = hasClub ? listNormal : promoPrice != null ? memberNormal : base
+  const eff = promoPrice != null ? promoPrice : memberNormal
+  return { compareAt, eff }
 }
 
 export async function fetchStoreCatalog(
@@ -605,83 +743,31 @@ export async function fetchStoreCatalog(
     for (const a of aRows) attrMeta.set(a.id, a)
   }
 
-  // Guest markup: visitors who are NOT logged in see prices marked up by the
-  // store's guest_markup % (logged-in clients see normal prices). Applied here
-  // so the product grid matches the checkout quote and the charge (both of which
-  // apply the same markup server-side).
-  const {
-    data: { user: authedUser },
-  } = await supabase.auth.getUser()
-  const isGuest = !authedUser
-  let guestMarkupPct = 0
-  if (isGuest) {
-    try {
-      const { data: cfg } = await supabase.rpc('get_store_public_config')
-      const raw = (cfg as { guest_markup?: unknown } | null)?.guest_markup
-      guestMarkupPct = Math.max(0, Number(raw ?? 0)) || 0
-    } catch {
-      guestMarkupPct = 0
-    }
-  }
+  // Shopper pricing (guest markup, club membership) - shared with the landing.
+  const shopper = await getShopperPricing(supabase)
+  const { isGuest, guestMarkupPct, isClubMember, mk } = shopper
   const markupFrac = guestMarkupPct / 100
-  // Guests: marked-up price, rounded UP to the next RD$25 (2500 cents).
-  // Members: exact price (markupFrac is 0 and no rounding).
-  const mk = (c: number) => {
-    const v = c * (1 + markupFrac)
-    return isGuest ? Math.ceil(v / 2500) * 2500 : Math.round(v)
-  }
-
-  // Club member: a logged-in customer with the Club toggle on pays the product's
-  // club price (when one is set). Detected via a safe RPC (no direct profile read).
-  // Matches the online charge (place_storefront_order) and the register.
-  let isClubMember = false
-  if (!isGuest) {
-    try {
-      const { data: m } = await supabase.rpc('get_my_is_club_member')
-      isClubMember = m === true
-    } catch {
-      isClubMember = false
-    }
-  }
 
   const rows: StoreProduct[] = []
   for (const p of products) {
     const setting = settingByProduct.get(p.id)
     if (setting && setting.is_visible === false) continue // hidden in this store
 
-    const base = p.price_cents
-    const override = setting?.price_override_cents ?? null
-    // The non-member NORMAL price in this store: per-store override if set, else base.
-    const listNormal = override != null ? override : base
-    // Club members pay the product's club price when one is set; everyone else pays
-    // the list normal. (Loyalty still applies on top at checkout, as before.)
-    const clubPrice =
-      (p as { club_price_cents?: number | null }).club_price_cents ?? null
-    const hasClub =
-      isClubMember && clubPrice != null && clubPrice > 0 && clubPrice < listNormal
-    let memberNormal = hasClub ? (clubPrice as number) : listNormal
-    // Direct sale price (round-58c): logged-in shoppers start from the lower
-    // of {current member/normal price, sale price}. Guests never get it.
-    const salePrice =
-      (p as { sale_price_cents?: number | null }).sale_price_cents ?? null
-    if (!isGuest && salePrice != null && salePrice > 0 && salePrice < memberNormal) {
-      memberNormal = salePrice
-    }
-    // Round 62: the PRICE-lowering promotion percent for this product (ANY active
-    // promotion, plain or featured). Same 30% max-discount cap as in-person and
-    // the checkout functions.
+    // Shared shopper price (same function as the /tienda landing deal cards).
+    // Round 62: promoPctByProduct = ANY active promotion (plain or featured).
     const promo = promoPctByProduct.get(p.id)
-    const promoPrice = promo
-      ? Math.round(memberNormal * Math.max(0.7, 1 - promo.percent / 100))
-      : null
+    const { compareAt, eff } = priceForShopper(
+      {
+        base: p.price_cents,
+        override: setting?.price_override_cents ?? null,
+        clubPrice: (p as { club_price_cents?: number | null }).club_price_cents ?? null,
+        salePrice: (p as { sale_price_cents?: number | null }).sale_price_cents ?? null,
+        promoPercent: promo?.percent ?? null,
+      },
+      shopper,
+    )
     // FEATURED deal info (daily/weekly only) -> drives the carousel/sections.
     const deal = dealByProduct.get(p.id)
-    // The "was" price to compare against and strike through:
-    //  - club member with a club price: the list normal (so the club saving shows)
-    //  - on a promotion: the member normal price (so % off is honest)
-    //  - on a plain override offer: the base list price
-    const compareAt = hasClub ? listNormal : promoPrice != null ? memberNormal : base
-    const eff = promoPrice != null ? promoPrice : memberNormal
     const isOffer = eff < compareAt
 
     // Keep only value ids whose value (and its attribute) are active/known, so

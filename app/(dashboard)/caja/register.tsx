@@ -50,6 +50,7 @@ import type { DiscountRuleRow } from '@/lib/discount-rules'
 import {
   resolveLineDiscount,
   type AppliedDiscount,
+  hasLivePromotion,
 } from '@/lib/discount-rules-resolver'
 import { resolveCartDiscounts } from '@/lib/bundle-resolver'
 import type { Locale } from '@/lib/i18n/dictionary'
@@ -109,9 +110,13 @@ function dopStringToCents(s: string): number {
 function centsToDopString(c: number): string {
   return Math.round(c / 100).toString()
 }
-function priceFor(p: ProductSearchResult): number {
+function priceFor(p: ProductSearchResult, hasDeal = false): number {
   // Regular price for this warehouse (per-warehouse override else base).
   const regular = p.warehouse_price_override_cents ?? p.base_price_cents
+  // round-88a (owner 2026-10-20): while the product has a LIVE deal, the deal
+  // % (applied by the resolver) comes off the REGULAR price, so the Sale price
+  // is ignored here. Same rule as the online checkout.
+  if (hasDeal) return regular
   // A product's own Sale price / offer (sale_price_cents) is the price the
   // customer pays online. Mirror that at the register: use it when it is set
   // and actually lower than the regular price. Discount RULES still stack on
@@ -255,7 +260,7 @@ export function Register({
           return { ...l, qty, line_discount_cents: d.totalDiscountCents, discount_breakdown: d.applied }
         })
       }
-      const unit = priceFor(p)
+      const unit = priceFor(p, hasLivePromotion(activeDiscountRules, p.id, warehouseId || null))
       const d = lineDiscountFor(p.id, p.primary_category_id, 1, unit)
       return [
         ...prev,
@@ -652,7 +657,7 @@ export function Register({
                   <div className="flex flex-1 flex-col gap-0.5 p-1.5">
                     <div className="line-clamp-2 text-xs font-medium leading-tight">{p.name}</div>
                     <div className="mt-auto text-xs font-semibold text-emerald-600">
-                      {formatDOP(priceFor(p))}
+                      {formatDOP(priceFor(p, hasLivePromotion(activeDiscountRules, p.id, warehouseId || null)))}
                     </div>
                   </div>
                 </button>

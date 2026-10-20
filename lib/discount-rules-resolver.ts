@@ -74,6 +74,30 @@ export type ResolveLineDiscountResult = {
   applied: AppliedDiscount[]
 }
 
+// round-88a (owner 2026-10-20): is there a LIVE promotion (deal) for this
+// product at this store? While there is, the deal % comes off the NORMAL
+// price, so staff screens must NOT start the line from the product's Sale
+// price. Same matching as the promotion branch below.
+export function hasLivePromotion(
+  rules: DiscountRuleRow[],
+  productId: string,
+  sourceWarehouseId: string | null,
+  at: Date = new Date(),
+): boolean {
+  const atMs = at.getTime()
+  return rules.some(
+    (r) =>
+      r.kind === 'promotion' &&
+      r.isActive &&
+      r.deltaPercent != null &&
+      r.deltaPercent > 0 &&
+      r.scopeProductId === productId &&
+      (r.scopeWarehouseId === null || r.scopeWarehouseId === sourceWarehouseId) &&
+      (!r.startsAt || new Date(r.startsAt).getTime() <= atMs) &&
+      (!r.endsAt || new Date(r.endsAt).getTime() >= atMs),
+  )
+}
+
 export function resolveLineDiscount(
   input: ResolveLineDiscountInput,
 ): ResolveLineDiscountResult {
