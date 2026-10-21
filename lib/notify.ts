@@ -3,6 +3,14 @@
 
 type WaTarget = { phone: string; apikey: string };
 
+// 2026-10-21: CallMeBot decodes the text a second time, so a plain "%" in a
+// product name (e.g. "13x4 150%") cut the message off there, and '"' (inches)
+// was dropped. Send look-alike characters instead: ％ (fullwidth percent) and
+// ″ (double prime). They read the same in WhatsApp.
+function waSafe(text: string): string {
+  return text.replace(/%/g, '\uFF05').replace(/"/g, '\u2033')
+}
+
 const OWNER: WaTarget | null =
   process.env.CALLMEBOT_OWNER_PHONE && process.env.CALLMEBOT_OWNER_KEY
     ? { phone: process.env.CALLMEBOT_OWNER_PHONE, apikey: process.env.CALLMEBOT_OWNER_KEY }
@@ -13,7 +21,7 @@ async function sendWhatsApp(t: WaTarget | null, text: string): Promise<void> {
   try {
     await fetch(
       `https://api.callmebot.com/whatsapp.php?phone=${encodeURIComponent(t.phone)}` +
-        `&apikey=${encodeURIComponent(t.apikey)}&text=${encodeURIComponent(text)}`,
+        `&apikey=${encodeURIComponent(t.apikey)}&text=${encodeURIComponent(waSafe(text))}`,
       { method: "GET", cache: "no-store" }
     );
   } catch (e) {

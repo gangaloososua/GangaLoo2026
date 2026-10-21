@@ -15,6 +15,14 @@
 
 import { createClient } from '@/lib/supabase/server'
 
+// 2026-10-21: CallMeBot decodes the text a second time, so a plain "%" in a
+// product name (e.g. "13x4 150%") cut the message off there, and '"' (inches)
+// was dropped. Send look-alike characters instead: ％ (fullwidth percent) and
+// ″ (double prime). They read the same in WhatsApp.
+function waSafe(text: string): string {
+  return text.replace(/%/g, '\uFF05').replace(/"/g, '\u2033')
+}
+
 async function sendOwnerWhatsApp(text: string): Promise<void> {
   const phone = process.env.CALLMEBOT_OWNER_PHONE
   const apikey = process.env.CALLMEBOT_OWNER_KEY
@@ -22,7 +30,7 @@ async function sendOwnerWhatsApp(text: string): Promise<void> {
   try {
     await fetch(
       `https://api.callmebot.com/whatsapp.php?phone=${encodeURIComponent(phone)}` +
-        `&apikey=${encodeURIComponent(apikey)}&text=${encodeURIComponent(text)}`,
+        `&apikey=${encodeURIComponent(apikey)}&text=${encodeURIComponent(waSafe(text))}`,
       { method: 'GET', cache: 'no-store' },
     )
   } catch (e) {
