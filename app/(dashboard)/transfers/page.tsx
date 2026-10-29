@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import type { ReactNode } from 'react'
-import { Plus, ArrowRight } from 'lucide-react'
+import { Plus, ArrowRight, Eye } from 'lucide-react'
 import { requireRole } from '@/lib/auth/guard'
 import { isOwnerEquivalent } from '@/lib/auth/roles'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -41,7 +41,21 @@ function statusBadge(status: string, locale: Locale) {
   }
 }
 
-function metaLine(t: TransferListRow, locale: Locale): string {
+function RouteLabel({ t }: { t: TransferListRow }) {
+  return (
+    <span className="text-sm font-medium leading-snug">
+      {t.from_warehouse_name}
+      <ArrowRight className="mx-1 inline h-3.5 w-3.5 text-muted-foreground" />
+      {t.to_warehouse_name}
+    </span>
+  )
+}
+
+// 2026-10-29: tidier rows. Info gets the full width (status + route, then
+// "11 units · 5 products", then the date, each on its own line); the buttons
+// sit underneath on phones and to the right on larger screens. Every row has
+// an explicit Open/Ver button to the detail page.
+function metaParts(t: TransferListRow, locale: Locale): { counts: string; when: string } {
   const units = `${t.total_qty} ${plural(locale, t.total_qty, 'unit.one', 'unit.other')}`
   const prods = `${t.item_count} ${plural(locale, t.item_count, 'product.one', 'product.other')}`
   let when = ''
@@ -51,18 +65,37 @@ function metaLine(t: TransferListRow, locale: Locale): string {
     when = `${tt(locale, 'tr.meta.sent')} ${formatDateTime(t.initiated_at)}`
   else if (t.requested_at)
     when = `${tt(locale, 'tr.meta.requested')} ${formatDateTime(t.requested_at)}`
-  return [units, prods, when].filter(Boolean).join(' · ')
+  return { counts: `${units} · ${prods}`, when }
 }
 
-function RouteLabel({ t }: { t: TransferListRow }) {
+function RowInfo({ t, locale, extra }: { t: TransferListRow; locale: Locale; extra?: ReactNode }) {
+  const { counts, when } = metaParts(t, locale)
   return (
-    <span className="truncate text-sm">
-      {t.from_warehouse_name}
-      <ArrowRight className="mx-1 inline h-3 w-3 text-muted-foreground" />
-      {t.to_warehouse_name}
-    </span>
+    <Link href={`/transfers/${t.id}`} className="block min-w-0 flex-1 hover:opacity-80">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+        {statusBadge(t.status, locale)}
+        <RouteLabel t={t} />
+      </div>
+      <div className="mt-1.5 text-sm">{counts}</div>
+      {when ? <div className="mt-0.5 text-xs text-muted-foreground">{when}</div> : null}
+      {extra}
+    </Link>
   )
 }
+
+function OpenButton({ id, locale }: { id: string; locale: Locale }) {
+  return (
+    <Button asChild variant="outline" size="sm">
+      <Link href={`/transfers/${id}`}>
+        <Eye className="mr-1 h-4 w-4" />
+        {locale === 'es' ? 'Ver' : 'Open'}
+      </Link>
+    </Button>
+  )
+}
+
+const ROW = 'flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6'
+const ACTIONS = 'flex flex-wrap items-center gap-2 sm:shrink-0 sm:justify-end'
 
 function ShippedRow({
   t,
@@ -76,32 +109,25 @@ function ShippedRow({
   locale: Locale
 }) {
   return (
-    <div className="flex items-center justify-between gap-3 px-6 py-3">
-      <Link href={`/transfers/${t.id}`} className="min-w-0 flex-1 hover:opacity-80">
-        <div className="flex items-center gap-2">
-          {statusBadge(t.status, locale)}
-          <RouteLabel t={t} />
-        </div>
-        <div className="mt-0.5 text-xs text-muted-foreground">{metaLine(t, locale)}</div>
-      </Link>
-      {(showReceive || showCancel) && (
-        <div className="flex shrink-0 items-center gap-2">
-          {showCancel && (
-            <CancelTransferButton
-              transferId={t.id}
-              fromWarehouseName={t.from_warehouse_name}
-              locale={locale}
-            />
-          )}
-          {showReceive && (
-            <ReceiveTransferButton
-              transferId={t.id}
-              toWarehouseName={t.to_warehouse_name}
-              locale={locale}
-            />
-          )}
-        </div>
-      )}
+    <div className={ROW}>
+      <RowInfo t={t} locale={locale} />
+      <div className={ACTIONS}>
+        <OpenButton id={t.id} locale={locale} />
+        {showCancel && (
+          <CancelTransferButton
+            transferId={t.id}
+            fromWarehouseName={t.from_warehouse_name}
+            locale={locale}
+          />
+        )}
+        {showReceive && (
+          <ReceiveTransferButton
+            transferId={t.id}
+            toWarehouseName={t.to_warehouse_name}
+            locale={locale}
+          />
+        )}
+      </div>
     </div>
   )
 }
@@ -116,20 +142,22 @@ function PlainRow({
   action?: ReactNode
 }) {
   return (
-    <div className="flex items-center justify-between gap-3 px-6 py-3">
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
-          {statusBadge(t.status, locale)}
-          <RouteLabel t={t} />
-        </div>
-        <div className="mt-0.5 text-xs text-muted-foreground">{metaLine(t, locale)}</div>
-        {t.status_note ? (
-          <div className="mt-0.5 text-xs text-muted-foreground">
-            {tt(locale, 'tr.meta.note')}: {t.status_note}
-          </div>
-        ) : null}
+    <div className={ROW}>
+      <RowInfo
+        t={t}
+        locale={locale}
+        extra={
+          t.status_note ? (
+            <div className="mt-0.5 text-xs text-muted-foreground">
+              {tt(locale, 'tr.meta.note')}: {t.status_note}
+            </div>
+          ) : null
+        }
+      />
+      <div className={ACTIONS}>
+        <OpenButton id={t.id} locale={locale} />
+        {action}
       </div>
-      {action}
     </div>
   )
 }
@@ -174,7 +202,7 @@ function PageHeader({ title, blurb, newHref, newLabel }: {
   newLabel: string
 }) {
   return (
-    <div className="flex items-baseline justify-between">
+    <div className="flex flex-wrap items-start justify-between gap-3">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
         <p className="text-sm text-muted-foreground">{blurb}</p>
@@ -215,15 +243,16 @@ export default async function TransfersPage() {
           empty={tt(locale, 'tr.empty.pending')}
         >
           {pending.map((r: PendingRequest) => (
-            <div key={r.id} className="px-6 py-3">
+            <div key={r.id} className="px-4 py-4 sm:px-6">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                     {statusBadge(r.status, locale)}
                     <RouteLabel t={r} />
                   </div>
+                  <div className="mt-1.5 text-sm">{metaParts(r, locale).counts}</div>
                   <div className="mt-0.5 text-xs text-muted-foreground">
-                    {metaLine(r, locale)}
+                    {metaParts(r, locale).when}
                     {r.requested_by_name ? ` · ${tt(locale, 'tr.meta.by')} ${r.requested_by_name}` : ''}
                   </div>
                   {r.notes ? (
@@ -239,7 +268,10 @@ export default async function TransfersPage() {
                     ))}
                   </ul>
                 </div>
-                <RequestReviewButtons request={r} />
+                <div className={ACTIONS}>
+                  <OpenButton id={r.id} locale={locale} />
+                  <RequestReviewButtons request={r} />
+                </div>
               </div>
             </div>
           ))}
