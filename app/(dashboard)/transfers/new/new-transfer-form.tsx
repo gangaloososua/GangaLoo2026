@@ -248,15 +248,19 @@ export function NewTransferForm({
             </p>
           ) : (
             <>
-              <div className="flex items-start gap-2">
-                <div className="flex-1">
+              {/* Phones: Scan on its own row above, so the search box and its
+                  results list get the full width. Larger screens: side by side. */}
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
+                <div className="min-w-0 flex-1">
                   <ProductSearch
                     warehouseId={fromId}
                     categories={categories}
                     onAdd={addProduct}
                   />
                 </div>
-                <QrScanButton onScan={handleScan} label="Scan" />
+                <div className="order-first sm:order-none">
+                  <QrScanButton onScan={handleScan} label="Scan" />
+                </div>
               </div>
 
               {lines.length === 0 ? (

@@ -277,25 +277,26 @@ export function ProductSearch({ warehouseId, categories, onAdd, locale = 'en' }:
                   />
                 ) : null}
               </div>
+              {/* 2026-10-29: the name gets the FULL row width (up to 2 lines);
+                  price + stock move to a second line under it. Before, the
+                  price/stock column sat beside the name and, in narrow
+                  places (transfer form next to the Scan button, phones),
+                  squeezed the name to one letter per line. */}
               <div className="min-w-0 flex-1">
-                {/* Was `truncate` (forced one line + ellipsis) -- on a
-                    narrow phone that left almost nothing readable next to
-                    the price/stock column. line-clamp-2 lets the name wrap
-                    onto a second line instead of getting chopped. */}
-                <div className="line-clamp-2 break-words font-medium">
+                <div className="line-clamp-2 break-words font-medium leading-snug">
                   {r.name}
                 </div>
-                <div className="truncate text-xs text-muted-foreground">
-                  {r.sku}
+                <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <span className="text-sm">
+                    {formatDOP(
+                      r.warehouse_price_override_cents ?? r.base_price_cents
+                    )}
+                  </span>
+                  {stockBadge(r.qty_on_hand)}
+                  <span className="min-w-0 truncate text-xs text-muted-foreground">
+                    {r.sku}
+                  </span>
                 </div>
-              </div>
-              <div className="shrink-0 text-right">
-                <div className="text-sm">
-                  {formatDOP(
-                    r.warehouse_price_override_cents ?? r.base_price_cents
-                  )}
-                </div>
-                <div className="mt-0.5">{stockBadge(r.qty_on_hand)}</div>
               </div>
             </button>
           ))}
