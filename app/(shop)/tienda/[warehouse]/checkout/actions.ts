@@ -11,6 +11,7 @@ import { resolveStoreWarehouse } from '@/lib/store/catalog'
 import { getStripe } from '@/lib/stripe'
 import { createPaypalOrder } from '@/lib/paypal'
 import { notifyNewOrder } from '@/lib/notify'
+import { closureFor } from '@/lib/store/closures'
 
 export type PlaceOrderInput = {
   warehouseSlug: string
@@ -57,6 +58,10 @@ export async function placeOnlineOrder(
   try {
     if (!input.items || input.items.length === 0) {
       return { ok: false, error: 'cart empty' }
+    }
+    // 2026-10-30: no new orders for a temporarily closed store.
+    if (closureFor(input.warehouseSlug)) {
+      return { ok: false, error: 'store temporarily closed' }
     }
 
     const warehouse = await resolveStoreWarehouse(input.warehouseSlug)

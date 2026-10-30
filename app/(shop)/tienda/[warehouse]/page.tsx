@@ -11,6 +11,8 @@ import {
   listStoreWarehouses,
 } from '@/lib/store/catalog'
 import { StorePage } from './store-page'
+import { closureFor } from '@/lib/store/closures'
+import { ClosedStoreNotice } from '../closed-store-notice'
 
 export const dynamic = 'force-dynamic'
 
@@ -37,6 +39,8 @@ export default async function WarehouseStorePage({
   params: Promise<{ warehouse: string }>
 }) {
   const { warehouse: slug } = await params
+  // 2026-10-30: temporarily closed store -> notice page (lib/store/closures.ts).
+  if (closureFor(slug)) return <ClosedStoreNotice slug={slug.toLowerCase()} />
   const warehouse = await resolveStoreWarehouse(slug)
   if (!warehouse) notFound()
 

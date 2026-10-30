@@ -6,6 +6,8 @@ import { notFound } from 'next/navigation'
 import { resolveStoreWarehouse } from '@/lib/store/catalog'
 import { fetchStoreProduct } from '@/lib/store/product'
 import { ProductView } from './product-view'
+import { closureFor } from '@/lib/store/closures'
+import { ClosedStoreNotice } from '../../closed-store-notice'
 
 export const dynamic = 'force-dynamic'
 
@@ -15,6 +17,7 @@ export default async function ProductPage({
   params: Promise<{ warehouse: string; producto: string }>
 }) {
   const { warehouse: slug, producto } = await params
+  if (closureFor(slug)) return <ClosedStoreNotice slug={slug.toLowerCase()} />
 
   const warehouse = await resolveStoreWarehouse(slug)
   if (!warehouse) notFound()

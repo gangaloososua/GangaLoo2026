@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { formatDOP } from '@/lib/format'
 import type { StoreWithDeals, StoreLandingTeaser } from '@/lib/store/catalog'
+import { closureFor, whatsappHref, prettyPhone } from '@/lib/store/closures'
 
 const NAVY = '#0A2A66'
 const RED = '#CE1126'
@@ -28,6 +29,11 @@ const T = {
     banner: 'Crea tu cuenta y obtén mejores precios en cada compra.',
     bannerBtn: 'Crear cuenta',
     bannerClose: 'Cerrar aviso',
+    closedTitle: (c: string) => `La tienda ${c} está cerrada temporalmente`,
+    closedBody: (o: string) => `Te atendemos con gusto en nuestra tienda ${o}. Compra en línea o escríbenos por WhatsApp.`,
+    closedBadge: 'Cerrada temporalmente',
+    goTo: (o: string) => `Ir a ${o}`,
+    goToStore: (o: string) => `Comprar en ${o} →`,
   },
   en: {
     welcome: 'Welcome',
@@ -44,6 +50,11 @@ const T = {
     banner: 'Create an account and get better prices on every order.',
     bannerBtn: 'Create account',
     bannerClose: 'Dismiss',
+    closedTitle: (c: string) => `Our ${c} store is temporarily closed`,
+    closedBody: (o: string) => `We're happy to serve you at our ${o} store. Shop online or message us on WhatsApp.`,
+    closedBadge: 'Temporarily closed',
+    goTo: (o: string) => `Go to ${o}`,
+    goToStore: (o: string) => `Shop at ${o} →`,
   },
 } as const
 
@@ -161,7 +172,17 @@ export function StoreLandingView({
   // The "Crear cuenta" sign-up form lives under a store (/tienda/<store>/cuenta).
   // The account is global, so any store works — we use the first available one.
   // (If you'd rather always send people to the Club page, set this to '/club'.)
-  const signupHref = stores[0] ? `/tienda/${stores[0].slug}/cuenta` : '/club'
+  // 2026-10-30: temporarily closed stores (lib/store/closures.ts) go last,
+  // and the sign-up link uses an OPEN store.
+  const openStores = stores.filter((s) => !closureFor(s.slug))
+  const closedStores = stores.filter((s) => closureFor(s.slug))
+  const ordered = [...openStores, ...closedStores]
+  const signupHref = openStores[0]
+    ? `/tienda/${openStores[0].slug}/cuenta`
+    : stores[0]
+      ? `/tienda/${stores[0].slug}/cuenta`
+      : '/club'
+  const storeBySlug = new Map(stores.map((s) => [s.slug, s]))
 
   // Show the sign-up banner only to visitors who aren't signed in, and only
   // if they haven't dismissed it before (remembered per browser).
@@ -205,6 +226,49 @@ export function StoreLandingView({
       </header>
 
       <main className="mx-auto w-full max-w-[760px] px-4 py-10">
+        {closedStores.map((c) => {
+          const target = storeBySlug.get(closureFor(c.slug)!.redirectSlug)
+          if (!target) return null
+          const wa = whatsappHref(
+            target.whatsapp,
+            `Hola, vengo de la tienda online. La tienda ${c.name} está cerrada, me gustaría comprar en ${target.name}.`,
+          )
+          return (
+            <div
+              key={`closed-${c.id}`}
+              className="mb-6 overflow-hidden rounded-2xl bg-white"
+              style={{ border: `2px solid ${RED}` }}
+            >
+              <div className="flex items-start gap-3 px-4 py-4">
+                <span className="text-[22px] leading-none" aria-hidden="true">🔒</span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[15px] font-semibold leading-snug" style={{ color: RED }}>{t.closedTitle(c.name)}</p>
+                  <p className="mt-1 text-[13px] leading-snug" style={{ color: INK }}>{t.closedBody(target.name)}</p>
+                  <p className="mt-1 text-[12px]" style={{ color: MUTED }}>WhatsApp {target.name}: {prettyPhone(target.whatsapp)}</p>
+                </div>
+              </div>
+              <div className="flex flex-col gap-2 border-t px-4 py-3 sm:flex-row" style={{ borderColor: '#f3d0d5' }}>
+                <Link
+                  href={`/tienda/${target.slug}`}
+                  className="flex-1 rounded-full px-4 py-2.5 text-center text-[13px] font-semibold text-white transition active:scale-[.98]"
+                  style={{ background: RED }}
+                >
+                  {t.goTo(target.name)} →
+                </Link>
+                <a
+                  href={wa}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex-1 rounded-full px-4 py-2.5 text-center text-[13px] font-semibold text-white transition active:scale-[.98]"
+                  style={{ background: '#1fa855' }}
+                >
+                  WhatsApp {target.name}
+                </a>
+              </div>
+            </div>
+          )
+        })}
+
         {showBanner && (
           <div
             className="mb-6 flex items-center gap-3 rounded-2xl px-4 py-3"
@@ -238,7 +302,31 @@ export function StoreLandingView({
           <p className="mt-8 text-[14px]" style={{ color: MUTED }}>{t.none}</p>
         ) : (
           <div className="mt-7 flex flex-col gap-5">
-            {stores.map((s) => (
+            {ordered.map((s) => {
+              const closure = closureFor(s.slug)
+              if (closure) {
+                const target = storeBySlug.get(closure.redirectSlug)
+                return (
+                  <Link
+                    key={s.id}
+                    href={`/tienda/${target?.slug ?? closure.redirectSlug}`}
+                    className="flex items-center justify-between gap-3 rounded-2xl bg-white p-5 transition active:scale-[.99]"
+                    style={{ border: '1px solid #eceef2', opacity: 0.85 }}
+                  >
+                    <div className="flex min-w-0 items-center gap-3">
+                      <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl text-[20px]" style={{ background: '#eef0f4' }} aria-hidden="true">🔒</span>
+                      <div className="min-w-0">
+                        <span className="block text-[17px] font-semibold" style={{ color: MUTED }}>{s.name}</span>
+                        <span className="mt-0.5 inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white" style={{ background: RED }}>{t.closedBadge}</span>
+                      </div>
+                    </div>
+                    <span className="shrink-0 text-[12px] font-semibold" style={{ color: NAVY }}>
+                      {t.goToStore(target?.name ?? closure.redirectSlug)}
+                    </span>
+                  </Link>
+                )
+              }
+              return (
               <div key={s.id} className="overflow-hidden rounded-2xl bg-white" style={{ border: '1px solid #eceef2' }}>
                 <Link href={`/tienda/${s.slug}`} className="flex items-center justify-between p-5 transition active:scale-[.99]">
                   <div className="flex items-center gap-3">
@@ -343,7 +431,8 @@ export function StoreLandingView({
                   </div>
                 )}
               </div>
-            ))}
+              )
+            })}
           </div>
         )}
       </main>
