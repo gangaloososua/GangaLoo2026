@@ -69,6 +69,12 @@ export type StoreProduct = {
   offerPercent: number // 0 when not an offer
   imageUrl: string | null
   category: { id: string; name: string } | null
+  // 2026-11-05: EVERY category this product belongs to (primary + extra
+  // links) plus their parent categories. The store's category buttons filter
+  // on this, so a product whose main category is "Cabellos" but is also in
+  // "Cabellos Ondulado" shows under both, and "Cabellos" also lists its
+  // sub-categories' products.
+  categoryIds?: string[]
   attributeValueIds: string[] // active attribute value ids assigned to this product
   stock: number // qty on hand in THIS warehouse
   dealSlot?: 'daily' | 'weekly' | null // featured deal slot, if any
@@ -553,7 +559,7 @@ export async function fetchStoreCatalog(
   // (was previously one-after-another). Same data, far less waiting per switch.
   // Each lookup is now batched (fetchByIds) so a large product list can never
   // overflow a single request and silently return empty.
-  const [whSettings, stockRows, dealRows, primaryLinks, pavRows] =
+  const [whSettings, stockRows, dealRows, allCatLinks, pavRows] =
     await Promise.all([
       fetchByIds<{
         product_id: string
@@ -592,12 +598,13 @@ export async function fetchStoreCatalog(
           .or(`warehouse_id.is.null,warehouse_id.eq.${warehouse.id}`)
           .in('product_id', batch),
       ),
-      fetchByIds<{ product_id: string; category_id: string }>(ids, (batch) =>
+      // 2026-11-05: ALL category links (not only the primary one); the
+      // primary link still decides the label + the list of category buttons.
+      fetchByIds<{ product_id: string; category_id: string; is_primary: boolean }>(ids, (batch) =>
         supabase
           .from('store_product_categories')
-          .select('product_id, category_id')
-          .in('product_id', batch)
-          .eq('is_primary', true),
+          .select('product_id, category_id, is_primary')
+          .in('product_id', batch),
       ),
       // Attribute assignments for these products (Stage 4 store views).
       fetchByIds<{ product_id: string; attribute_value_id: string }>(ids, (batch) =>
@@ -661,6 +668,8 @@ export async function fetchStoreCatalog(
     }
   }
 
+  const primaryLinks = (allCatLinks ?? []).filter((l) => l.is_primary)
+
   // Collect the ids the second wave depends on.
   const catIds = [...new Set((primaryLinks ?? []).map((r) => r.category_id))]
 
@@ -719,6 +728,28 @@ export async function fetchStoreCatalog(
   for (const l of primaryLinks ?? []) {
     const name = catNameById.get(l.category_id)
     if (name) catByProduct.set(l.product_id, { id: l.category_id, name })
+  }
+
+  // 2026-11-05: every category (+ ancestors) per product, for the filter.
+  // Parent map comes from ALL store categories (small table), so a link to a
+  // sub-category also counts for its main category.
+  const parentById = new Map<string, string | null>()
+  try {
+    const { data: allCats } = await supabase.from('store_categories').select('id, parent_id')
+    for (const c of (allCats ?? []) as Array<{ id: string; parent_id: string | null }>)
+      parentById.set(c.id, c.parent_id ?? null)
+  } catch {
+    /* filter then falls back to direct links only */
+  }
+  const catIdsByProduct = new Map<string, Set<string>>()
+  for (const l of allCatLinks ?? []) {
+    const set = catIdsByProduct.get(l.product_id) ?? new Set<string>()
+    let cur: string | null | undefined = l.category_id
+    for (let guard = 0; cur && guard < 10; guard++) {
+      set.add(cur)
+      cur = parentById.get(cur)
+    }
+    catIdsByProduct.set(l.product_id, set)
   }
 
   const valueMeta = new Map<string, { id: string; attribute_id: string; value: string; slug: string; display_order: number }>()
@@ -790,6 +821,7 @@ export async function fetchStoreCatalog(
       offerPercent: isOffer ? Math.round((1 - eff / compareAt) * 100) : 0,
       imageUrl: p.primary_image_url,
       category: catByProduct.get(p.id) ?? null,
+      categoryIds: [...(catIdsByProduct.get(p.id) ?? [])],
       attributeValueIds,
       stock: stockByProduct.get(p.id) ?? 0,
       // Featured slot/countdown ONLY for daily/weekly promotions. A plain

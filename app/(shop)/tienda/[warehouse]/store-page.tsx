@@ -707,7 +707,9 @@ export function StorePage({ catalog, stores = [] }: { catalog: StoreCatalog; sto
     const byCat =
       activeCat === 'all'
         ? products.filter((p) => !offerIdsShown.has(p.id))
-        : products.filter((p) => p.category?.id === activeCat)
+        : products.filter(
+            (p) => p.category?.id === activeCat || (p.categoryIds ?? []).includes(activeCat),
+          )
     return byCat.filter(inStock).filter(attrOk)
   }, [searching, trimmedQuery, activeCat, products, attributes, selectedValues, offers])
 
