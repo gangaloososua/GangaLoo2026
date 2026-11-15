@@ -8,7 +8,6 @@
 // TO REOPEN: delete the store's line below (or empty the object) and publish.
 
 export const CLOSED_STORES: Record<string, { redirectSlug: string }> = {
-  maranatha: { redirectSlug: 'montellano' },
 }
 
 export function closureFor(slug: string | null | undefined): { redirectSlug: string } | null {
