@@ -7,13 +7,20 @@
 // products in a themed box while the promotions are live.
 //
 // Safe to import from both server and client code (no server-only imports).
-// To add a season later, add one entry here (and its storefront theme).
+//
+// TO ADD A SEASON (round-90):
+//   1. add one entry below (id = short lowercase word, no spaces; it is saved
+//      in the database, so never rename an id once it has been used),
+//   2. optionally add its look in lib/store/campaign-themes.tsx.
+//      Without a look it still shows on the storefront, in a plain box.
 
-export type CampaignId = 'halloween'
-
-export const CAMPAIGNS: Array<{ id: CampaignId; label: string; emoji: string }> = [
+export const CAMPAIGNS = [
+  { id: 'blackfriday', label: 'Black Friday', emoji: '🛍️' },
+  { id: 'christmas', label: 'Christmas / Navidad', emoji: '🎄' },
   { id: 'halloween', label: 'Halloween', emoji: '🎃' },
-]
+] as const
+
+export type CampaignId = (typeof CAMPAIGNS)[number]['id']
 
 export function isCampaignId(v: string): v is CampaignId {
   return CAMPAIGNS.some((c) => c.id === v)

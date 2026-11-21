@@ -6,6 +6,7 @@ import { formatDOP } from '@/lib/format'
 import { ts, type Locale } from '@/lib/i18n/shop'
 import { useCart } from '@/lib/store/cart'
 import type { StoreCatalog, StoreProduct, StoreDeal, StoreWarehouse, StoreBundle, StoreCampaign } from '@/lib/store/catalog'
+import { CAMPAIGN_THEMES } from '@/lib/store/campaign-themes'
 
 const NAVY = '#0A2A66'
 const RED = '#CE1126'
@@ -335,9 +336,94 @@ function CampaignSection({
   if (hidden || inStock.length === 0) return null
 
   const isHalloween = campaign.id === 'halloween'
-  const t = isHalloween ? CAMPAIGN_T[locale].halloween : CAMPAIGN_T[locale].generic
+  // Round 90: other seasons with a look in lib/store/campaign-themes.tsx.
+  const theme = isHalloween ? undefined : CAMPAIGN_THEMES[campaign.id]
+  const t = isHalloween
+    ? CAMPAIGN_T[locale].halloween
+    : theme
+      ? theme.text[locale]
+      : CAMPAIGN_T[locale].generic
   const maxPct = Math.max(...inStock.map((p) => p.offerPercent))
   const shownItems = showAll ? inStock : inStock.slice(0, 8)
+
+  if (theme) {
+    const Icon = theme.icon
+    const Decorations = theme.decorations
+    const Footer = theme.footer
+    return (
+      <section className="mx-auto w-full max-w-[1100px] px-4 pb-8">
+        <style>{`${theme.fontUrl ? `@import url('${theme.fontUrl}');` : ''}
+          .cmp-card { border-radius: 18px; box-shadow: ${theme.cardShadow} }
+          ${theme.css}
+        `}</style>
+        <div
+          className="relative overflow-hidden rounded-3xl px-4 pb-5 pt-6 sm:px-6 sm:pt-8"
+          style={{ background: theme.background }}
+        >
+          <Decorations />
+
+          <div className="relative flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div className="flex items-center gap-3">
+              <span className="cmp-icon flex-shrink-0">
+                <Icon />
+              </span>
+              <div>
+                <h2 className="cmp-title text-[30px] leading-none sm:text-[40px]" style={theme.titleStyle}>
+                  {t.title}
+                </h2>
+                <p className="mt-1 text-[13px]" style={{ color: theme.subColor }}>
+                  {t.sub}
+                  {maxPct > 0 && (
+                    <span
+                      className="ml-2 rounded-full px-2 py-0.5 text-[11px] font-bold"
+                      style={{ background: theme.badge.bg, color: theme.badge.color }}
+                    >
+                      {t.upTo} -{maxPct}%
+                    </span>
+                  )}
+                </p>
+              </div>
+            </div>
+            {campaign.endsAt && (
+              <div className="relative">
+                <Countdown endsAt={campaign.endsAt} onExpire={onExpire} locale={locale} accent={theme.accent} />
+              </div>
+            )}
+          </div>
+
+          <div className="relative mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+            {shownItems.map((p, i) => (
+              <div key={p.id} className="cmp-card">
+                <ProductCard p={p} locale={locale} delay={i * 35} storeSlug={storeSlug} onAdd={onAdd} onShare={onShare} />
+              </div>
+            ))}
+          </div>
+
+          {inStock.length > 8 && (
+            <div className="relative mt-5 flex justify-center">
+              <button
+                type="button"
+                onClick={() => setShowAll((v) => !v)}
+                className="rounded-full px-6 py-2.5 text-[13px] font-semibold transition active:scale-95"
+                style={{ background: theme.accent, color: theme.accentText, boxShadow: `0 0 16px ${theme.glow}` }}
+              >
+                {showAll ? t.less : `${t.more} · ${inStock.length - 8}`}
+              </button>
+            </div>
+          )}
+
+          {Footer && (
+            <div className="relative mt-5 flex items-center justify-center gap-4 opacity-90" aria-hidden="true">
+              <Footer />
+            </div>
+          )}
+        </div>
+        {theme.stripe && (
+          <div aria-hidden="true" className="mx-6 h-1.5 rounded-b-full" style={{ background: theme.stripe }} />
+        )}
+      </section>
+    )
+  }
 
   if (!isHalloween) {
     return (
